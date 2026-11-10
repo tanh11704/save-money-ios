@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14), .iOS(.v17)],
     products: [.library(name: "SaveMoneyCore", targets: ["SaveMoneyCore"])],
     targets: [
-        .target(name: "SaveMoneyCore", path: "App", exclude: ["SaveMoneyApp.swift", "Info.plist", "Views", "Tests"], sources: ["Models", "Services"]),
+        .target(name: "SaveMoneyCore", path: "App", exclude: ["SaveMoneyApp.swift", "Info.plist", "Views", "Tests", "Assets.xcassets"], sources: ["Models", "Services"]),
         .testTarget(name: "SaveMoneyCoreTests", dependencies: ["SaveMoneyCore"], path: "App/Tests", exclude: ["SmokeTests.swift"], resources: [.copy("Fixtures")])
     ]
 )
