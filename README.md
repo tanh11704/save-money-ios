@@ -4,12 +4,12 @@
 
 ## Trạng thái
 
-Đã triển khai code bước 1 và toàn bộ bước 2a–2e: Services, tab Thêm, Lịch sử,
-sửa/xóa và hỗ trợ khả năng tiếp cận. Có 35 unit test model/service và một smoke
-test app. Chưa xác nhận build/test iOS hoặc chạy trên thiết bị.
+Đã triển khai code bước 1, 2a–2e và 3a–3e: ghi giao dịch, lịch sử, sửa/xóa,
+quản lý ví/danh mục, archive/khôi phục và dữ liệu mặc định. Kiểm thử iOS, UI và
+máy thật chưa được xác nhận do máy chưa cài Xcode đầy đủ.
 
-Theo yêu cầu “cứ làm toàn bộ, tôi sẽ chạy lại sau”, không chờ cổng test để viết
-các phần còn lại của bước 2. Các bước 3–7 trong SPEC chưa được triển khai.
+Bước 3 được làm trọn vẹn rồi kiểm tra tổng hợp một lần theo yêu cầu mới.
+Các bước 4–7 (thống kê, backup/restore, khóa app và nghiệm thu) chưa triển khai.
 
 Bundle ID đã chốt: `vn.tanh11704.SaveMoney`. Giữ cố định trước và sau khi dùng thật.
 Deployment target tạm là iOS 17.0 (tối thiểu cho SwiftData); cần xác nhận phiên bản
@@ -139,7 +139,8 @@ App mở vào tab Thêm. Form dùng lại được cho sửa ở 2d.
 
 Ví/danh mục tạm chỉ được tạo một lần khi store hoàn toàn trống, qua
 `TemporarySampleData`; không tạo giao dịch, không trộn vào kho đang có dữ liệu.
-Bước 3 phải bỏ bootstrap này. Thêm 6 unit test cho lựa chọn form và bootstrap.
+Bootstrap này và test tương ứng đã được thay bằng DefaultDataSeeder ở bước 3.
+Các test lựa chọn form vẫn được giữ và bổ sung kiểm tra archive.
 
 Parse Swift và plist đạt. `swift test`/`swift build` vẫn bị chặn ở plugin
 SwiftDataMacros. Chưa xác minh giao diện, haptic hoặc persistence trên iPhone.
@@ -182,7 +183,7 @@ test, UI hoặc khả năng tiếp cận đã chạy đạt.
 
 ### Checklist chạy lại khi có Xcode/iPhone (chưa thực hiện)
 
-- [ ] Chạy `Cmd+U` toàn bộ 36 test trong scheme SaveMoney, sau đó `Cmd+B`.
+- [ ] Chạy `Cmd+U` toàn bộ 50 test hiện tại trong scheme SaveMoney, sau đó `Cmd+B`.
 - [ ] Cài/run trên iPhone thật; app mở vào Thêm, dữ liệu tạm chỉ tạo một lần.
 - [ ] Chi: nhập số → chọn danh mục → Lưu; số tiền xóa, loại/ví/danh mục giữ lại,
       có rung nhẹ/“Đã lưu”, không tự đổi tab. Kiểm tra mở lại app nhớ lựa chọn.
@@ -198,3 +199,99 @@ test, UI hoặc khả năng tiếp cận đã chạy đạt.
 - [ ] VoiceOver: đọc rõ loại/số tiền/lựa chọn; nhập tiền, sửa và xác nhận xóa được.
 
 Chưa nhập dữ liệu thật trước khi hoàn tất backup/restore và checklist mục 9 SPEC.
+
+
+## Bước 3a–3e — Ví và danh mục
+
+### Schema và lần chạy đầu
+
+**Trước khi chạy bản bước 3, xóa app SaveMoney khỏi simulator và iPhone rồi cài
+lại.** Chủ dự án xác nhận chưa có dữ liệu thật và cho phép reset riêng lần này.
+`Wallet.kindRaw` được thêm với mặc định `cash`; các giá trị gồm `cash`, `bank`,
+`card`, `other`. Không có code tự xóa hoặc thay store khi mở app.
+
+Máy hiện không có Xcode/simctl nên agent chưa gỡ app trên bất kỳ thiết bị nào.
+Khi có Xcode, simulator đang boot có thể gỡ bằng:
+
+```sh
+xcrun simctl uninstall booted vn.tanh11704.SaveMoney
+```
+
+Trên iPhone: xóa ứng dụng SaveMoney bằng màn hình chính/Cài đặt trước lần cài
+mới. Việc này xóa cả dữ liệu thử nghiệm và UserDefaults trong app. Đây không phải
+kế hoạch migration cho dữ liệu thật. **Mọi thay đổi schema sau bước này phải xuất
+backup trước, có kế hoạch migration và thử trên bản sao.**
+
+Đã bỏ hoàn toàn TemporarySampleData và cờ tạo mẫu bước 2 khỏi code. Seeder mới
+chỉ tạo khi chưa có `didSeedDefaults` và kho ví/danh mục/giao dịch trống. Tạo một
+ví Tiền mặt số dư 0, 8 danh mục Chi và 2 danh mục Thu đúng SPEC; save xong mới bật
+cờ. Store đã có dữ liệu không được trộn dữ liệu mặc định. Archive không làm mất
+cờ và không kích hoạt seed lại.
+
+### Services
+
+- WalletService: tạo/sửa, trim/NFC tên, tối đa 30 ký tự, chống trùng không phân
+  biệt hoa thường kể cả archive, chặn archive ví hoạt động cuối cùng, khôi phục.
+- CategoryService: tên duy nhất trong cùng loại kể cả archive; loại Chi/Thu;
+  không đổi loại khi có giao dịch; vẫn được sửa tên/icon, archive và khôi phục.
+- Mỗi thao tác dùng context riêng, một lần save; lỗi rollback, không ảnh hưởng
+  draft/context của màn hình khác. Không có API xóa thật ví hoặc danh mục.
+- Sửa số dư ban đầu xem trước số dư trước/sau bằng BalanceCalculator; preview
+  không sửa model. Khoản nợ vẫn dùng Int64, dấu âm do service áp dụng.
+- Tổng số dư ở mọi tab gồm ví archive; số dư 0 không làm thay đổi tổng. Mục
+  “Đã lưu trữ” vẫn chứa ví số dư 0 để có thể khôi phục chúng.
+
+### Giao diện và kết nối
+
+Tab thứ 3 “Ví”: tổng số dư, danh sách đang dùng, mục thu gọn “Đã lưu trữ”, nút
+thêm và lối vào Quản lý danh mục. Sheet ví có tên/loại/số dư ban đầu, bàn phím số
+và “Đang nợ”; nếu sửa số dư ban đầu của ví có giao dịch thì hiện cảnh báo và
+số dư trước/sau. Archive luôn có xác nhận nêu số dư còn lại; khôi phục một chạm.
+
+Danh mục chia Chi/Thu/Đã lưu trữ, sheet dùng lại cho thêm/sửa, 30 SF Symbols với
+nhãn tiếng Việt, khóa Loại khi đã dùng. Lỗi xuất hiện bằng chữ đỏ, không qua
+alert. Màn hình dùng màu hệ thống, Dynamic Type, nhãn VoiceOver, vùng chạm 44pt.
+Chưa xác minh trực quan trên simulator hoặc iPhone.
+
+Sau quản lý, cả ba tab tải lại snapshot. Form Thêm bỏ lựa chọn vừa archive mà
+không xóa số tiền/ngày/ghi chú đang nhập; form sửa giữ được tham chiếu archive
+của giao dịch cũ. UserDefaults gần nhất được lọc theo dữ liệu đang dùng. Không
+có ví hoạt động thì hiện hướng dẫn sang tab Ví để thêm/khôi phục.
+
+### Test mới và kiểm tra cuối
+
+Test in-memory mới/bổ sung: tên trùng hoa thường/Unicode và mục archive, trim,
+0/30/31 ký tự; archive ví cuối cùng; đổi loại danh mục đã dùng; archive/restore
+giữ giao dịch và số dư; preview và sửa số dư ban đầu; lỗi cập nhật không thay
+dữ liệu; seed chính xác một lần và không lặp sau archive; form bỏ chọn archive
+nhưng vẫn giữ tham chiếu khi sửa. Bộ test bước 1 và các test còn áp dụng của
+bước 2 được giữ; test bootstrap tạm được thay bằng test dữ liệu mặc định.
+
+Kết quả lượt kiểm tra tổng hợp duy nhất ngày 10/11/2026:
+
+- Parse toàn bộ Swift, plist/project, shared scheme và `git diff --check`: đạt.
+- Source Xcode khớp filesystem: 27 file app, 10 file test, không thiếu/trùng.
+- Có 50 test (49 unit test model/service + 1 smoke test app).
+- 39 kiểm tra Foundation biên dịch từ mã nguồn thật MoneyFormatter, LocalCalendar
+  và ManagementValidation: đạt, gồm tên tiếng Việt, Unicode, trim và độ dài.
+- `swift test` toàn bộ bước 1–3: exit 1 ở biên dịch vì thiếu SwiftDataMacros;
+  chưa thực thi các unit test. Log: `/tmp/savemoney-step3-test.log`.
+- `swift build`: exit 1 cùng nguyên nhân. Log: `/tmp/savemoney-step3-build.log`.
+- Build iOS bằng `xcodebuild`: exit 1 vì chỉ có Command Line Tools, chưa cài
+  Xcode. Log: `/tmp/savemoney-step3-ios-build.log`.
+- Chưa gỡ/cài app trên thiết bị; chưa kiểm tra trực quan, VoiceOver hoặc Dynamic
+  Type trên iPhone. Không xem việc có code/test là xác nhận test đã đạt.
+
+### Checklist chạy lại bước 3
+
+- [ ] Xóa app thử nghiệm cũ khỏi simulator/iPhone trước khi cài schema mới.
+- [ ] Chạy toàn bộ unit test, build iOS và chạy trên iPhone.
+- [ ] Lần đầu đúng 1 ví/10 danh mục, đóng/mở lại và archive danh mục không seed lại.
+- [ ] Thêm/sửa tên, kiểm tra trùng với mục archive, 30/31 ký tự và khoảng trắng.
+- [ ] Thêm ví nợ, sửa số dư ban đầu: số dư trước/sau khớp BalanceCalculator.
+- [ ] Archive ví còn tiền: tổng không đổi; ví cuối cùng bị chặn; khôi phục đúng.
+- [ ] Danh mục có giao dịch khóa loại; đổi tên/icon cập nhật lịch sử; archive và
+      khôi phục giữ giao dịch và số dư.
+- [ ] Chọn ví/danh mục ở Thêm rồi archive ở tab Ví: lựa chọn cũ bị bỏ, draft còn.
+      Sửa lịch sử cũ vẫn đọc được ví/danh mục archive.
+- [ ] Dynamic Type lớn nhất, chế độ tối, VoiceOver: dùng được toàn bộ màn hình mới.

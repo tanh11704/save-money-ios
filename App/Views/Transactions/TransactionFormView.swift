@@ -45,6 +45,11 @@ struct TransactionFormView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if original == nil && !store.wallets.contains(where: { !$0.isArchived }) {
+                    Text("Chưa có ví đang dùng. Sang tab Ví để thêm hoặc khôi phục ví trước khi nhập giao dịch.")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("transaction.noActiveWallet")
+                }
                 kindPicker
 
                 amountDisplay
@@ -70,7 +75,7 @@ struct TransactionFormView: View {
                     Button("Tải lại dữ liệu") { reload() }
                         .frame(minHeight: 44)
                 }
-                Text("Dữ liệu mẫu tạm để kiểm tra. Chưa nhập dữ liệu thật.")
+                Text("Chưa nhập dữ liệu thật trước khi hoàn tất sao lưu và khôi phục.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             .padding()
@@ -100,6 +105,10 @@ struct TransactionFormView: View {
                 preserveWallet: original != nil)
             saveError = nil
             saved = false
+        }
+        .onChange(of: store.snapshotVersion) { _, _ in
+            draft = TransactionFormSelection.reconcile(draft, wallets: store.wallets,
+                categories: store.categories, editing: original)
         }
         .task(id: saved) {
             guard saved else { return }

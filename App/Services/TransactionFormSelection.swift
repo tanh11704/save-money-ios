@@ -39,4 +39,16 @@ struct TransactionFormSelection {
         }
         return draft
     }
+    /// Rebind stale snapshots by ID after management changes. Do not silently
+    /// replace an archived selection while a transaction is being entered.
+    static func reconcile(_ input: TransactionDraft, wallets: [Wallet], categories: [Category],
+                          editing original: Transaction? = nil) -> TransactionDraft {
+        var draft = input
+        draft.wallet = self.wallets(wallets, retaining: original?.wallet?.id).first { $0.id == input.wallet?.id }
+        draft.toWallet = input.kind == .transfer
+            ? self.wallets(wallets, retaining: original?.toWallet?.id, excluding: draft.wallet?.id).first { $0.id == input.toWallet?.id } : nil
+        draft.category = self.categories(categories, kind: input.kind, retaining: original?.category?.id).first { $0.id == input.category?.id }
+        return draft
+    }
+
 }

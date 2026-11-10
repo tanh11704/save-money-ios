@@ -11,6 +11,8 @@ final class TransactionScreenStore: ObservableObject {
     @Published private(set) var balances: [UUID: String] = [:]
     @Published private(set) var totalBalance = MoneyFormatter.string(from: 0)
     @Published private(set) var ready = false
+    @Published private(set) var snapshotVersion = UUID()
+    @Published private(set) var balanceValues: [UUID: Int64] = [:]
     @Published var errorMessage: String?
     let recent = RecentSelectionStore()
     private var container: ModelContainer?
@@ -20,7 +22,7 @@ final class TransactionScreenStore: ObservableObject {
         guard self.container == nil else { return }
         self.container = container
         do {
-            try TemporarySampleData.installIfNeeded(container: container)
+            try DefaultDataSeeder.installIfNeeded(container: container)
             try reload()
             ready = true
         } catch { errorMessage = TransactionPresentation.errorMessage(error) }
@@ -40,8 +42,11 @@ final class TransactionScreenStore: ObservableObject {
         let categories = try context.fetch(FetchDescriptor<Category>(sortBy: [SortDescriptor(\Category.name)]))
         let transactions = try context.fetch(FetchDescriptor<Transaction>(sortBy: [SortDescriptor(\Transaction.date, order: .reverse)]))
         var balances: [UUID: String] = [:]
+        var values: [UUID: Int64] = [:]
         for wallet in wallets {
-            balances[wallet.id] = MoneyFormatter.string(from: try BalanceCalculator.balance(for: wallet, transactions: transactions))
+            let value = try BalanceCalculator.balance(for: wallet, transactions: transactions)
+            values[wallet.id] = value
+            balances[wallet.id] = MoneyFormatter.string(from: value)
         }
         let total = try BalanceCalculator.totalBalance(wallets: wallets, transactions: transactions)
         readContext = context
@@ -49,8 +54,10 @@ final class TransactionScreenStore: ObservableObject {
         self.categories = categories
         self.transactions = transactions
         self.balances = balances
+        balanceValues = values
         totalBalance = MoneyFormatter.string(from: total)
         errorMessage = nil
+        snapshotVersion = UUID()
     }
 
     func save(_ draft: TransactionDraft, editing id: UUID?) throws {
@@ -70,4 +77,53 @@ final class TransactionScreenStore: ObservableObject {
             try reload()
         } catch { errorMessage = TransactionPresentation.errorMessage(error) }
     }
+    func saveWallet(_ draft: WalletDraft, editing id: UUID?) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        let service = WalletService(container: container)
+        if let id { try service.update(id: id, with: draft) }
+        else { try service.create(draft) }
+        refreshAfterManagementWrite()
+    }
+
+    func archiveWallet(_ id: UUID) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        try WalletService(container: container).archive(id: id)
+        refreshAfterManagementWrite()
+    }
+
+    func restoreWallet(_ id: UUID) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        try WalletService(container: container).restore(id: id)
+        refreshAfterManagementWrite()
+    }
+
+    func saveCategory(_ draft: CategoryDraft, editing id: UUID?) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        let service = CategoryService(container: container)
+        if let id { try service.update(id: id, with: draft) }
+        else { try service.create(draft) }
+        refreshAfterManagementWrite()
+    }
+
+    func archiveCategory(_ id: UUID) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        try CategoryService(container: container).archive(id: id)
+        refreshAfterManagementWrite()
+    }
+
+    func restoreCategory(_ id: UUID) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        try CategoryService(container: container).restore(id: id)
+        refreshAfterManagementWrite()
+    }
+
+    func categoryHasTransactions(_ id: UUID) -> Bool {
+        transactions.contains { $0.category?.id == id }
+    }
+
+    private func refreshAfterManagementWrite() {
+        do { try reload() }
+        catch { errorMessage = "Đã lưu thay đổi, nhưng chưa tải lại được dữ liệu. Hãy tải lại." }
+    }
+
 }

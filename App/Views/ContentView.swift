@@ -23,6 +23,11 @@ struct ContentView: View {
                     }
                     .tabItem { Label("Lịch sử", systemImage: "list.bullet") }
                     .tag(1)
+                    NavigationStack {
+                        WalletListView(store: store)
+                    }
+                    .tabItem { Label("Ví", systemImage: "wallet.bifold") }
+                    .tag(2)
                 }
             } else {
                 VStack(spacing: 16) {

@@ -64,4 +64,43 @@ final class TransactionFormSelectionTests: XCTestCase {
             XCTAssertEqual(TransactionPresentation.amount(transaction), sign + "1.000 ₫")
         }
     }
+    func testArchiveReconciliationClearsNewFormButKeepsHistoricalEdit() async throws {
+        let wallet = Wallet(name: "Ví")
+        let category = Category(name: "Chi", kind: .expense)
+        let original = Transaction(amount: 100, kind: .expense, wallet: wallet, category: category)
+        let input = TransactionDraft(amount: 200, wallet: wallet, category: category)
+        wallet.isArchived = true
+        category.isArchived = true
+        let newForm = TransactionFormSelection.reconcile(input, wallets: [wallet], categories: [category])
+        XCTAssertNil(newForm.wallet)
+        XCTAssertNil(newForm.category)
+        XCTAssertEqual(newForm.amount, 200)
+        let edit = TransactionFormSelection.reconcile(input, wallets: [wallet], categories: [category], editing: original)
+        XCTAssertEqual(edit.wallet?.id, wallet.id)
+        XCTAssertEqual(edit.category?.id, category.id)
+        XCTAssertNoThrow(try TransactionValidator.validate(edit, editing: original))
+        let missing = TransactionFormSelection.reconcile(input, wallets: [], categories: [])
+        XCTAssertNil(missing.wallet)
+        XCTAssertNil(missing.category)
+    }
+
+    func testNoActiveWalletAndArchivedRecentSelectionAreSafe() async throws {
+        let suite = "FormSelectionTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let recent = RecentSelectionStore(defaults: defaults)
+        let wallet = Wallet(name: "Cũ")
+        let category = Category(name: "Cũ", kind: .expense)
+        recent.remember(TransactionDraft(amount: 1, wallet: wallet, category: category))
+        wallet.isArchived = true
+        category.isArchived = true
+        let restored = TransactionFormSelection.restoring(TransactionDraft(), wallets: [wallet], categories: [category], recent: recent)
+        XCTAssertNil(restored.wallet)
+        XCTAssertNil(restored.category)
+        XCTAssertThrowsError(try TransactionValidator.validate(restored))
+        let reopened = RecentSelectionStore(defaults: defaults)
+        XCTAssertNil(reopened.selection(for: .expense, wallets: [wallet], categories: [category]).walletID)
+        XCTAssertNil(reopened.selection(for: .expense, wallets: [wallet], categories: [category]).categoryID)
+    }
+
 }

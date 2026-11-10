@@ -1,11 +1,9 @@
 import Foundation
 import SwiftData
 
-/// TEMPORARY, step 2 only. Remove this bootstrap in step 3.
-/// Never adds sample records to an existing ledger; never creates transactions.
 @MainActor
-struct TemporarySampleData {
-    static let marker = "SaveMoney.temporaryStep2DataInstalled"
+struct DefaultDataSeeder {
+    static let marker = "didSeedDefaults"
 
     static func installIfNeeded(container: ModelContainer, defaults: UserDefaults = .standard) throws {
         guard !defaults.bool(forKey: marker) else { return }
@@ -13,15 +11,13 @@ struct TemporarySampleData {
         context.autosaveEnabled = false
         guard try context.fetchCount(FetchDescriptor<Wallet>()) == 0,
               try context.fetchCount(FetchDescriptor<Category>()) == 0,
-              try context.fetchCount(FetchDescriptor<Transaction>()) == 0 else {
-            defaults.set(true, forKey: marker)
-            return
-        }
+              try context.fetchCount(FetchDescriptor<Transaction>()) == 0 else { return }
         context.insert(Wallet(name: "Tiền mặt"))
-        context.insert(Wallet(name: "Ngân hàng"))
-        for (name, icon) in [("Ăn uống", "fork.knife"), ("Đi lại", "bus"), ("Khác", "tag")] {
-            context.insert(Category(name: name, kind: .expense, icon: icon))
-        }
+        let expense: [(String, String)] = [
+            ("Ăn uống", "fork.knife"), ("Đi lại", "bus"), ("Nhà ở", "house"), ("Hóa đơn", "doc.text"),
+            ("Mua sắm", "bag"), ("Sức khỏe", "cross.case"), ("Giải trí", "gamecontroller"), ("Khác", "tag")
+        ]
+        for (name, icon) in expense { context.insert(Category(name: name, kind: .expense, icon: icon)) }
         context.insert(Category(name: "Lương", kind: .income, icon: "banknote"))
         context.insert(Category(name: "Thu nhập khác", kind: .income, icon: "plus.circle"))
         do {

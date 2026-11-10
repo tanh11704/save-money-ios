@@ -14,8 +14,8 @@ struct BalanceCalculator {
         var expenseByCategory: [UUID: Int64] = [:]
     }
 
-    static func balance(for wallet: Wallet, transactions: [Transaction]) throws -> Int64 {
-        var result = wallet.openingBalance
+    static func balance(for wallet: Wallet, transactions: [Transaction], openingBalance: Int64? = nil) throws -> Int64 {
+        var result = openingBalance ?? wallet.openingBalance
         for transaction in transactions {
             let kind = try validatedKind(transaction)
             if transaction.wallet?.id == wallet.id {

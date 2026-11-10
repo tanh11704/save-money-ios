@@ -32,6 +32,7 @@ struct TransactionPresentation {
     }
 
     static func errorMessage(_ error: Error) -> String {
+        if let error = error as? ManagementError { return error.localizedDescription }
         if let error = error as? TransactionValidator.ValidationError { return error.localizedDescription }
         if let error = error as? TransactionService.ServiceError { return error.localizedDescription }
         if error is BalanceCalculator.CalculationError {
