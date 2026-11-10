@@ -87,3 +87,37 @@ Kết quả kiểm tra ngày 10/11/2026:
 Chưa tạo dữ liệu tài chính hoặc store trên thiết bị. Schema này là schema khởi
 đầu; nếu đã cài và nhập dữ liệu ngoài phiên này, cần báo lại trước khi chạy.
 Commit bước 1 lưu tiến độ chưa được xác minh, không đánh dấu cổng hoàn thành.
+
+
+## Bước 2a: tầng Services (chưa có giao diện)
+
+Đã viết 5 service theo mục 12 và thêm 19 unit test:
+
+- `MoneyFormatter`: Int64 → dấu chấm hàng nghìn + `₫`, đọc chuỗi nhập hợp lệ;
+  bàn phím giữ state Int64 với phím số, `000`, xóa lùi. Vượt
+  999.999.999.999 thì giữ số cũ. Định dạng số dư âm hỗ trợ cả Int64.min.
+- `TransactionValidator`: kiểm tra số tiền, quan hệ theo loại, danh mục đúng
+  loại, archive; lỗi tiếng Việt. Sửa giao dịch cũ được giữ nguyên quan hệ đã
+  archive nhưng không được chọn mới quan hệ archive khác.
+- `TransactionService`: tạo/sửa/xóa và save tường minh; khi đổi loại xóa danh
+  mục hoặc ví đích thừa. Context mới cho mỗi thao tác, kiểm tra lại ID đã lưu
+  và archive trong store. Save lỗi thì rollback context của thao tác; không
+  save/rollback các thay đổi đang nhập ở main context.
+- `TransactionGrouping`: ngày Asia/Saigon, mới nhất trước, thứ tự ổn định khi
+  cùng thời điểm; tiêu đề hôm nay/hôm qua và ngày vi_VN.
+- `RecentSelectionStore`: lưu ID UserDefaults riêng theo thu/chi/chuyển, chỉ
+  cập nhật từ service sau khi save thành công; lọc ID thiếu hoặc đã archive
+  khi lấy lựa chọn cho giao dịch mới.
+
+Không đổi schema, chưa có dữ liệu mẫu hoặc UI bước 2b–2e.
+
+Kiểm tra ngày 10/11/2026:
+
+- Parse cú pháp Swift và plist/project: đạt; mọi source đã vào đúng target.
+- Biên dịch trực tiếp mã nguồn thật MoneyFormatter + LocalCalendar bằng
+  swiftc và chạy 29 phép kiểm tra độc lập: đạt (format/parse các mốc yêu cầu,
+  giới hạn bàn phím, số âm lớn và ngày/tháng Asia/Saigon).
+- `swift test` và `swift build`: thất bại ở bước biên dịch vì thiếu plugin
+  `SwiftDataMacros` trong Command Line Tools; các unit test chưa được thực thi.
+- Cần Xcode đầy đủ để xác minh persistence, validator/model và toàn bộ test.
+  Chưa đánh dấu 2a đạt và chưa chuyển sang 2b.
