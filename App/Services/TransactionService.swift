@@ -65,7 +65,11 @@ final class TransactionService {
         // Fresh identity map on each call: archive changes made elsewhere are visible.
         context = ModelContext(container)
         context.autosaveEnabled = false
-        do { return try operation() }
+        do {
+            let result = try operation()
+            NotificationCenter.default.post(name: .ledgerDidChange, object: container, userInfo: ["transaction": true])
+            return result
+        }
         catch { context.rollback(); throw error }
     }
 

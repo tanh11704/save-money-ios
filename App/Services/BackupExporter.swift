@@ -1,0 +1,67 @@
+import Foundation
+import SwiftData
+
+@MainActor
+struct BackupExporter {
+    enum Kind: String { case auto = "Auto", manual = "Manual", preRestore = "PreRestore" }
+    let container: ModelContainer
+    let directory: URL
+    var appVersion = BackupExporter.applicationVersion
+    static var applicationVersion: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+    var beforeWrite: (() throws -> Void)?
+    var afterWrite: ((URL) throws -> Void)?
+
+    func capture(now: Date = Date()) throws -> BackupFile {
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        let wallets = try context.fetch(FetchDescriptor<Wallet>()).sorted { $0.id.uuidString < $1.id.uuidString }
+        let categories = try context.fetch(FetchDescriptor<Category>()).sorted { $0.id.uuidString < $1.id.uuidString }
+        let transactions = try context.fetch(FetchDescriptor<Transaction>()).sorted { $0.id.uuidString < $1.id.uuidString }
+        let payload = BackupFile.Payload(
+            wallets: try wallets.map { .init(id: $0.id.uuidString, name: $0.name, kind: $0.kindRaw,
+                openingBalance: $0.openingBalance, isArchived: $0.isArchived, createdAt: try BackupFile.milliseconds($0.createdAt)) },
+            categories: categories.map { .init(id: $0.id.uuidString, name: $0.name, kind: $0.kindRaw, icon: $0.icon, isArchived: $0.isArchived) },
+            transactions: try transactions.map { .init(id: $0.id.uuidString, amount: $0.amount, kind: $0.kindRaw,
+                date: try BackupFile.milliseconds($0.date), note: $0.note, walletId: $0.wallet?.id.uuidString,
+                toWalletId: $0.toWallet?.id.uuidString, categoryId: $0.category?.id.uuidString) })
+        let graph = BackupValidator.Graph(wallets: wallets, categories: categories, transactions: transactions)
+        let file = BackupFile(createdAt: try BackupFile.milliseconds(now), appVersion: appVersion,
+            checksum: try BackupFile.digest(payload), summary: .init(wallets: wallets.count, categories: categories.count,
+                transactions: transactions.count, expectedBalances: try BackupValidator.expectedBalances(graph)), payload: payload)
+        _ = try BackupValidator.validate(file)
+        return file
+    }
+
+    func export(kind: Kind, now: Date = Date(), captured: BackupFile? = nil) throws -> URL {
+        let file = try captured ?? capture(now: now)
+        _ = try BackupValidator.validate(file)
+        let folder = kind == .preRestore ? directory.appendingPathComponent("PreRestore", isDirectory: true) : directory
+        let manager = FileManager.default
+        try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        let temporary = folder.appendingPathComponent(".\(UUID().uuidString).tmp")
+        defer { try? manager.removeItem(at: temporary) }
+        try beforeWrite?()
+        try BackupFile.encoder().encode(file).write(to: temporary, options: .withoutOverwriting)
+        try afterWrite?(temporary)
+        let readBack = try BackupValidator.read(Data(contentsOf: temporary))
+        guard readBack.file == file else { throw BackupError.unreadable }
+        let formatter = DateFormatter()
+        formatter.calendar = LocalCalendar.calendar; formatter.timeZone = LocalCalendar.calendar.timeZone
+        formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyyMMdd-HHmmss"
+        // Preserve the specified filename format without overwriting a same-second backup.
+        for offset in 0..<86_400 {
+            let stamp = formatter.string(from: now.addingTimeInterval(TimeInterval(offset)))
+            let target = folder.appendingPathComponent("SaveMoney-\(stamp)-\(kind.rawValue).json")
+            if !manager.fileExists(atPath: target.path) {
+                try manager.moveItem(at: temporary, to: target)
+                return target
+            }
+        }
+        throw BackupError.collision
+    }
+}

@@ -31,6 +31,10 @@ struct RecentSelectionStore {
                          destinationID: kind == .transfer ? destination?.id : nil)
     }
 
+    func clear() {
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(prefix) { defaults.removeObject(forKey: key) }
+    }
+
     private func set(_ id: UUID?, field: String, kind: TransactionKind) {
         let key = prefix + kind.rawValue + "." + field
         if let id { defaults.set(id.uuidString, forKey: key) }

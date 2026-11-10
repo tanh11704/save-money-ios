@@ -4,16 +4,21 @@
 
 ## Trạng thái
 
-Đã triển khai bước 1–4: giao dịch, ví/danh mục và thống kê tháng.
-**Kết quả mới nhất:** 64/64 unit test model/service chạy đạt trên macOS bằng
-Xcode 27.2; app build iOS Simulator đạt. Chưa chạy trên simulator/iPhone vì
-chưa cài runtime iOS Simulator; smoke test iOS và kiểm tra trực quan còn chờ.
+Đã triển khai phần code bước 1–6: giao dịch, ví/danh mục, thống kê,
+backup/restore, tự sao lưu, Cài đặt và khóa ứng dụng. Bước 7 có hướng dẫn và
+checklist bên dưới, chưa nghiệm thu trên thiết bị/SideStore.
 
-Các ghi nhận thiếu Xcode/SwiftDataMacros ở bước 1–3 bên dưới là lịch sử trước
-khi có Xcode. Terminal vẫn trỏ vào Command Line Tools; dùng DEVELOPER_DIR như
-hướng dẫn bên dưới để chạy bằng Xcode mà không đổi cấu hình máy.
+**Kết quả mới nhất:** 96/96 unit test bước 1–6 đạt trên macOS bằng Xcode 27.2.
+App và test target iOS Simulator Debug build đạt; app Release build đạt.
+Smoke test iOS, kiểm tra trực quan và diễn tập thiết bị chưa thực hiện vì máy
+chưa có runtime iOS Simulator và chưa sử dụng iPhone thật.
 
-Bước 5–7 (backup/restore, khóa app và nghiệm thu) chưa triển khai.
+Các ghi nhận thiếu Xcode/SwiftDataMacros ở bước 1–3 là lịch sử. Terminal vẫn
+trỏ vào Command Line Tools; dùng DEVELOPER_DIR như hướng dẫn để chạy Xcode.
+
+Chưa có tag step-4-verified/step-5-verified/step-6-verified/step-7-verified.
+Theo yêu cầu làm toàn bộ rồi kiểm tra sau, đã tiếp tục code trước nghiệm thu
+thiết bị; không tự xác nhận việc đã dùng thử vài ngày hoặc đã qua ngày thứ 7.
 
 Bundle ID đã chốt: `vn.tanh11704.SaveMoney`. Giữ cố định trước và sau khi dùng thật.
 Deployment target tạm là iOS 17.0 (tối thiểu cho SwiftData); cần xác nhận phiên bản
@@ -187,7 +192,7 @@ test, UI hoặc khả năng tiếp cận đã chạy đạt.
 
 ### Checklist chạy lại khi có Xcode/iPhone (chưa thực hiện)
 
-- [ ] Chạy `Cmd+U` toàn bộ 65 test hiện tại trong scheme SaveMoney, sau đó `Cmd+B`.
+- [ ] Chạy `Cmd+U` toàn bộ 97 test hiện tại trong scheme SaveMoney, sau đó `Cmd+B`.
 - [ ] Cài/run trên iPhone thật; app mở vào Thêm, dữ liệu tạm chỉ tạo một lần.
 - [ ] Chi: nhập số → chọn danh mục → Lưu; số tiền xóa, loại/ví/danh mục giữ lại,
       có rung nhẹ/“Đã lưu”, không tự đổi tab. Kiểm tra mở lại app nhớ lựa chọn.
@@ -400,3 +405,224 @@ mỗi dòng thu mở đúng 1 giao dịch. Test mẫu đã khớp các số cố
 
 **Bước 4 chưa qua toàn bộ cổng nghiệm thu Phần C** cho tới khi các ô còn lại
 được kiểm tra trên màn hình và thiết bị. Chưa nhập dữ liệu thật trước backup.
+
+
+## Bước 5 — Backup/restore và tự động hóa
+
+Đã bổ sung nguyên văn mục 15–16 của plan vào SPEC, giữ nội dung đã có. Mục 15
+ưu tiên hơn mục 8. Không đổi schema SwiftData ở bước này.
+
+### Định dạng đã chốt v1
+
+- File `SaveMoney-yyyyMMdd-HHmmss-{Auto|Manual|PreRestore}.json`, ngày giờ tên
+  theo Asia/Saigon. Cùng giây thì chọn tên giây kế tiếp còn trống, không ghi đè.
+- Envelope `savemoney-backup`, schemaVersion **định dạng file** = 1, độc lập
+  schema SwiftData. appVersion đọc từ CFBundleShortVersionString/CFBundleVersion.
+- DTO Codable Int64 cho tiền và thời gian mili giây từ 1970. Không qua
+  JSONSerialization hoặc Double cho tiền. Độ chính xác thời gian của file là
+  **mili giây**; phần nhỏ hơn mili giây của Date gốc được làm tròn.
+- UUID viết hoa; quan hệ rỗng được ghi `null` và bắt buộc có key trong file.
+- Payload mã hóa sortedKeys, withoutEscapingSlashes, không khoảng trắng thừa;
+  SHA-256 tính trên payload chuẩn sau decode/re-encode. Thứ tự mảng export theo ID.
+- File mẫu vàng `App/Tests/Fixtures/golden-v1.json` được kiểm tra trong test,
+  chỉ nằm trong test bundle, không có trong app Release. Thay quy tắc chuẩn phải
+  tăng phiên bản định dạng và giữ decoder cho file cũ.
+- Checksum chỉ phát hiện hỏng vô tình, không chống người cố ý sửa và băm lại.
+  JSON chưa mã hóa, đọc được trong Tệp dù app có khóa Face ID.
+
+### An toàn ghi và restore
+
+Export đọc snapshot riêng, tính số dư bằng BalanceCalculator, ghi file tạm cùng
+thư mục, đọc lại xác minh checksum/số lượng/số dư và toàn bộ nội dung, rồi mới
+move sang tên chính thức. File tạm được dọn khi lỗi; không thay file cũ.
+
+Import cho chọn file từ Tệp hoặc danh sách backup. Kiểm tra header/version,
+checksum, số lượng, ID/trùng/tham chiếu/loại giao dịch/số tiền và số dư trước khi
+hiện tóm tắt. Tóm tắt có từng ví, tổng số dư và khoảng ngày. Phải bấm xác nhận
+thay toàn bộ mới restore; giữ nguyên bytes đã được xem trước.
+
+Trước khi thay dữ liệu, export PreRestore và kiểm tra đọc lại. Không làm được
+thì dừng. Context restore riêng, autosave tắt, xóa giao dịch trước rồi ví/danh
+mục, nạp graph, đối chiếu số dư từng ví trước save. Save một lần; lỗi rollback.
+Thành công mới xóa ID lựa chọn gần nhất, đặt didSeedDefaults=true và tải lại UI.
+Restore bản trống không tạo lại danh mục/ví mặc định khi mở app lần sau.
+
+Store SwiftData vẫn dùng `Application Support/default.store` (đường dẫn mặc
+định trước đây), được cấu hình rõ, CloudKit tắt. **Store không nằm trong Documents.**
+Chỉ `Documents/Backups/` được chia sẻ qua Tệp; UIFileSharingEnabled và
+LSSupportsOpeningDocumentsInPlace đều bật. Mở store lỗi không tự xóa/tạo lại store.
+
+### Tự động hóa và nhắc nhở
+
+- Auto khi app vào background với beginBackgroundTask, và sau 20 thay đổi
+  giao dịch thành công (thêm/sửa/xóa); bộ đếm tồn tại qua lần mở app.
+- Auto so checksum với bản hợp lệ mới nhất; trùng thì bỏ qua. Nếu toàn bộ kho
+  hiện rỗng còn bản trước có dữ liệu thì bỏ qua. Bản Manual rỗng vẫn được phép.
+- Giữ 10 bản Auto/Manual hợp lệ; 5 PreRestore trong thư mục riêng, Auto không đẩy
+  PreRestore ra ngoài. File tạm/file ngoài định dạng không được tính là bản hợp lệ.
+- Sao lưu chạy từ AppRuntime, không phụ thuộc nội dung đang khóa hay mở.
+- Tab Cài đặt: trạng thái, Sao lưu ngay, Share Sheet, danh sách backup và restore.
+- Mốc chép ra ngoài chỉ đổi khi Share Sheet báo hoàn tất thành công, không đổi
+  khi chỉ mở hoặc hủy sheet. Banner dựa trên mốc này: quá 7 ngày vàng, quá 14
+  ngày đỏ; chưa từng chép có nhắc rõ. Backup tự động không làm mới mốc chép ra ngoài.
+- Sau mỗi lần chép hoàn tất: xin quyền thông báo, hủy các lịch cũ và đặt lại
+  +14/+21/+28 ngày, nội dung không có số tiền. Bị từ chối quyền thì có giải thích.
+
+### Diễn tập 5d (chưa thực hiện trên thiết bị)
+
+- [ ] Tạo mẫu có thu/chi/chuyển và ví/danh mục archive.
+- [ ] Sao lưu, chia sẻ sang iCloud Drive; ghi số dư từng ví ra giấy.
+- [ ] Xóa **app thử nghiệm**, cài lại, import file từ iCloud Drive, so từng ví.
+- [ ] Trên bản sao file, sửa một ký tự: bị từ chối, dữ liệu hiện tại không đổi.
+- [ ] Thử ảnh/PDF/JSON không phải backup: báo lỗi rõ, không đổi dữ liệu.
+- [ ] Thông báo thử với mốc ngắn trên thiết bị đã hiện; không lộ số tiền.
+- [ ] File hiện trong Tệp; store không được chia sẻ; thử lưu file ra ngoài.
+
+Không cần thử restore toàn bộ iPhone từ iCloud Backup chỉ để nghiệm thu app.
+Sau khi cả test và diễn tập đều đạt mới gắn `step-5-verified`.
+
+## Bước 6 — Khóa ứng dụng
+
+AppLockService có Clock và Authenticator thay thế được trong test; trạng thái
+locked/unlocked/authenticating. Bản thật dùng LocalAuthentication với
+.deviceOwnerAuthentication (Face ID/Touch ID và mật mã máy dự phòng), có
+NSFaceIDUsageDescription tiếng Việt. Mặc định tắt.
+
+Khi bật, mở app lạnh là locked; ở nền **hơn 30 giây** thì khóa, đúng 30 giây
+hoặc ít hơn thì giữ trạng thái. Inactive không bắt đầu bộ đếm nền hoặc tự khóa
+lại: hộp thoại hệ thống không gây vòng lặp. Kết quả xác thực cũ bị bỏ qua nếu
+app đã chuyển nền. Bật/tắt đều phải xác thực thành công; chưa có mật mã máy thì
+không bật. Công tắc và lỗi ở Cài đặt.
+
+Khi locked/authenticating, ProtectedAppView không dựng ContentView tài chính.
+Khi không active, màn che hệ thống che snapshot app switcher và ẩn nội dung
+thật khỏi VoiceOver. Mở khóa tự thử một lần khi màn khóa active, thất bại có
+nút Mở khóa để thử lại. Backup nền chạy độc lập.
+
+### Diễn tập 6c (bắt buộc iPhone, chưa thực hiện)
+
+- [ ] Face ID thành công; thất bại rồi chọn mật mã máy vẫn mở được.
+- [ ] Dưới/đúng 30 giây không khóa, hơn 30 giây khóa.
+- [ ] App switcher không có số liệu; VoiceOver màn khóa không đọc dữ liệu thật.
+- [ ] Share Sheet/Tệp quay lại không xác thực lặp hoặc kẹt.
+- [ ] Bật/tắt yêu cầu xác thực; chưa đặt mật mã có giải thích.
+- [ ] Backup tự động vẫn chạy khi app đang khóa.
+
+Chỉ gắn `step-6-verified` sau checklist máy thật. Face ID chỉ khóa giao diện;
+JSON trong Tệp không được mã hóa. Mã hóa backup thuộc giai đoạn 3, chưa triển khai.
+
+## Bước 7 — Đưa vào dùng thật (chưa nghiệm thu)
+
+### Thông tin phát hành cần chốt
+
+| Mục | Trạng thái |
+| --- | --- |
+| Bundle ID nguồn | `vn.tanh11704.SaveMoney` |
+| Bundle ID thực tế sau ký SideStore | Chưa cài/ký, phải ghi lại từ bản cài thật |
+| Deployment target trong code | iOS 17.0; vẫn tạm, chưa biết iOS của iPhone |
+| iPhone/model/iOS đã kiểm tra | Chưa được cung cấp hoặc xác minh |
+| Ngày kiểm tra code | 10/11/2026, Xcode 27.2, macOS test in-memory |
+| Bản Release | Build SDK iOS Simulator; chưa có IPA đã ký để phân phối |
+| Dữ liệu thử trong Release | Không có giao dịch mẫu/debug seeder; chỉ dữ liệu mặc định bắt buộc |
+
+Hướng dẫn cài SideStore theo [tài liệu chính thức SideStore](https://docs.sidestore.io/).
+Đã xác nhận trang tài liệu còn truy cập được ngày 10/11/2026; không coi README
+này là hướng dẫn cài SideStore đã được thử trên iPhone cụ thể.
+
+### Trình tự nghiệm thu bản dùng thật
+
+1. Xác nhận model/iOS của iPhone và chốt deployment target. Dùng Apple ID riêng;
+   bật Developer Mode nếu tài liệu chính thức/hệ thống yêu cầu.
+2. Cài SideStore/app theo tài liệu chính thức, ghi bundle ID thực tế vào bảng.
+   Chỉ sau khi đã có backup ngoài thiết bị mới xóa bản cài thử từ Xcode để tránh nhầm.
+3. Ngày 1: nhập dữ liệu mẫu, backup và chép iCloud Drive, bật khóa app. Làm mới
+   thủ công trong SideStore và xác minh toàn bộ dữ liệu còn nguyên.
+4. Qua ngày thứ 7: xác minh tự làm mới hoạt động. Nếu không, chốt lịch làm mới
+   thủ công hằng tuần. Chưa thể đánh dấu mục này bằng test tự động trong repo.
+5. Tự đặt Lời nhắc hằng tuần trong app Lời nhắc của iPhone: “Mở SideStore, kiểm
+   tra hạn app”. Không dựa vào thông báo trong SaveMoney khi chữ ký app hết hạn.
+6. Lặp toàn bộ 5d trên **bản SideStore này**: backup ra ngoài, xóa app, cài lại
+   qua SideStore, restore file, so từng ví và từng giao dịch. Đây là chứng minh
+   chuyển được dữ liệu giữa hai bundle ID nếu cách ký làm ID thay đổi.
+7. Sau khi mọi checklist đạt mới chọn mốc bắt đầu sạch, tạo ví/số dư thật, backup
+   ngay và chép ra ngoài. Một đến hai tuần đầu đối chiếu số dư thường xuyên,
+   giữ cách ghi cũ song song nếu có thể. Không xóa mẫu trước khi đã giữ bản sao.
+
+### Quy trình sự cố
+
+- App không mở hoặc chữ ký hết hạn: giữ file đã chép iCloud Drive, xem tài liệu
+  SideStore để làm mới/cài lại. Không xóa app chứa dữ liệu duy nhất chỉ để thử.
+- Store không mở: app không tự xóa store. Giữ nguyên thiết bị và file backup,
+  kiểm tra nguyên nhân trên bản sao trước mọi thao tác phá hủy dữ liệu.
+- Backup tự động lỗi: vào Cài đặt → Sao lưu ngay, xác nhận bản mới đọc được và
+  chép ra iCloud Drive. Không ghi đè/xóa bản tốt trước khi có bản thay thế đã kiểm tra.
+- Restore bị từ chối: giữ file gốc, dùng một bản khác. Chỉ thử sửa trên bản sao.
+- Restore thành công nhưng chọn nhầm file: dùng bản PreRestore vừa tạo (5 bản
+  riêng) hoặc bản ngoài thiết bị đã xác minh để khôi phục lại.
+- Không chắc app hết hạn còn hiện thư mục trong Tệp hay không; file đã chép ra
+  iCloud Drive mới là bản độc lập với app cần giữ.
+
+### Mọi lần đổi schema sau này
+
+1. Export và chép backup ngoài thiết bị; xác minh checksum và diễn tập restore.
+2. Ghi kế hoạch migration SwiftData có phiên bản nguồn/đích; giữ khả năng đọc
+   backup cũ, không nhầm schemaVersion file JSON với phiên bản model.
+3. Thay model và viết migration, thử trên **bản sao** store, kiểm tra từng bản
+   ghi và số dư, thử đóng/mở app và restore các phiên bản backup được hỗ trợ.
+4. Chỉ cập nhật bản dùng thật khi kiểm tra đạt và vẫn còn đường lui. Không tự
+   reset store khi lỗi. Đổi canonical JSON thì tăng phiên bản định dạng file.
+
+### Cổng dùng thật
+
+- [ ] Step-4-verified: đã dùng thử vài ngày và đối chiếu màn hình theo bước 4.
+- [ ] Toàn bộ test bước 1–6 đạt trên iOS, bao gồm smoke test app.
+- [ ] Diễn tập 5d và restore trên SideStore đều đạt.
+- [ ] Qua ngày thứ 7, dữ liệu vẫn nguyên, kế hoạch làm mới rõ ràng.
+- [ ] Khóa app đang bật và checklist iPhone đạt.
+- [ ] iCloud Backup của iPhone đang bật.
+- [ ] Lời nhắc hằng tuần độc lập đã đặt.
+- [ ] Có file trong iCloud Drive đã thử restore thành công.
+- [ ] Bảng thiết bị/iOS/bundle ID thực tế và ngày nghiệm thu đã điền.
+- [ ] Chỉ lúc này mới gắn step-7-verified hoặc v1.0 và nhập dữ liệu thật.
+
+Không có tag verified nào được tạo tự động trong phiên triển khai này.
+
+## Kiểm tra tổng hợp bước 5–6
+
+Kiểm tra ngày 10/11/2026 bằng Xcode 27.2:
+
+- **96/96 unit test trên macOS đạt, không bỏ qua test**: 64 test cũ và 32 test
+  mới cho backup, scheduler, nhắc nhở và khóa app; SwiftData in-memory.
+- **Debug app + test target iOS Simulator: BUILD SUCCEEDED.**
+- **Release app iOS Simulator: BUILD SUCCEEDED.** Chưa ký hoặc xuất IPA.
+- 97 test được khai báo gồm 96 unit test và 1 smoke test iOS chưa chạy.
+- Lint plist, parse Swift, project source và shared scheme: đạt. Project khớp
+  filesystem với 42 file app và 14 file test; resource Fixtures chỉ thuộc test.
+- Kiểm tra sản phẩm Release: không có golden-v1.json, không có giao dịch mẫu
+  hoặc bootstrap tạm bước 2 trong source production.
+- Log: `/tmp/savemoney-step56-tests.log`, `/tmp/savemoney-step56-build.log`,
+  `/tmp/savemoney-step56-release.log`. Build artifacts đều trong /tmp.
+- Không cài/xóa app, không ghi dữ liệu tài chính thật, không gọi xác thực hoặc
+  gửi thông báo thật trong test. Authenticator/ReminderClient đều dùng bản giả.
+- Chưa có runtime iOS Simulator; chưa kiểm tra trên iPhone. Chưa thực hiện
+  diễn tập 5d, 6c, SideStore hoặc ngày thứ 7. **Chưa đủ điều kiện dùng dữ liệu thật.**
+
+Các test quan trọng đã chạy: fixture checksum v1; export/readback tiền lớn;
+trùng tên file; lỗi ghi và dọn temp; round-trip mọi trường; thay kho không rỗng
+bằng kho không rỗng; từ chối file rỗng/hỏng/thiếu trường/schema mới/ID trùng/
+tham chiếu sai/chuyển cùng ví/số âm; PreRestore lỗi thì dừng; lỗi sau xóa và
+lệch số dư trước save đều rollback; giữ đúng 10/5 bản; Auto bỏ qua trùng/rỗng;
+bộ đếm tồn tại; banner chính xác quá 7/14 ngày; nhắc 14/21/28 ngày được đặt lại;
+khóa lạnh, ranh giới 30 giây, inactive không lặp, bật/tắt phải xác thực và
+kết quả auth muộn sau background không mở khóa được.
+
+Chạy lại sau khi cài runtime và chọn simulator/iPhone:
+
+```sh
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+swift test --scratch-path /tmp/savemoney-xcode-swift-build
+xcodebuild -project SaveMoney.xcodeproj -scheme SaveMoney -destination 'platform=iOS Simulator,id=SIMULATOR_UDID' test
+```
+
+Tài liệu vận hành là phần chuẩn bị bước 7, không phải xác nhận đã thực hiện
+các thao tác trên thiết bị. Chỉ gắn tag verified khi có kết quả nghiệm thu thật.

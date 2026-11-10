@@ -1,3 +1,4 @@
+import Foundation
 import SwiftData
 
 /// Each operation saves once, and rollback never touches another screen's draft.
@@ -11,6 +12,7 @@ struct ManagementPersistence {
         do {
             let result = try body(context)
             try context.save()
+            NotificationCenter.default.post(name: .ledgerDidChange, object: container)
             return result
         } catch {
             context.rollback()

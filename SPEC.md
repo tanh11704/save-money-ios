@@ -195,3 +195,203 @@ Chủ dự án thực hiện, không phải LLM:
 ## 11. Chưa làm (ngoài phạm vi)
 
 Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng bộ đám mây, liên kết tài khoản ngân hàng, bản Android. Chỉ xem xét lại nếu chủ dự án yêu cầu rõ.
+
+## 12. Quy tắc giao diện
+
+### Điều hướng
+- TabView, mở app vào tab "Thêm". Bước 2 chỉ có 2 tab: "Thêm" và "Lịch sử". Các tab Ví, Thống kê, Cài đặt thêm ở bước sau.
+- Sửa giao dịch mở bằng sheet từ danh sách, dùng lại đúng form của tab "Thêm".
+
+### Ô nhập số tiền
+- Dùng bàn phím số tự vẽ (không dùng TextField), gồm các phím 0-9, "000", xóa lùi. Không có con trỏ, không dán chữ, không có chỗ để gõ ký tự lạ.
+- State gốc là `Int64`. Chuỗi hiển thị luôn được sinh ra từ `Int64`, không bao giờ ngược lại.
+- Giới hạn tối đa 999.999.999.999 đ. Vượt thì bỏ qua lần bấm đó, không báo lỗi.
+- Định dạng: dấu chấm phân cách hàng nghìn, hậu tố "₫", ví dụ `1.250.000 ₫`. Dùng `monospacedDigit`.
+- Mọi định dạng tiền đi qua một `MoneyFormatter` duy nhất trong Services.
+
+### Bố cục màn hình Thêm (từ trên xuống)
+1. Chọn loại: Chi / Thu / Chuyển (segmented, mặc định Chi)
+2. Số tiền cỡ lớn
+3. Danh mục (lưới chip, mục dùng gần nhất lên đầu). Khi chọn Chuyển: thay bằng "Từ ví" và "Đến ví"
+4. Ví (chip, hiện kèm số dư hiện tại của ví)
+5. Ngày: chip "Hôm nay", "Hôm qua", "Chọn ngày"
+6. Ghi chú (không bắt buộc, thu gọn mặc định)
+7. Bàn phím số và nút Lưu nằm cuối màn hình, vùng ngón cái với tới
+
+### Hành vi
+- Lưu xong: rung nhẹ, hiện thông báo ngắn "Đã lưu", xóa số tiền, giữ nguyên loại/ví/danh mục để nhập tiếp. Không chuyển tab, không hiện alert.
+- Nút Lưu bị vô hiệu khi dữ liệu chưa hợp lệ, kèm dòng giải thích ngắn bằng tiếng Việt ngay dưới (không dùng alert).
+- Đổi loại sang Chuyển: xóa danh mục. Đổi từ Chuyển sang loại khác: xóa ví đích.
+- Ví đích không được trùng ví nguồn: ví đã chọn ở "Từ ví" bị ẩn khỏi "Đến ví".
+- Ví/danh mục đã archive không hiện khi chọn mới, nhưng vẫn hiện đúng khi xem hoặc sửa giao dịch cũ.
+- Nhớ ví và danh mục dùng gần nhất theo từng loại (thu, chi, chuyển), lưu ID trong UserDefaults.
+- Xóa giao dịch: vuốt và có hộp xác nhận.
+
+### Danh sách lịch sử
+- Nhóm theo ngày (múi giờ Asia/Saigon), mới nhất trước. Tiêu đề: "Hôm nay", "Hôm qua", sau đó "Thứ ba, 10/11/2026".
+- Mỗi dòng: icon danh mục, tên danh mục (hoặc "Chuyển: A → B"), ghi chú và tên ví ở dòng phụ, số tiền căn phải.
+- Chi hiện dấu "−", thu hiện dấu "+", chuyển không dấu và màu trung tính. Không dùng riêng màu để phân biệt, luôn có dấu.
+- Trên cùng hiện tổng số dư (từ `BalanceCalculator`).
+- Trạng thái rỗng: "Chưa có giao dịch. Sang tab Thêm để ghi khoản đầu tiên."
+
+### Phong cách chung
+- Chỉ dùng thành phần và màu hệ thống của SwiftUI, SF Symbols, Dynamic Type, hỗ trợ chế độ tối. Không tự dựng theme.
+- Vùng chạm tối thiểu 44x44 pt.
+- Mọi nhãn tiếng Việt, ngày giờ theo `vi_VN` và Asia/Saigon.
+- VoiceOver: số tiền đọc là "một triệu hai trăm năm mươi nghìn đồng" hoặc tối thiểu có nhãn rõ loại giao dịch.
+- Không animation phức tạp, không onboarding, không tính năng của bước sau.
+
+## 13. Quy tắc quản lý ví và danh mục (Bước 3)
+
+### Điều hướng
+- Thêm tab "Ví" (tab thứ 3). Tab "Danh mục" không tách riêng: vào từ tab Ví qua mục "Quản lý danh mục", để thanh tab không quá đông.
+- Thêm ví/danh mục mở bằng sheet. Sửa dùng lại đúng form thêm.
+- Chưa thêm tab Thống kê và Cài đặt (bước sau).
+
+### Tab Ví
+- Trên cùng: "Tổng số dư" cỡ lớn, lấy từ `BalanceCalculator`, chỉ cộng các ví **chưa archive**...
+  → **Quy tắc rõ ràng:** tổng số dư hiển thị mặc định gồm cả ví đã archive nếu số dư khác 0, để không có tiền "biến mất". Ví archive có số dư 0 thì không tính vào danh sách.
+- Danh sách ví đang dùng: tên, loại (icon), số dư căn phải. Số dư âm hiện màu đỏ và dấu "−".
+- Cuối danh sách: mục thu gọn "Đã lưu trữ (N)" chứa ví archive, mở ra xem được, có thao tác "Khôi phục".
+- Nút "+" thêm ví. Vuốt dòng: "Lưu trữ" (không có "Xóa").
+- Trạng thái rỗng: "Chưa có ví. Thêm ví đầu tiên để bắt đầu."
+
+### Form ví
+- Trường: Tên, Loại (Tiền mặt / Ngân hàng / Thẻ / Khác), Số dư ban đầu.
+- Số dư ban đầu dùng lại bàn phím số tự vẽ và `MoneyFormatter` của bước 2. Cho phép âm (ví dụ thẻ tín dụng đang nợ) bằng công tắc "Đang nợ", không cho gõ dấu trừ.
+- Tên: bắt buộc, tối đa 30 ký tự, cắt khoảng trắng hai đầu, không trùng tên ví khác (không phân biệt hoa thường, tính cả ví đã archive).
+- **Sửa số dư ban đầu của ví đã có giao dịch:** cho phép, nhưng hiện cảnh báo "Số dư hiện tại của ví sẽ thay đổi theo", và hiện số dư trước và sau.
+
+### Form danh mục
+- Trường: Tên, Loại (Chi / Thu), Biểu tượng (lưới SF Symbols chọn sẵn, khoảng 30 icon).
+- **Không cho đổi Loại (thu/chi) khi danh mục đã có giao dịch**: ô Loại bị khóa, kèm dòng giải thích. Muốn khác loại thì tạo danh mục mới.
+- Tên: bắt buộc, tối đa 30 ký tự, không trùng trong cùng loại (không phân biệt hoa thường, tính cả đã archive).
+- Danh sách danh mục chia hai mục "Chi" và "Thu", có mục thu gọn "Đã lưu trữ".
+
+### Archive
+- Lưu trữ ví/danh mục: hộp xác nhận ngắn nêu hậu quả: "Không hiện khi nhập mới. Lịch sử và số dư giữ nguyên."
+- Không cho lưu trữ ví cuối cùng còn đang dùng (phải còn ít nhất một ví hoạt động).
+- Lưu trữ ví có số dư khác 0: cho phép nhưng cảnh báo rõ số dư còn lại.
+- Khôi phục: một chạm, không cần xác nhận.
+- Không có chức năng xóa thật ở bất kỳ đâu.
+
+### Dữ liệu mặc định (lần chạy đầu)
+- Chỉ tạo khi cả ví và danh mục đều trống **và** cờ `didSeedDefaults` trong UserDefaults chưa bật. Bật cờ ngay sau khi tạo. Tránh tạo lại sau khi người dùng chủ động archive hết.
+- Ví mặc định: "Tiền mặt" (số dư 0). Không tạo ví khác.
+- Danh mục chi: Ăn uống, Đi lại, Nhà ở, Hóa đơn, Mua sắm, Sức khỏe, Giải trí, Khác.
+- Danh mục thu: Lương, Thu nhập khác.
+- Xóa hoàn toàn đoạn tạo dữ liệu mẫu tạm của bước 2.
+
+### Phong cách chung
+- Giữ các quy tắc ở mục 12: thành phần hệ thống, Dynamic Type, chế độ tối, vùng chạm 44pt, tiếng Việt, VoiceOver.
+- Lỗi hiện dòng chữ đỏ ngay dưới trường, không dùng alert (trừ hộp xác nhận hành động).
+- Không thêm: sắp xếp kéo thả, đổi màu danh mục, ngân sách, thống kê.
+
+## 14. Quy tắc thống kê tháng (Bước 4)
+
+### Phạm vi
+- Thêm tab "Thống kê" (tab thứ 4). Chỉ thống kê **một tháng lịch** mỗi lần xem. Chưa có biểu đồ, so sánh tháng, ngân sách (thuộc giai đoạn 2).
+- Mọi phép tính nằm trong `StatsService`, dùng `LocalCalendar` (Asia/Saigon). View chỉ hiển thị.
+
+### Định nghĩa số liệu
+- **Tổng thu** = tổng `amount` các giao dịch `income` trong tháng.
+- **Tổng chi** = tổng `amount` các giao dịch `expense` trong tháng.
+- **Chênh lệch** = tổng thu − tổng chi (có thể âm).
+- Giao dịch `transfer` **không tính** vào thu, chi, chênh lệch hay danh mục.
+- Khoảng tháng: từ 00:00 ngày 1 (gồm) đến 00:00 ngày 1 tháng sau (loại trừ), giờ Asia/Saigon.
+- Giao dịch thuộc ví/danh mục đã archive **vẫn được tính**.
+- Chi theo danh mục: sắp xếp giảm dần theo số tiền, kèm phần trăm trên tổng chi (làm tròn 1 chữ số thập phân, chỉ để hiển thị, không dùng để tính tiếp). Danh mục tổng 0 thì không hiện. Giao dịch không có danh mục (dữ liệu lỗi) gom vào dòng "Không có danh mục", không bỏ qua.
+- Thêm mục "Thu theo danh mục" tương tự, hiện bên dưới.
+- Phép cộng dùng `Int64`, báo lỗi khi tràn, như `BalanceCalculator`.
+
+### Bố cục (từ trên xuống)
+1. Thanh chọn tháng: nút lùi "‹", nhãn "Tháng 11/2026", nút tiến "›". Không cho tiến quá tháng hiện tại. Chạm nhãn mở chọn tháng/năm. Có nút "Tháng này" khi đang xem tháng khác.
+2. Thẻ tóm tắt: Tổng thu (+), Tổng chi (−), Chênh lệch (có dấu +/−). Không chỉ dùng màu, luôn có dấu.
+3. "Chi theo danh mục": mỗi dòng gồm icon, tên, số tiền, phần trăm.
+4. "Thu theo danh mục".
+5. Chạm một dòng danh mục: mở danh sách giao dịch của danh mục đó trong tháng (chỉ xem, dùng lại dòng giao dịch của Lịch sử).
+
+### Trạng thái
+- Tháng không có giao dịch: "Tháng này chưa có giao dịch."
+- Tháng có thu nhưng không có chi (hoặc ngược lại): vẫn hiện thẻ tóm tắt, mục trống ghi "Không có khoản chi/thu."
+- Số liệu cập nhật ngay khi thêm, sửa, xóa giao dịch ở tab khác (dùng `@Query`, không cache thủ công).
+
+### Phong cách chung
+- Giữ quy tắc mục 12 và 13: thành phần hệ thống, Dynamic Type, chế độ tối, vùng chạm 44pt, tiếng Việt, VoiceOver (đọc "Tổng chi, một triệu hai trăm nghìn đồng").
+- Dùng `MoneyFormatter` đã có. Cỡ chữ lớn nhất: bố cục xếp dọc, không cắt số tiền.
+- Không thêm: biểu đồ, so sánh tháng, xuất CSV, lọc theo ví.
+
+## 15. Đặc tả kỹ thuật backup (Bước 5, chi tiết hóa mục 8)
+
+### Định dạng file
+- Tên: `SaveMoney-yyyyMMdd-HHmmss-{Auto|Manual|PreRestore}.json`
+- `schemaVersion` ở đây là phiên bản **định dạng file backup**, độc lập với schema SwiftData.
+
+```json
+{
+  "format": "savemoney-backup",
+  "schemaVersion": 1,
+  "createdAt": 1789000000000,
+  "appVersion": "1.0 (1)",
+  "checksum": "<sha256 hex của payload>",
+  "summary": {
+    "wallets": 2, "categories": 10, "transactions": 120,
+    "expectedBalances": { "<walletId>": 1080000 }
+  },
+  "payload": {
+    "wallets":      [{ "id", "name", "kind", "openingBalance", "isArchived", "createdAt" }],
+    "categories":   [{ "id", "name", "kind", "icon", "isArchived" }],
+    "transactions": [{ "id", "amount", "kind", "date", "note", "walletId", "toWalletId", "categoryId" }]
+  }
+}
+```
+
+### Quy tắc mã hóa dữ liệu
+- Tiền là số nguyên `Int64`, giải mã bằng `Codable` với kiểu `Int64`. Cấm `JSONSerialization` hoặc `Double` trung gian.
+- Thời gian lưu bằng `Int64` mili giây từ 1970 (không dùng chuỗi ngày).
+- ID là chuỗi UUID viết hoa. Quan hệ lưu bằng ID, giá trị rỗng là `null`.
+- Checksum = SHA-256 của `payload` được mã hóa theo dạng chuẩn: `sortedKeys`, không khoảng trắng thừa. Khi kiểm tra: giải mã payload, mã hóa lại đúng dạng chuẩn, băm, so sánh.
+- Checksum chỉ phát hiện hỏng file vô tình, **không chống sửa cố ý** (file chưa mã hóa, việc đó thuộc giai đoạn 3).
+- Có một "file mẫu vàng" cố định trong thư mục test. Test phải xác minh checksum của file này luôn đạt. Đổi dạng chuẩn thì phải tăng `schemaVersion`.
+
+### Thuật toán export
+1. Đọc dữ liệu, tính `expectedBalances` bằng `BalanceCalculator`.
+2. Mã hóa, ghi ra file tạm cùng thư mục.
+3. Đọc lại file tạm, kiểm tra checksum, số lượng và số dư khớp.
+4. Đạt thì đổi tên thành file chính thức. Không đạt thì xóa file tạm, báo lỗi, không đụng tới các bản cũ.
+
+### Thuật toán restore (thay thế toàn bộ)
+1. Kiểm tra file: `format`, `schemaVersion` được hỗ trợ, checksum, số lượng khớp `summary`.
+2. Kiểm tra cấu trúc: ID không trùng, mọi `walletId`/`toWalletId`/`categoryId` tồn tại, `amount > 0`, `kind` hợp lệ, quy tắc giao dịch như `TransactionValidator` (chuyển tiền có hai ví khác nhau và không có danh mục; thu/chi có ví và danh mục; loại danh mục khớp loại giao dịch).
+3. Hiện tóm tắt (số ví, danh mục, giao dịch, tổng số dư, khoảng ngày) và chờ xác nhận.
+4. Tạo bản `PreRestore` của dữ liệu hiện tại và kiểm tra bản đó đọc lại được. Không tạo được thì **dừng**.
+5. Dùng `ModelContext` riêng, tắt autosave. Xóa giao dịch trước, rồi ví và danh mục, nạp dữ liệu từ file, **tính lại số dư từng ví và so với `expectedBalances` trước khi save**. Lệch hoặc lỗi bất kỳ thì `rollback`, dữ liệu cũ còn nguyên.
+6. Save một lần. Xóa các ID "gần nhất" trong UserDefaults. Đặt `didSeedDefaults = true`.
+
+### Quản lý bản backup
+- `Backups/`: giữ 10 bản Auto/Manual gần nhất. `Backups/PreRestore/`: giữ 5 bản, **không** bị đẩy ra bởi bản Auto.
+- Auto-backup bỏ qua nếu checksum trùng bản mới nhất (dữ liệu không đổi). Auto-backup bỏ qua nếu dữ liệu hiện **rỗng** mà bản trước có dữ liệu (chống ghi đè bản tốt bằng bản trống).
+- Kích hoạt: khi app vào nền (dùng `beginBackgroundTask`) và sau mỗi 20 thay đổi giao dịch (thêm, sửa, xóa).
+- Thư mục `Documents` hiện trong Tệp. Kiểm tra store SwiftData **không** nằm trong `Documents`.
+
+### Nhắc nhở
+- Theo dõi hai mốc: "backup gần nhất" và "chép ra ngoài gần nhất" (cập nhật khi Share Sheet báo đã hoàn tất).
+- Thông báo cục bộ: mỗi lần chép ra ngoài thì hủy và đặt lại các thông báo ở +14, +21, +28 ngày. Nội dung chung chung, không có số tiền.
+- Banner: vàng khi quá 7 ngày, đỏ khi quá 14 ngày, tính trên mốc "chép ra ngoài".
+
+## 16. Quy tắc Cài đặt và khóa ứng dụng (Bước 5c, 6)
+
+### Tab Cài đặt (tab thứ 5)
+- Mục "Sao lưu": banner trạng thái, nút "Sao lưu ngay", "Chia sẻ bản mới nhất", "Danh sách bản sao lưu", "Khôi phục từ file", ghi chú nhắc bật iCloud Backup.
+- Mục "Bảo mật": công tắc "Khóa bằng Face ID".
+- Không thêm gì khác (chưa có giao diện tùy biến, xuất CSV).
+
+### Khóa ứng dụng
+- Dùng `LocalAuthentication`, chính sách `.deviceOwnerAuthentication` (sinh trắc học, tự rơi về mật mã máy).
+- Khóa khi mở app từ trạng thái tắt, và khi quay lại từ nền sau hơn 30 giây.
+- Khi bị khóa: **không dựng** nội dung thật (không chỉ phủ lớp lên), ẩn khỏi VoiceOver.
+- Khi app không ở trạng thái active: phủ màn che để app switcher không lộ số liệu. Phủ màn che ≠ khóa. Hộp thoại Face ID của hệ thống cũng làm app "inactive", **không được** vì thế mà khóa lại hoặc lặp vòng xác thực.
+- Bật công tắc: phải xác thực thành công trước. Tắt công tắc: cũng phải xác thực. Máy chưa đặt mật mã thì không bật được và có giải thích.
+- Mặc định tắt trong code, nhưng bật là bắt buộc trong checklist nghiệm thu bước 7.
+- Backup tự động chạy nền không phụ thuộc trạng thái khóa.
+- Logic khóa (đếm thời gian, chuyển trạng thái) tách riêng và test được bằng đồng hồ giả và trình xác thực giả.
