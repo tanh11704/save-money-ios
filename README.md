@@ -522,12 +522,245 @@ JSON trong Tệp không được mã hóa. Mã hóa backup thuộc giai đoạn 
 | Deployment target trong code | iOS 17.0; vẫn tạm, chưa biết iOS của iPhone |
 | iPhone/model/iOS đã kiểm tra | Chưa được cung cấp hoặc xác minh |
 | Ngày kiểm tra code | 10/11/2026, Xcode 27.2, macOS test in-memory |
-| Bản Release | Build SDK iOS Simulator; chưa có IPA đã ký để phân phối |
+| Bản Release | Có script tạo IPA iphoneos chưa ký cho SideStore; chưa ký/cài lên iPhone |
 | Dữ liệu thử trong Release | Không có giao dịch mẫu/debug seeder; chỉ dữ liệu mặc định bắt buộc |
 
-Hướng dẫn cài SideStore theo [tài liệu chính thức SideStore](https://docs.sidestore.io/).
-Đã xác nhận trang tài liệu còn truy cập được ngày 10/11/2026; không coi README
-này là hướng dẫn cài SideStore đã được thử trên iPhone cụ thể.
+### Hướng dẫn cài SaveMoney bằng SideStore và làm mới trong nền
+
+Đối chiếu tài liệu ngày **10/11/2026**. Hướng dẫn cho Mac đang chứa repo này,
+SideStore **Stable cài riêng**, iPhone chạy **iOS 17 trở lên** theo deployment
+target hiện tại. Không dùng nhánh LiveContainer/nightly trong quy trình này.
+Tên nút tiếng Anh được ghi kèm để dễ tìm khi iPhone dùng ngôn ngữ khác.
+
+Ba cơ chế độc lập:
+
+| Cơ chế | Ứng dụng thực hiện | Mục đích |
+| --- | --- | --- |
+| Sao lưu JSON | SaveMoney | Giữ và chuyển dữ liệu tài chính |
+| Refresh nền/Phím tắt | SideStore | Ký lại ứng dụng trước hạn |
+| Lời nhắc hằng tuần | Lời nhắc của iPhone | Dự phòng nếu refresh không chạy |
+
+SaveMoney không có công tắc gia hạn chữ ký. Thông báo sao lưu trong SaveMoney
+không thay cho kiểm tra hạn SideStore. Với tài khoản miễn phí, tài liệu SideStore
+nêu hạn ký thông thường 7 ngày và tối đa 3 app hoạt động, tính cả SideStore.
+Nguồn: [FAQ SideStore](https://docs.sidestore.io/docs/faq).
+
+#### A. Chuẩn bị một lần
+
+1. Ghi model/iOS của iPhone vào bảng “Thông tin phát hành”. Đặt mật mã máy.
+2. Chuẩn bị Mac, cáp USB, Apple Account dùng cho SideStore và Wi-Fi.
+3. Trên iPhone, cài **LocalDevVPN** từ link App Store trong
+   [Prerequisites chính thức](https://docs.sidestore.io/docs/installation/prerequisites).
+4. Mở LocalDevVPN → Connect; cho phép cấu hình VPN khi được hỏi.
+5. Trên Mac, tải **iloader** từ link trong trang Prerequisites đó.
+
+SideStore yêu cầu Wi-Fi và LocalDevVPN kết nối khi cài/cập nhật/refresh theo
+quy trình này. Không thay LocalDevVPN bằng hướng dẫn WireGuard/StosVPN cũ.
+Nguồn: [Prerequisites](https://docs.sidestore.io/docs/installation/prerequisites).
+
+Nếu đã có SaveMoney chứa dữ liệu: vào Cài đặt của SaveMoney → Sao lưu ngay →
+Chia sẻ bản mới nhất → Lưu vào Tệp → iCloud Drive. Kiểm tra file ở iCloud Drive
+trước khi đổi cách cài. Không xóa bản cũ chứa dữ liệu duy nhất.
+
+#### B. Tạo IPA dành cho iPhone trên Mac
+
+Bản build Simulator ở các bước trước **không dùng để cài lên iPhone**. Script
+mới build Release bằng SDK `iphoneos`, đóng gói đúng `Payload/SaveMoney.app`,
+kiểm tra nền tảng IOS/arm64 và kiểm tra ZIP. Không cần chọn Team để tạo bản
+**chưa ký** này; SideStore sẽ ký khi cài.
+
+1. Mở Terminal trên Mac.
+2. Chạy:
+
+   ```sh
+   cd /Users/tanh11704/Desktop/SaveMoney
+   bash scripts/build-sidestore-ipa.sh
+   ```
+
+3. Khi thành công, file nằm tại:
+
+   ```text
+   /Users/tanh11704/Desktop/SaveMoney/build/SideStore/SaveMoney.ipa
+   ```
+
+4. Mở Finder tại thư mục đó:
+
+   ```sh
+   open build/SideStore
+   ```
+
+5. Chép `SaveMoney.ipa` vào iCloud Drive, đợi đồng bộ. Trên iPhone, mở Tệp →
+   iCloud Drive và xác nhận nhìn thấy file. AirDrop sang Tệp cũng là một cách
+   chuyển file nếu bạn chủ động chọn dùng.
+
+Script chỉ tạo artifact trong `build/SideStore/`, không cài app, không đụng dữ
+liệu iPhone và không tự gửi file. Nhật ký build ở `build/SideStore/build.log`.
+Nếu build lỗi, xem nhật ký; không dùng lại IPA cũ như thể build mới đã thành công.
+IPA chưa ký không phải bản App Store và không cài bằng cách chỉ chạm file trong Tệp.
+
+#### C. Cài SideStore lần đầu
+
+Các bước dưới theo [Install chính thức](https://docs.sidestore.io/docs/installation/install):
+
+1. Nối iPhone với Mac bằng USB; mở khóa và chọn Tin cậy máy tính khi được hỏi.
+2. Mở iloader, đăng nhập Apple Account, chọn iPhone.
+3. Chọn **Install SideStore (Stable)**.
+4. iPhone: Cài đặt → Cài đặt chung → VPN & Quản lý thiết bị → tài khoản nhà
+   phát triển → Tin cậy. iOS 18+ có thể yêu cầu **Allow & Restart**.
+5. Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển → bật; khởi động
+   lại/xác nhận nếu hệ thống yêu cầu.
+6. Kết nối LocalDevVPN, mở SideStore, đăng nhập cùng tài khoản dùng với iloader.
+7. Vào **My Apps**, chạm bộ đếm ngày của **SideStore** để refresh chính nó trước.
+   Đợi hoàn tất; app có thể tạm trở về màn hình chính rồi mở lại được.
+
+Nếu xuất hiện yêu cầu tạo/thay certificate, hướng dẫn chính thức dùng Yes hoặc
+Refresh Now. Đọc cảnh báo trước khi đồng ý nếu tài khoản đang ký app khác. Chưa cài SaveMoney trước khi refresh SideStore
+lần đầu thành công. Lý do: [FAQ về lần refresh đầu](https://docs.sidestore.io/docs/faq).
+
+#### D. Cài SaveMoney vào SideStore
+
+1. Trên iPhone, kiểm tra Wi-Fi và LocalDevVPN đang kết nối.
+2. Mở SideStore → **My Apps** → nút **+** → chọn `SaveMoney.ipa` trong Tệp.
+   Nếu bố cục khác, dùng Phím tắt → tác vụ SideStore → **Install IPA** để chọn file.
+3. Đợi ký/cài hoàn tất; xác nhận SaveMoney xuất hiện trong My Apps với hạn mới.
+4. Mở SaveMoney từ màn hình chính, chỉ nhập dữ liệu mẫu lúc nghiệm thu.
+5. Ghi bundle ID thực tế của bản đã ký vào bảng phát hành (xem thông tin app
+   trong SideStore nếu bản đó hiển thị). Không coi ID nguồn là bằng chứng ID
+   sau ký; nếu không xem được thì ghi “chưa xác minh”.
+6. Nếu đây là bản cài riêng so với bản Xcode, dùng JSON để chuyển dữ liệu:
+   Cài đặt → Khôi phục từ file → chọn backup → kiểm tra tóm tắt → xác nhận.
+7. Đối chiếu số dư từng ví. Chỉ dọn bản Xcode sau khi có backup ngoài thiết bị
+   và đã kiểm tra bản SideStore; chưa rõ bản nào là bản nào thì chưa xóa.
+
+SideStore công bố hành động **Install IPA** trong
+[mã nguồn App Shortcuts chính thức](https://github.com/SideStore/SideStore/blob/develop/AltStore/Intents/App%20Intents/AppShortcuts.swift).
+Các thao tác chuyển dữ liệu ở trên là quy trình của SaveMoney, chưa được diễn tập
+trên iPhone trong phiên viết hướng dẫn này.
+
+#### E. Refresh thủ công để kiểm tra nền tảng
+
+1. Chép backup JSON ra ngoài trước lần thử đầu.
+2. Thoát về màn hình chính từ SaveMoney; không để giao dịch đang nhập dở.
+3. Mở SideStore → My Apps → refresh **SaveMoney và SideStore** bằng bộ đếm ngày
+   hoặc nút Refresh All nếu có. Đợi xong trước khi mở lại SaveMoney.
+4. Kiểm tra hạn ký tăng trở lại và SaveMoney vẫn có nguyên dữ liệu.
+
+Chưa refresh thủ công được thì chưa chuyển sang tự động hóa. Không dùng việc
+mở được app ngay sau cài làm bằng chứng refresh nền đã chạy.
+
+#### F. Bật làm mới nền ở cả iOS và SideStore
+
+1. iPhone: **Cài đặt → Cài đặt chung → Làm mới ứng dụng trong nền**; chọn Wi-Fi,
+   bật riêng **SideStore** trong danh sách nếu được hiển thị.
+2. Vào **SideStore → Settings → Refreshing Apps → Background Refresh**, bật.
+   Nếu nhãn khác, tìm nhóm cài đặt refresh tương ứng; không bật các tùy chọn
+   debug/giữ âm thanh/vị trí chỉ để làm theo hướng dẫn này.
+3. Để Wi-Fi và LocalDevVPN kết nối trong khoảng bạn muốn tự refresh.
+4. Về màn hình chính bình thường; không chủ động vuốt tắt SideStore khỏi app switcher.
+5. Khi kiểm tra refresh, tắt **Chế độ nguồn điện thấp** trong Cài đặt → Pin.
+   Chế độ này vô hiệu hóa Background App Refresh.
+
+Nguồn: [Apple về làm mới nền và vuốt tắt app](https://support.apple.com/en-us/118408),
+[Apple về Low Power Mode](https://support.apple.com/en-asia/101604),
+[cài đặt refresh trong mã nguồn SideStore](https://github.com/SideStore/SideStore/blob/develop/AltStore/Settings/SettingsViewController.swift).
+
+Bật công tắc là điều kiện cấu hình, chưa phải bằng chứng gia hạn thành công.
+Cần kiểm tra hạn ký sau một khoảng để máy tự hoạt động, như mục H.
+
+#### G. Thêm lịch Phím tắt hằng ngày
+
+Lịch gợi ý của dự án: **20:30 mỗi ngày**, khi bạn thường ở nhà có Wi-Fi. Đổi giờ
+cho phù hợp; không cần đợi sát ngày hết hạn.
+
+**Tạo và chạy thử shortcut trước:**
+
+1. Mở Phím tắt trên iPhone → tạo phím tắt mới → tìm tác vụ của **SideStore**.
+2. Thêm **Refresh All Apps**, đặt tên `Gia hạn SideStore`.
+3. Giữ LocalDevVPN kết nối, Wi-Fi bật, mở khóa iPhone; bấm chạy thử shortcut.
+4. Cấp quyền nếu hệ thống hỏi. Sau khi xong, kiểm tra My Apps của SideStore và
+   mở lại SaveMoney để đối chiếu dữ liệu.
+
+Tác vụ Refresh All Apps được công bố trong
+[App Shortcuts của SideStore](https://github.com/SideStore/SideStore/blob/develop/AltStore/Intents/App%20Intents/AppShortcuts.swift).
+Nếu chưa thấy tác vụ: mở SideStore một lần, quay lại Phím tắt và tìm lại; nếu
+vẫn thiếu, kiểm tra phiên bản Stable/tài liệu của bản đã cài, dùng mục E trong
+lúc xử lý. Không tải shortcut không rõ nguồn để thay thế.
+
+**iOS 17–26, nếu có tab tạo Tự động hóa kiểu cũ:**
+
+1. Phím tắt → Tự động hóa → **+** → tạo tự động hóa cá nhân.
+2. Chọn **Thời gian trong ngày**, 20:30, **Hằng ngày**.
+3. Chọn **Chạy ngay / Run Immediately** nếu có; hoặc tắt **Hỏi trước khi chạy**.
+4. Chọn shortcut `Gia hạn SideStore`; nếu vào trình sửa, thêm tác vụ **Chạy phím
+   tắt / Run Shortcut** và chọn tên đó. Lưu tự động hóa.
+
+Nguồn: [Apple — tạo tự động hóa](https://support.apple.com/en-ie/guide/shortcuts/apdfbdbd7123/ios),
+[Apple — chạy không hỏi](https://support.apple.com/en-euro/guide/shortcuts/-apd602971e63/ios).
+
+**iOS 27, nếu trigger nằm ngay trong shortcut:**
+
+1. Mở shortcut `Gia hạn SideStore` → **Edit → Automation**.
+2. Thêm trigger **Time of Day**, đặt giờ và lặp hằng ngày.
+3. **Edit → Info → Privacy → Allow Running When Locked** nếu muốn cho phép
+   shortcut chạy khi khóa. Kiểm tra tự động hóa đang bật trong danh sách Automation.
+
+Nguồn: [Apple — Shortcuts iOS 27](https://support.apple.com/en-om/guide/shortcuts/apdfbdbd7123/10.0/ios/27).
+
+Cho phép chạy khi khóa không bảo đảm mọi thao tác SideStore đều hoàn tất khi
+khóa. Tác vụ SideStore có thể yêu cầu chuyển ra foreground nếu gần hết thời
+gian; nếu iPhone yêu cầu mở khóa/mở app, hãy làm theo rồi kiểm tra hạn ký.
+Nguồn: [RefreshAllAppsIntent của SideStore](https://github.com/SideStore/SideStore/blob/develop/AltStore/Intents/App%20Intents/RefreshAllAppsIntent.swift).
+
+**Thử lịch:** tạm đặt trigger sau vài phút, quan sát cả thông báo lỗi và hạn ký
+thực tế, rồi trả về 20:30 hằng ngày. Kiểm tra thêm một lần khi màn hình khóa.
+Nếu shortcut chạy nhưng hạn không đổi, coi là chưa thành công; chuyển sang mục E
+và mục I. Không giả định automation đã làm việc chỉ vì có dấu bật.
+
+#### H. Xác minh qua 7 ngày và nhắc dự phòng
+
+1. Ngày cài: ghi hạn của cả SideStore và SaveMoney, số dư từng ví, tạo backup
+   và chép iCloud Drive.
+2. Ngày tiếp theo: kiểm tra hạn có tăng sau lịch 20:30, app mở được, dữ liệu còn.
+   Để kiểm tra refresh nền tự nhiên riêng, có thể tạm tắt lịch Phím tắt rồi
+   quan sát; bật lại lịch sau lần thử. Không để thử nghiệm kéo dài đến hết hạn.
+3. Ngày 5–6: nếu chưa chắc tự refresh, thực hiện mục E ngay; không chờ ngày 7.
+4. Qua ngày 7: xác nhận cả hai app vẫn mở được, hạn đã được gia hạn và dữ liệu
+   khớp. Ghi ngày/model/iOS/phiên bản SideStore vào README trước khi đánh dấu đạt.
+5. Trong app **Lời nhắc** của iPhone, tạo việc “Mở SideStore, kiểm tra hạn app”,
+   đặt giờ phù hợp, lặp hằng tuần. Đây là lớp dự phòng độc lập với SaveMoney.
+
+Bảng ghi nhận cá nhân:
+
+| Ngày/giờ | Refresh nền hay shortcut/thủ công | Hạn SideStore | Hạn SaveMoney | Mở app/dữ liệu | Kết quả |
+| --- | --- | --- | --- | --- | --- |
+| Chưa kiểm tra | — | — | — | — | Chưa nghiệm thu |
+
+Bước cài đặt chỉ hoàn tất khi đã thử backup → xóa bản thử → cài lại qua
+SideStore → restore từ iCloud Drive → đối chiếu dữ liệu như checklist 5d/7.
+
+#### I. Xử lý lỗi theo thứ tự
+
+| Hiện tượng | Thao tác tiếp theo |
+| --- | --- |
+| No Wi-Fi/VPN, AFC connection | Kiểm tra Wi-Fi + LocalDevVPN; thử lại sau khi khởi động lại hai app. |
+| Pairing file lỗi/hết hạn sau cập nhật iOS | Dùng iloader để thay pairing file theo tài liệu chính thức. |
+| Shortcut không có tác vụ hoặc lỗi | Thử refresh thủ công; kiểm tra đúng shortcut thuộc bản SideStore đã cài. |
+| Báo chạy xong nhưng hạn chưa tăng | Coi là chưa gia hạn; thử mục E, giữ bản backup ngoài thiết bị. |
+| SideStore hết hạn, không mở được | Dùng Mac và tài liệu chính thức để phục hồi SideStore; giữ SaveMoney và dữ liệu hiện tại. |
+| IPA không cài được | Xem build.log; dùng IPA từ SDK iphoneos, không lấy sản phẩm Simulator. |
+
+Nguồn lỗi kết nối/pairing: [SideStore Common Issues](https://docs.sidestore.io/docs/troubleshooting/common-issues).
+Không làm bước xóa SaveMoney hàng loạt khi chưa có JSON ngoài thiết bị đã kiểm
+tra; nếu hướng dẫn sự cố yêu cầu cài lại, hoàn tất backup trước mọi thao tác xóa.
+
+**Đã kiểm tra trên Mac ngày 10/11/2026:** script build Release bằng SDK iphoneos
+thành công; binary arm64, nền tảng IOS, MinimumOSVersion 17.0; IPA kiểm tra ZIP
+đạt, không có test bundle/file mẫu vàng. IPA nguồn có bundle ID
+`vn.tanh11704.SaveMoney`, chưa có chữ ký SideStore.
+
+Chưa thực hiện cài SideStore, đăng nhập Apple Account hay cấu hình Phím tắt
+trên chiếc iPhone của bạn. Chưa chứng minh tự gia hạn qua 7 ngày; các mục nghiệm
+thu thiết bị vẫn để chưa hoàn thành.
 
 ### Trình tự nghiệm thu bản dùng thật
 
