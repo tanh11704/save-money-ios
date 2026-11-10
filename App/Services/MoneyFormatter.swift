@@ -40,7 +40,10 @@ struct MoneyFormatter {
     }
 
     static func applying(_ key: Key, to amount: Int64) -> Int64 {
-        guard (0...maximumInput).contains(amount) else { return amount }
+        guard amount >= 0 else { return amount }
+        // An older record may exceed the new input cap; allow reducing it.
+        if case .backspace = key { return amount / 10 }
+        guard amount <= maximumInput else { return amount }
         let multiplier: Int64
         let suffix: Int64
         switch key {

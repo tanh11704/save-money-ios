@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = TransactionScreenStore()
     @State private var selectedTab = 0
 
@@ -40,5 +41,10 @@ struct ContentView: View {
         .environment(\.calendar, LocalCalendar.calendar)
         .environment(\.timeZone, LocalCalendar.calendar.timeZone)
         .task { store.configure(container: modelContext.container) }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, store.ready else { return }
+            do { try store.reload() }
+            catch { store.errorMessage = TransactionPresentation.errorMessage(error) }
+        }
     }
 }

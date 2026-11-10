@@ -12,7 +12,6 @@ final class TransactionScreenStore: ObservableObject {
     @Published private(set) var totalBalance = MoneyFormatter.string(from: 0)
     @Published private(set) var ready = false
     @Published var errorMessage: String?
-    @Published var changeToken = UUID()
     let recent = RecentSelectionStore()
     private var container: ModelContainer?
     private var readContext: ModelContext?
@@ -51,12 +50,11 @@ final class TransactionScreenStore: ObservableObject {
         self.transactions = transactions
         self.balances = balances
         totalBalance = MoneyFormatter.string(from: total)
-        changeToken = UUID()
         errorMessage = nil
     }
 
     func save(_ draft: TransactionDraft, editing id: UUID?) throws {
-        guard let container else { return }
+        guard let container else { throw TransactionService.ServiceError.missingRecord }
         let service = TransactionService(container: container, recentSelections: recent)
         if let id { try service.update(id: id, with: draft) }
         else { try service.create(draft) }

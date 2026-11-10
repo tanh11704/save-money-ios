@@ -4,10 +4,12 @@
 
 ## Trạng thái
 
-Đã chuẩn bị bước khởi tạo và viết phần code bước 1 theo yêu cầu tiếp tục của
-chủ dự án. Có ba model SwiftData, model container, BalanceCalculator và 10 test
-in-memory. Các bước có build/test còn chờ Xcode; giao diện bước 2 đang được triển khai
-theo yêu cầu tiếp tục của chủ dự án.
+Đã triển khai code bước 1 và toàn bộ bước 2a–2e: Services, tab Thêm, Lịch sử,
+sửa/xóa và hỗ trợ khả năng tiếp cận. Có 35 unit test model/service và một smoke
+test app. Chưa xác nhận build/test iOS hoặc chạy trên thiết bị.
+
+Theo yêu cầu “cứ làm toàn bộ, tôi sẽ chạy lại sau”, không chờ cổng test để viết
+các phần còn lại của bước 2. Các bước 3–7 trong SPEC chưa được triển khai.
 
 Bundle ID đã chốt: `vn.tanh11704.SaveMoney`. Giữ cố định trước và sau khi dùng thật.
 Deployment target tạm là iOS 17.0 (tối thiểu cho SwiftData); cần xác nhận phiên bản
@@ -44,7 +46,7 @@ xcodebuild -project SaveMoney.xcodeproj -scheme SaveMoney -destination 'generic/
 
 Ngày 10/11/2026: máy chỉ có Command Line Tools; cả lệnh build và test dừng vì
 `xcodebuild` yêu cầu Xcode. Kiểm tra cú pháp Swift và plist đạt nhưng không thay
-thế việc build/test iOS. Chưa chuyển sang bước 1 theo cổng kiểm tra của plan.
+thế việc build/test iOS. Các cổng kiểm tra vẫn để mở dù đã viết bước tiếp theo.
 
 Yêu cầu mới của chủ dự án trong plan là agent commit sau mỗi bước, thay cho
 quy tắc 13 của SPEC. Commit khởi tạo chỉ lưu tiến độ, không xác nhận bước đã đạt.
@@ -110,7 +112,7 @@ Commit bước 1 lưu tiến độ chưa được xác minh, không đánh dấu
   cập nhật từ service sau khi save thành công; lọc ID thiếu hoặc đã archive
   khi lấy lựa chọn cho giao dịch mới.
 
-Không đổi schema, chưa có dữ liệu mẫu hoặc UI bước 2b–2e.
+Bước 2a không đổi schema; UI và bootstrap tạm được bổ sung ở 2b–2e bên dưới.
 
 Kiểm tra ngày 10/11/2026:
 
@@ -121,7 +123,7 @@ Kiểm tra ngày 10/11/2026:
 - `swift test` và `swift build`: thất bại ở bước biên dịch vì thiếu plugin
   `SwiftDataMacros` trong Command Line Tools; các unit test chưa được thực thi.
 - Cần Xcode đầy đủ để xác minh persistence, validator/model và toàn bộ test.
-  Chưa đánh dấu 2a đạt và chưa chuyển sang 2b.
+  Chưa đánh dấu 2a đạt; đã triển khai tiếp UI theo yêu cầu mới.
 
 ## Tiến độ bước 2b–2e
 
@@ -145,7 +147,7 @@ SwiftDataMacros. Chưa xác minh giao diện, haptic hoặc persistence trên iP
 ### 2c — Lịch sử
 
 Đã nối tab Lịch sử: nhóm ngày qua TransactionGrouping, mới nhất trước, tổng số
- dư qua BalanceCalculator, dấu thu/chi rõ ràng và nội dung rỗng theo SPEC.
+dư qua BalanceCalculator, dấu thu/chi rõ ràng và nội dung rỗng theo SPEC.
 Có tải lại khi kéo danh sách và thông báo lỗi khi không đọc được dữ liệu.
 Parse Swift/plist đạt; test/build vẫn bị chặn bởi SwiftDataMacros.
 
@@ -156,3 +158,43 @@ liệu. Vuốt Xóa hoặc dùng hành động VoiceOver đều phải xác nh�
 chỉ qua TransactionService, sau khi save tải lại cả số dư và lịch sử.
 Khi sửa giữ ID, ngày/ghi chú; khi đổi loại xóa trường không còn phù hợp.
 Parse Swift/plist đạt; test/build vẫn bị chặn bởi SwiftDataMacros.
+
+
+### 2e — Rà soát khả năng tiếp cận
+
+- Dùng màu/vật liệu hệ thống, không khóa chế độ sáng/tối.
+- Phím số, nút Lưu, chip chọn, thao tác chính có vùng chạm tối thiểu 44pt.
+- Text theo Dynamic Type; danh mục/ví chuyển thành một cột ở cỡ trợ năng.
+  Bộ chọn loại dùng segmented ở cỡ thông thường và menu hệ thống ở cỡ trợ năng
+  để các nhãn không bị cắt. Dòng lịch sử xếp dọc ở cỡ trợ năng.
+- Số tiền dùng monospacedDigit, co theo chiều ngang; nhãn VoiceOver giữ đủ loại
+  và số tiền. Xóa có hành động VoiceOver và luôn qua xác nhận.
+- Khi nhập ghi chú bằng bàn phím hệ thống, bàn phím tiền được thu gọn thành nút
+  “Xong ghi chú” để không che vùng nhập trên iPhone nhỏ.
+- Thông báo lỗi tiếng Việt; lỗi save giữ nguyên draft. Nếu save thành công nhưng
+  tải lại lỗi, không báo save thất bại để tránh người dùng lưu trùng.
+- Trở lại foreground tải lại snapshot và tiêu đề ngày theo Asia/Saigon.
+
+Đã parse cú pháp mọi file Swift, lint plist/project, kiểm tra tham chiếu toàn bộ
+source (19 file app, 9 file test) và chạy riêng 30 phép kiểm tra Foundation: đạt. Đã thử test/build cho từng
+phần 2b, 2c, 2d, 2e; đều dừng ở lỗi thiếu SwiftDataMacros. Không khẳng định unit
+test, UI hoặc khả năng tiếp cận đã chạy đạt.
+
+### Checklist chạy lại khi có Xcode/iPhone (chưa thực hiện)
+
+- [ ] Chạy `Cmd+U` toàn bộ 36 test trong scheme SaveMoney, sau đó `Cmd+B`.
+- [ ] Cài/run trên iPhone thật; app mở vào Thêm, dữ liệu tạm chỉ tạo một lần.
+- [ ] Chi: nhập số → chọn danh mục → Lưu; số tiền xóa, loại/ví/danh mục giữ lại,
+      có rung nhẹ/“Đã lưu”, không tự đổi tab. Kiểm tra mở lại app nhớ lựa chọn.
+- [ ] Thu và chuyển: thử đầy đủ; nguồn/đích không trùng; tổng số dư không đổi
+      khi chuyển; kiểm tra nhập `999.999.999.999` rồi bấm thêm số/000 bị bỏ qua.
+- [ ] Lịch sử nhóm đúng tại 23:59/00:00 Asia/Saigon; trạng thái rỗng và dấu +/−.
+- [ ] Sửa đủ các cặp đổi loại, đổi ví, ngày, ghi chú; số dư cập nhật đúng.
+      Hủy sửa không lưu. Hủy xóa giữ nguyên; xác nhận xóa cập nhật số dư.
+- [ ] Kiểm tra tham chiếu archive bằng dữ liệu test: giữ đúng lịch sử và sửa cũ,
+      không xuất hiện như lựa chọn mới. Bước 3 sẽ bổ sung UI quản lý archive.
+- [ ] iPhone nhỏ, Dynamic Type lớn nhất, chế độ tối: không cắt nội dung, cuộn được,
+      bàn phím/nút Lưu với tới được; thử ghi chú khi bàn phím hệ thống đang mở.
+- [ ] VoiceOver: đọc rõ loại/số tiền/lựa chọn; nhập tiền, sửa và xác nhận xóa được.
+
+Chưa nhập dữ liệu thật trước khi hoàn tất backup/restore và checklist mục 9 SPEC.

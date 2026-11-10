@@ -39,6 +39,7 @@ final class MoneyFormatterTests: XCTestCase {
         XCTAssertEqual(MoneyFormatter.applying(.tripleZero, to: 999_999_999), 999_999_999_000)
         XCTAssertEqual(MoneyFormatter.applying(.tripleZero, to: 1_000_000_000), 1_000_000_000)
         XCTAssertEqual(MoneyFormatter.applying(.backspace, to: 0), 0)
+        XCTAssertEqual(MoneyFormatter.applying(.backspace, to: 1_000_000_000_000), 100_000_000_000)
         XCTAssertEqual(MoneyFormatter.applying(.tripleZero, to: 0), 0)
         XCTAssertEqual(MoneyFormatter.applying(.digit(10), to: 123), 123)
     }

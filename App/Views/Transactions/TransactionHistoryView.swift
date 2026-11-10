@@ -36,6 +36,7 @@ struct TransactionHistoryView: View {
                         Button { editing = transaction } label: { row(transaction) }
                             .buttonStyle(.plain)
                             .accessibilityLabel(TransactionPresentation.accessibilityLabel(transaction))
+                            .accessibilityValue([transaction.wallet?.name ?? "", transaction.note].filter { !$0.isEmpty }.joined(separator: ", "))
                             .accessibilityHint("Chạm hai lần để sửa giao dịch")
                             .accessibilityAction(named: Text("Xóa giao dịch")) { requestDeletion(transaction) }
                             .swipeActions(allowsFullSwipe: false) {
@@ -75,17 +76,17 @@ struct TransactionHistoryView: View {
                     amount(transaction)
                 }
             } else {
-            ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 12) {
-                description(transaction)
-                Spacer(minLength: 8)
-                amount(transaction)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                description(transaction)
-                amount(transaction).frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            }
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        description(transaction)
+                        Spacer(minLength: 8)
+                        amount(transaction)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        description(transaction)
+                        amount(transaction)
+                    }
+                }
             }
         }
         .frame(minHeight: 44)

@@ -14,6 +14,7 @@ struct TransactionFormView: View {
     @State private var saveError: String?
     @State private var saved = false
     @State private var saving = false
+    @FocusState private var noteFocused: Bool
 
     init(store: TransactionScreenStore, original: Transaction? = nil) {
         self.store = store
@@ -44,14 +45,7 @@ struct TransactionFormView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Picker("Loại giao dịch", selection: $draft.kind) {
-                    Text("Chi").tag(TransactionKind.expense)
-                    Text("Thu").tag(TransactionKind.income)
-                    Text("Chuyển").tag(TransactionKind.transfer)
-                }
-                .pickerStyle(.segmented)
-                .frame(minHeight: 44)
-                .accessibilityIdentifier("transaction.kind")
+                kindPicker
 
                 amountDisplay
 
@@ -64,6 +58,8 @@ struct TransactionFormView: View {
                 DisclosureGroup("Ghi chú", isExpanded: $noteExpanded) {
                     TextField("Ghi chú không bắt buộc", text: $draft.note, axis: .vertical)
                         .lineLimit(2...5)
+                        .focused($noteFocused)
+                        .frame(minHeight: 44)
                         .textFieldStyle(.roundedBorder)
                         .padding(.top, 8)
                         .accessibilityIdentifier("transaction.note")
@@ -79,7 +75,15 @@ struct TransactionFormView: View {
             }
             .padding()
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { inputControls }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if noteFocused {
+                Button("Xong ghi chú") { noteFocused = false }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .buttonStyle(.borderedProminent)
+                    .padding(8)
+                    .background(.bar)
+            } else { inputControls }
+        }
         .scrollDismissesKeyboard(.interactively)
         .task {
             guard !initialized else { return }
@@ -112,13 +116,34 @@ struct TransactionFormView: View {
         }
     }
 
+    private var kindPicker: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                // A system menu keeps the large labels readable on narrow iPhones.
+                Picker("Loại giao dịch", selection: $draft.kind) { kindOptions }
+                    .pickerStyle(.menu)
+            } else {
+                Picker("Loại giao dịch", selection: $draft.kind) { kindOptions }
+                    .pickerStyle(.segmented)
+            }
+        }
+        .frame(minHeight: 44)
+        .accessibilityIdentifier("transaction.kind")
+    }
+
+    @ViewBuilder private var kindOptions: some View {
+        Text("Chi").tag(TransactionKind.expense)
+        Text("Thu").tag(TransactionKind.income)
+        Text("Chuyển").tag(TransactionKind.transfer)
+    }
+
     private var amountDisplay: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Số tiền").font(.headline)
             Text(MoneyFormatter.string(from: draft.amount))
                 .font(.largeTitle.weight(.semibold))
                 .monospacedDigit()
-                .minimumScaleFactor(0.4)
+                .minimumScaleFactor(0.25)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
                 .accessibilityLabel("\(TransactionPresentation.kindTitle(draft.kind)), số tiền \(MoneyFormatter.string(from: draft.amount))")
