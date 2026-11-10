@@ -141,3 +141,10 @@ Bước 3 phải bỏ bootstrap này. Thêm 6 unit test cho lựa chọn form v�
 
 Parse Swift và plist đạt. `swift test`/`swift build` vẫn bị chặn ở plugin
 SwiftDataMacros. Chưa xác minh giao diện, haptic hoặc persistence trên iPhone.
+
+### 2c — Lịch sử
+
+Đã nối tab Lịch sử: nhóm ngày qua TransactionGrouping, mới nhất trước, tổng số
+ dư qua BalanceCalculator, dấu thu/chi rõ ràng và nội dung rỗng theo SPEC.
+Có tải lại khi kéo danh sách và thông báo lỗi khi không đọc được dữ liệu.
+Parse Swift/plist đạt; test/build vẫn bị chặn bởi SwiftDataMacros.
