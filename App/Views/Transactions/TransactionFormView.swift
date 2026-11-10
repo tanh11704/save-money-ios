@@ -14,6 +14,7 @@ struct TransactionFormView: View {
     @State private var saveError: String?
     @State private var saved = false
     @State private var saving = false
+    @State private var keypadVisible = true
     @FocusState private var noteFocused: Bool
 
     init(store: TransactionScreenStore, original: Transaction? = nil) {
@@ -149,15 +150,27 @@ struct TransactionFormView: View {
     private var amountDisplay: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Số tiền").font(.headline)
-            Text(MoneyFormatter.string(from: draft.amount))
-                .font(.largeTitle.weight(.semibold))
-                .monospacedDigit()
-                .minimumScaleFactor(0.25)
-                .lineLimit(1)
+            Button { setKeypad(visible: true) } label: {
+                HStack {
+                    Text(MoneyFormatter.string(from: draft.amount))
+                        .font(.largeTitle.weight(.semibold))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.25)
+                        .lineLimit(1)
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 8)
+                    if !keypadVisible {
+                        Image(systemName: "keyboard").foregroundStyle(.tint).accessibilityHidden(true)
+                    }
+                }
                 .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-                .accessibilityLabel("\(TransactionPresentation.kindTitle(draft.kind)), số tiền \(MoneyFormatter.string(from: draft.amount))")
-                .accessibilityIdentifier("transaction.amount")
-            Text("Tối đa 999.999.999.999 ₫")
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(TransactionPresentation.kindTitle(draft.kind)), số tiền \(MoneyFormatter.string(from: draft.amount))")
+            .accessibilityHint(keypadVisible ? "" : "Mở bàn phím số")
+            .accessibilityIdentifier("transaction.amount")
+            Text(keypadVisible ? "Tối đa 999.999.999.999 ₫" : "Chạm vào số tiền để mở bàn phím")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -174,6 +187,7 @@ struct TransactionFormView: View {
                                   icon: category.icon, selected: draft.category?.id == category.id) {
                         draft.category = category
                         saveError = nil
+                        setKeypad(visible: false)
                     }
                 }
             }
@@ -195,6 +209,7 @@ struct TransactionFormView: View {
                         if destination { draft.toWallet = wallet }
                         else { draft = TransactionFormSelection.selectingWallet(wallet, in: draft, available: store.wallets) }
                         saveError = nil
+                        setKeypad(visible: false)
                     }
                 }
             }
@@ -211,7 +226,10 @@ struct TransactionFormView: View {
                 SelectionChip(title: "Hôm qua", selected: LocalCalendar.calendar.isDate(draft.date, inSameDayAs: TransactionPresentation.yesterday())) {
                     draft.date = TransactionPresentation.yesterday()
                 }
-                SelectionChip(title: "Chọn ngày", selected: showingDatePicker) { showingDatePicker.toggle() }
+                SelectionChip(title: "Chọn ngày", selected: showingDatePicker) {
+                    showingDatePicker.toggle()
+                    if showingDatePicker { setKeypad(visible: false) }
+                }
             }
             if showingDatePicker {
                 DatePicker("Ngày giao dịch", selection: $draft.date, displayedComponents: .date)
@@ -227,10 +245,22 @@ struct TransactionFormView: View {
                 Text("Đã lưu").foregroundStyle(.secondary)
                     .accessibilityIdentifier("transaction.saved")
             }
-            MoneyKeypad { key in
-                draft.amount = MoneyFormatter.applying(key, to: draft.amount)
-                saveError = nil
-                saved = false
+            if keypadVisible {
+                HStack {
+                    Spacer()
+                    Button { setKeypad(visible: false) } label: {
+                        Label("Ẩn bàn phím", systemImage: "keyboard.chevron.compact.down")
+                            .font(.subheadline)
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("keypad.hide")
+                }
+                MoneyKeypad { key in
+                    draft.amount = MoneyFormatter.applying(key, to: draft.amount)
+                    saveError = nil
+                    saved = false
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             Button(action: save) {
                 Label(original == nil ? "Lưu" : "Lưu thay đổi", systemImage: "checkmark")
@@ -264,8 +294,15 @@ struct TransactionFormView: View {
                 draft.amount = 0
                 saveError = nil
                 saved = true
+                setKeypad(visible: true)
             }
         } catch { saveError = TransactionPresentation.errorMessage(error) }
+    }
+
+    /// The custom keypad is tall; collapsing it frees the scroll area so lower chips stay reachable.
+    private func setKeypad(visible: Bool) {
+        guard keypadVisible != visible else { return }
+        withAnimation(.easeOut(duration: 0.2)) { keypadVisible = visible }
     }
 
     private func reload() {
