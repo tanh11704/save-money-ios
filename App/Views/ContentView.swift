@@ -1,16 +1,44 @@
+import SwiftData
 import SwiftUI
 
+@MainActor
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var store = TransactionScreenStore()
+    @State private var selectedTab = 0
+
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "wallet.bifold")
-                .font(.largeTitle)
-            Text("SaveMoney")
-                .font(.title)
-            Text("Ứng dụng đang được thiết lập.")
-                .foregroundStyle(.secondary)
+        Group {
+            if store.ready {
+                TabView(selection: $selectedTab) {
+                    NavigationStack {
+                        TransactionFormView(store: store)
+                            .navigationTitle("Thêm giao dịch")
+                    }
+                    .tabItem { Label("Thêm", systemImage: "plus.circle") }
+                    .tag(0)
+                    NavigationStack {
+                        TransactionHistoryView(store: store)
+                    }
+                    .tabItem { Label("Lịch sử", systemImage: "list.bullet") }
+                    .tag(1)
+                }
+            } else {
+                VStack(spacing: 16) {
+                    if let message = store.errorMessage {
+                        Text(message)
+                        Button("Thử lại") { store.retry() }
+                            .frame(minHeight: 44)
+                    } else {
+                        ProgressView("Đang mở dữ liệu…")
+                    }
+                }
+                .padding()
+            }
         }
-        .padding()
+        .environment(\.locale, Locale(identifier: "vi_VN"))
+        .environment(\.calendar, LocalCalendar.calendar)
+        .environment(\.timeZone, LocalCalendar.calendar.timeZone)
+        .task { store.configure(container: modelContext.container) }
     }
 }
-

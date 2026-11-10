@@ -6,7 +6,8 @@
 
 Đã chuẩn bị bước khởi tạo và viết phần code bước 1 theo yêu cầu tiếp tục của
 chủ dự án. Có ba model SwiftData, model container, BalanceCalculator và 10 test
-in-memory. Chưa xác nhận bước 1 đạt; chưa chuyển sang giao diện giao dịch.
+in-memory. Các bước có build/test còn chờ Xcode; giao diện bước 2 đang được triển khai
+theo yêu cầu tiếp tục của chủ dự án.
 
 Bundle ID đã chốt: `vn.tanh11704.SaveMoney`. Giữ cố định trước và sau khi dùng thật.
 Deployment target tạm là iOS 17.0 (tối thiểu cho SwiftData); cần xác nhận phiên bản
@@ -121,3 +122,22 @@ Kiểm tra ngày 10/11/2026:
   `SwiftDataMacros` trong Command Line Tools; các unit test chưa được thực thi.
 - Cần Xcode đầy đủ để xác minh persistence, validator/model và toàn bộ test.
   Chưa đánh dấu 2a đạt và chưa chuyển sang 2b.
+
+## Tiến độ bước 2b–2e
+
+Theo yêu cầu mới, tiếp tục triển khai dù môi trường chưa chạy được SwiftData.
+Việc này bỏ cổng chờ build/test giữa các phần; không đánh dấu các kiểm thử đã đạt.
+
+### 2b — Tab Thêm
+
+Đã có form SwiftUI, bàn phím số 0–9/000/xóa lùi, số tiền Int64, chip danh mục/ví
+và số dư, ngày Asia/Saigon, ghi chú thu gọn và lỗi tiếng Việt ngay dưới nút Lưu.
+Lưu thành công giữ lựa chọn, xóa số tiền, rung nhẹ và thông báo “Đã lưu”.
+App mở vào tab Thêm. Form dùng lại được cho sửa ở 2d.
+
+Ví/danh mục tạm chỉ được tạo một lần khi store hoàn toàn trống, qua
+`TemporarySampleData`; không tạo giao dịch, không trộn vào kho đang có dữ liệu.
+Bước 3 phải bỏ bootstrap này. Thêm 6 unit test cho lựa chọn form và bootstrap.
+
+Parse Swift và plist đạt. `swift test`/`swift build` vẫn bị chặn ở plugin
+SwiftDataMacros. Chưa xác minh giao diện, haptic hoặc persistence trên iPhone.
