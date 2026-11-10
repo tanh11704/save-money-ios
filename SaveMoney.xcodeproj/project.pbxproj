@@ -1,0 +1,43 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		000000000000000000000001 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = { 000000000000000000000017 = { TestTargetID = 000000000000000000000016; }; }; }; buildConfigurationList = 00000000000000000000001A; compatibilityVersion = "Xcode 14.0"; developmentRegion = vi; knownRegions = (vi, en, Base); mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (000000000000000000000016, 000000000000000000000017); };
+		000000000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMoneyApp.swift; sourceTree = "<group>"; };
+		000000000000000000000008 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		000000000000000000000009 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
+		00000000000000000000000A = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		00000000000000000000000B = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SaveMoney.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		00000000000000000000000C = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SaveMoneyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000002 = { isa = PBXGroup; children = (000000000000000000000004, 000000000000000000000003); sourceTree = "<group>"; };
+		000000000000000000000003 = { isa = PBXGroup; children = (00000000000000000000000B, 00000000000000000000000C); name = Products; sourceTree = "<group>"; };
+		000000000000000000000004 = { isa = PBXGroup; children = (000000000000000000000007, 00000000000000000000000A, 000000000000000000000005, 000000000000000000000006); path = App; sourceTree = "<group>"; };
+		000000000000000000000005 = { isa = PBXGroup; children = (000000000000000000000008); path = Views; sourceTree = "<group>"; };
+		000000000000000000000006 = { isa = PBXGroup; children = (000000000000000000000009); path = Tests; sourceTree = "<group>"; };
+		00000000000000000000000D = { isa = PBXBuildFile; fileRef = 000000000000000000000007; };
+		00000000000000000000000E = { isa = PBXBuildFile; fileRef = 000000000000000000000008; };
+		00000000000000000000000F = { isa = PBXBuildFile; fileRef = 000000000000000000000009; };
+		000000000000000000000010 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000000D, 00000000000000000000000E); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000011 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000000F); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000012 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000013 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000014 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000015 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000016 = { isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000001B; buildPhases = (000000000000000000000010, 000000000000000000000012, 000000000000000000000014); buildRules = (); dependencies = (); name = SaveMoney; productName = SaveMoney; productReference = 00000000000000000000000B; productType = "com.apple.product-type.application"; };
+		000000000000000000000017 = { isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000001C; buildPhases = (000000000000000000000011, 000000000000000000000013, 000000000000000000000015); buildRules = (); dependencies = (000000000000000000000019); name = SaveMoneyTests; productName = SaveMoneyTests; productReference = 00000000000000000000000C; productType = "com.apple.product-type.bundle.unit-test"; };
+		000000000000000000000018 = { isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001; proxyType = 1; remoteGlobalIDString = 000000000000000000000016; remoteInfo = SaveMoney; };
+		000000000000000000000019 = { isa = PBXTargetDependency; target = 000000000000000000000016; targetProxy = 000000000000000000000018; };
+		00000000000000000000001A = { isa = XCConfigurationList; buildConfigurations = (00000000000000000000001D, 00000000000000000000001E); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		00000000000000000000001D = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; TARGETED_DEVICE_FAMILY = 1; CLANG_ENABLE_MODULES = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; ENABLE_TESTABILITY = YES; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; }; name = Debug; };
+		00000000000000000000001E = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; TARGETED_DEVICE_FAMILY = 1; CLANG_ENABLE_MODULES = YES; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
+		00000000000000000000001B = { isa = XCConfigurationList; buildConfigurations = (00000000000000000000001F, 000000000000000000000020); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		00000000000000000000001F = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = vn.tanh11704.SaveMoney; INFOPLIST_FILE = App/Info.plist; GENERATE_INFOPLIST_FILE = NO; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; }; name = Debug; };
+		000000000000000000000020 = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = vn.tanh11704.SaveMoney; INFOPLIST_FILE = App/Info.plist; GENERATE_INFOPLIST_FILE = NO; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; }; name = Release; };
+		00000000000000000000001C = { isa = XCConfigurationList; buildConfigurations = (000000000000000000000021, 000000000000000000000022); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		000000000000000000000021 = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = vn.tanh11704.SaveMoney.Tests; GENERATE_INFOPLIST_FILE = YES; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SaveMoney.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SaveMoney"; BUNDLE_LOADER = "$(TEST_HOST)"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; }; name = Debug; };
+		000000000000000000000022 = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = vn.tanh11704.SaveMoney.Tests; GENERATE_INFOPLIST_FILE = YES; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SaveMoney.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SaveMoney"; BUNDLE_LOADER = "$(TEST_HOST)"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"; }; name = Release; };
+	};
+	rootObject = 000000000000000000000001;
+}
