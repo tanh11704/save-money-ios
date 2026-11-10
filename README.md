@@ -148,3 +148,11 @@ SwiftDataMacros. Chưa xác minh giao diện, haptic hoặc persistence trên iP
  dư qua BalanceCalculator, dấu thu/chi rõ ràng và nội dung rỗng theo SPEC.
 Có tải lại khi kéo danh sách và thông báo lỗi khi không đọc được dữ liệu.
 Parse Swift/plist đạt; test/build vẫn bị chặn bởi SwiftDataMacros.
+
+### 2d — Sửa và xóa
+
+Chạm dòng giao dịch mở sheet dùng lại TransactionFormView; Hủy không ghi dữ
+liệu. Vuốt Xóa hoặc dùng hành động VoiceOver đều phải xác nhận. Tạo/sửa/xóa
+chỉ qua TransactionService, sau khi save tải lại cả số dư và lịch sử.
+Khi sửa giữ ID, ngày/ghi chú; khi đổi loại xóa trường không còn phù hợp.
+Parse Swift/plist đạt; test/build vẫn bị chặn bởi SwiftDataMacros.

@@ -3,6 +3,9 @@ import SwiftUI
 @MainActor
 struct TransactionHistoryView: View {
     @ObservedObject var store: TransactionScreenStore
+    @State private var editing: Transaction?
+    @State private var pendingDeletion: Transaction?
+    @State private var confirmingDeletion = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -30,15 +33,38 @@ struct TransactionHistoryView: View {
             ForEach(TransactionGrouping.group(store.transactions)) { day in
                 Section(TransactionGrouping.title(for: day.date)) {
                     ForEach(day.transactions, id: \.id) { transaction in
-                        row(transaction)
-                            .accessibilityElement(children: .combine)
+                        Button { editing = transaction } label: { row(transaction) }
+                            .buttonStyle(.plain)
                             .accessibilityLabel(TransactionPresentation.accessibilityLabel(transaction))
+                            .accessibilityHint("Chạm hai lần để sửa giao dịch")
+                            .accessibilityAction(named: Text("Xóa giao dịch")) { requestDeletion(transaction) }
+                            .swipeActions(allowsFullSwipe: false) {
+                                Button(role: .destructive) { requestDeletion(transaction) } label: {
+                                    Label("Xóa", systemImage: "trash")
+                                }
+                            }
                     }
                 }
             }
         }
         .navigationTitle("Lịch sử")
         .refreshable { reload() }
+        .sheet(item: $editing) { transaction in
+            NavigationStack {
+                TransactionFormView(store: store, original: transaction)
+            }
+        }
+        .confirmationDialog("Xóa giao dịch này?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
+            Button("Xóa giao dịch", role: .destructive) {
+                if let transaction = pendingDeletion { store.delete(transaction.id) }
+                pendingDeletion = nil
+            }
+            Button("Hủy", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            if let transaction = pendingDeletion {
+                Text("\(TransactionPresentation.title(transaction)) · \(TransactionPresentation.amount(transaction)). Thao tác này không thể hoàn tác.")
+            }
+        }
     }
 
     private func row(_ transaction: Transaction) -> some View {
@@ -91,6 +117,11 @@ struct TransactionHistoryView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.25)
             .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func requestDeletion(_ transaction: Transaction) {
+        pendingDeletion = transaction
+        confirmingDeletion = true
     }
 
     private func reload() {
