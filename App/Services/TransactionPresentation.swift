@@ -23,7 +23,7 @@ struct TransactionPresentation {
         if transaction.kindRaw == TransactionKind.transfer.rawValue {
             return "Chuyển: \(transaction.wallet?.name ?? "Ví không xác định") → \(transaction.toWallet?.name ?? "Ví không xác định")"
         }
-        return transaction.category?.name ?? "Danh mục không xác định"
+        return transaction.category?.name ?? "Không có danh mục"
     }
 
     static func accessibilityLabel(_ transaction: Transaction) -> String {
@@ -32,6 +32,7 @@ struct TransactionPresentation {
     }
 
     static func errorMessage(_ error: Error) -> String {
+        if let error = error as? ReportingMonth.MonthError { return error.localizedDescription }
         if let error = error as? ManagementError { return error.localizedDescription }
         if let error = error as? TransactionValidator.ValidationError { return error.localizedDescription }
         if let error = error as? TransactionService.ServiceError { return error.localizedDescription }

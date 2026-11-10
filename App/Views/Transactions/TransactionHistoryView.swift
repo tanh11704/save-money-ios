@@ -6,7 +6,6 @@ struct TransactionHistoryView: View {
     @State private var editing: Transaction?
     @State private var pendingDeletion: Transaction?
     @State private var confirmingDeletion = false
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         List {
@@ -33,7 +32,7 @@ struct TransactionHistoryView: View {
             ForEach(TransactionGrouping.group(store.transactions)) { day in
                 Section(TransactionGrouping.title(for: day.date)) {
                     ForEach(day.transactions, id: \.id) { transaction in
-                        Button { editing = transaction } label: { row(transaction) }
+                        Button { editing = transaction } label: { TransactionRow(transaction: transaction) }
                             .buttonStyle(.plain)
                             .accessibilityLabel(TransactionPresentation.accessibilityLabel(transaction))
                             .accessibilityValue([transaction.wallet?.name ?? "", transaction.note].filter { !$0.isEmpty }.joined(separator: ", "))
@@ -66,58 +65,6 @@ struct TransactionHistoryView: View {
                 Text("\(TransactionPresentation.title(transaction)) · \(TransactionPresentation.amount(transaction)). Thao tác này không thể hoàn tác.")
             }
         }
-    }
-
-    private func row(_ transaction: Transaction) -> some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) {
-                    description(transaction)
-                    amount(transaction)
-                }
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 12) {
-                        description(transaction)
-                        Spacer(minLength: 8)
-                        amount(transaction)
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        description(transaction)
-                        amount(transaction)
-                    }
-                }
-            }
-        }
-        .frame(minHeight: 44)
-        .padding(.vertical, 4)
-    }
-
-    private func description(_ transaction: Transaction) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: transaction.kindRaw == "transfer" ? "arrow.left.arrow.right" : transaction.category?.icon ?? "tag")
-                .foregroundStyle(.secondary).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(TransactionPresentation.title(transaction))
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(transaction.wallet?.name ?? "Ví không xác định")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                if !transaction.note.isEmpty {
-                    Text(transaction.note).font(.subheadline).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    private func amount(_ transaction: Transaction) -> some View {
-        Text(TransactionPresentation.amount(transaction))
-            .font(.headline).monospacedDigit()
-            .foregroundStyle(transaction.kindRaw == "income" ? Color.green : Color.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.25)
-            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private func requestDeletion(_ transaction: Transaction) {

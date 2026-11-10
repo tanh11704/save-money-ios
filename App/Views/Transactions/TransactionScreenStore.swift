@@ -17,6 +17,7 @@ final class TransactionScreenStore: ObservableObject {
     let recent = RecentSelectionStore()
     private var container: ModelContainer?
     private var readContext: ModelContext?
+    var statisticsContext: ModelContext? { readContext }
 
     func configure(container: ModelContainer) {
         guard self.container == nil else { return }
@@ -44,11 +45,11 @@ final class TransactionScreenStore: ObservableObject {
         var balances: [UUID: String] = [:]
         var values: [UUID: Int64] = [:]
         for wallet in wallets {
-            let value = try BalanceCalculator.balance(for: wallet, transactions: transactions)
+            let value = try BalanceCalculator.balance(for: wallet, transactions: transactions, allowMissingCategory: true)
             values[wallet.id] = value
             balances[wallet.id] = MoneyFormatter.string(from: value)
         }
-        let total = try BalanceCalculator.totalBalance(wallets: wallets, transactions: transactions)
+        let total = try BalanceCalculator.totalBalance(wallets: wallets, transactions: transactions, allowMissingCategory: true)
         readContext = context
         self.wallets = wallets
         self.categories = categories

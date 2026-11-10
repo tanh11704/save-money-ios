@@ -4,12 +4,16 @@
 
 ## Trạng thái
 
-Đã triển khai code bước 1, 2a–2e và 3a–3e: ghi giao dịch, lịch sử, sửa/xóa,
-quản lý ví/danh mục, archive/khôi phục và dữ liệu mặc định. Kiểm thử iOS, UI và
-máy thật chưa được xác nhận do máy chưa cài Xcode đầy đủ.
+Đã triển khai bước 1–4: giao dịch, ví/danh mục và thống kê tháng.
+**Kết quả mới nhất:** 64/64 unit test model/service chạy đạt trên macOS bằng
+Xcode 27.2; app build iOS Simulator đạt. Chưa chạy trên simulator/iPhone vì
+chưa cài runtime iOS Simulator; smoke test iOS và kiểm tra trực quan còn chờ.
 
-Bước 3 được làm trọn vẹn rồi kiểm tra tổng hợp một lần theo yêu cầu mới.
-Các bước 4–7 (thống kê, backup/restore, khóa app và nghiệm thu) chưa triển khai.
+Các ghi nhận thiếu Xcode/SwiftDataMacros ở bước 1–3 bên dưới là lịch sử trước
+khi có Xcode. Terminal vẫn trỏ vào Command Line Tools; dùng DEVELOPER_DIR như
+hướng dẫn bên dưới để chạy bằng Xcode mà không đổi cấu hình máy.
+
+Bước 5–7 (backup/restore, khóa app và nghiệm thu) chưa triển khai.
 
 Bundle ID đã chốt: `vn.tanh11704.SaveMoney`. Giữ cố định trước và sau khi dùng thật.
 Deployment target tạm là iOS 17.0 (tối thiểu cho SwiftData); cần xác nhận phiên bản
@@ -39,7 +43,7 @@ xcodebuild -project SaveMoney.xcodeproj -scheme SaveMoney -destination 'generic/
 
 - [x] Project và test target đã được tạo.
 - [x] Bật `UIFileSharingEnabled` và `LSSupportsOpeningDocumentsInPlace`.
-- [ ] Build iOS đạt.
+- [x] Build app cho iOS Simulator đạt (chưa chạy app).
 - [ ] Smoke test chạy đạt trên simulator hoặc thiết bị.
 - [ ] App trống chạy trên iPhone thật.
 - [ ] Chủ dự án xác nhận iCloud Backup đã bật.
@@ -183,7 +187,7 @@ test, UI hoặc khả năng tiếp cận đã chạy đạt.
 
 ### Checklist chạy lại khi có Xcode/iPhone (chưa thực hiện)
 
-- [ ] Chạy `Cmd+U` toàn bộ 50 test hiện tại trong scheme SaveMoney, sau đó `Cmd+B`.
+- [ ] Chạy `Cmd+U` toàn bộ 65 test hiện tại trong scheme SaveMoney, sau đó `Cmd+B`.
 - [ ] Cài/run trên iPhone thật; app mở vào Thêm, dữ liệu tạm chỉ tạo một lần.
 - [ ] Chi: nhập số → chọn danh mục → Lưu; số tiền xóa, loại/ví/danh mục giữ lại,
       có rung nhẹ/“Đã lưu”, không tự đổi tab. Kiểm tra mở lại app nhớ lựa chọn.
@@ -295,3 +299,104 @@ Kết quả lượt kiểm tra tổng hợp duy nhất ngày 10/11/2026:
 - [ ] Chọn ví/danh mục ở Thêm rồi archive ở tab Ví: lựa chọn cũ bị bỏ, draft còn.
       Sửa lịch sử cũ vẫn đọc được ví/danh mục archive.
 - [ ] Dynamic Type lớn nhất, chế độ tối, VoiceOver: dùng được toàn bộ màn hình mới.
+
+
+## Bước 4a–4d — Thống kê tháng
+
+### Cách tính và giao diện
+
+StatsService nhận năm/tháng (hoặc ReportingMonth), dùng LocalCalendar tại
+Asia/Saigon. Khoảng tháng gồm đầu tháng và loại trừ đầu tháng sau. Tái sử dụng
+BalanceCalculator.flowTotals cho cả tổng và danh mục thu/chi; không cộng tiền
+lần nữa trong View. Giữ Int64, phát hiện tràn số. Chuyển tiền không xuất hiện
+trong thu/chi/danh mục. Không lọc archive.
+
+Giao dịch thiếu danh mục được gom riêng theo loại vào “Không có danh mục”. Chế
+độ đọc của màn hình cho phép thiếu danh mục để người dùng vẫn vào được app và
+sửa dữ liệu; validator tạo/sửa và calculator ở chế độ mặc định vẫn nghiêm ngặt.
+Không sửa schema hoặc tự thay dữ liệu.
+
+Danh mục sắp theo số tiền giảm dần, giữ ID riêng, chỉ hiện tổng dương. Phần trăm
+được tính bằng Decimal rồi làm tròn tới một chữ số thập phân và lưu thành số
+nguyên phần mười phần trăm để hiển thị; không dùng Double/Float, không suy ngược
+phần trăm thành tiền. Chênh lệch có dấu +/−, số 0 hiển thị +0.
+
+Tab thứ 4 “Thống kê”: tháng trước/sau (không vượt tháng hiện tại), chạm nhãn để
+chọn tháng/năm, “Tháng này”, tóm tắt thu/chi/chênh lệch, chi và thu theo danh mục.
+Chạm dòng mở sheet chỉ đọc, có tổng và giao dịch nhóm theo ngày, dùng lại
+TransactionRow của Lịch sử. Không có biểu đồ, so sánh tháng, CSV hoặc lọc ví.
+
+Dữ liệu lấy bằng @Query, báo cáo tính từ kết quả query chứ không cache. Sau mỗi
+save, query dùng lại context đọc mới của store; chỉ report con được tái tạo,
+state tháng và danh mục đang xem giữ ở cha. Query chi tiết cũng được làm mới.
+Bố cục số liệu xếp dọc, không lineLimit cho tiền; màu hệ thống, VoiceOver có
+loại/số tiền/phần trăm và nút chính có vùng chạm 44pt. Các kiểm tra này mới được
+rà code/build, chưa xác nhận trực quan trên thiết bị.
+
+### Kết quả test/build
+
+- **64/64 unit test đạt**, gồm toàn bộ test còn áp dụng của bước 1–3 và 15 test
+  Stats mới, SwiftData in-memory trên macOS. Không bỏ qua test nào trong package.
+- App và test target iOS Simulator đều **BUILD SUCCEEDED** bằng Xcode 27.2,
+  SDK iOS 27.2. Test target đã biên dịch đủ cả smoke test.
+- Sửa trùng tên Category giữa model và Objective-C trong test bằng typealias
+  có module rõ ràng; không đổi model hay schema.
+- Project có 65 test khai báo (64 unit + 1 smoke test app); smoke test chưa chạy
+  trên iOS. Danh sách simulator/runtime rỗng, không có iPhone được sử dụng.
+- Log unit test: `/tmp/savemoney-step4-tests.log`.
+- Log build app: `/tmp/savemoney-step4-ios-build.log`.
+- Log build test target: `/tmp/savemoney-step4-test-target-build.log`.
+
+Lệnh tái hiện (không cần đổi xcode-select):
+
+```sh
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+swift test --scratch-path /tmp/savemoney-xcode-swift-build
+xcodebuild -project SaveMoney.xcodeproj -scheme SaveMoney -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/savemoney-step4-derived CODE_SIGNING_ALLOWED=NO build
+```
+
+### Đối chiếu cộng tay (chưa đối chiếu màn hình)
+
+Chỉ nhập dữ liệu mẫu vào kho thử nghiệm trong tháng đang xem. Không tự seed các
+giao dịch này vào app. Bảng dưới và các tổng được tính tay độc lập trước khi
+so với StatsService trong test; chưa thay thế yêu cầu ghi ra giấy và so màn hình.
+
+| Loại | Danh mục / hướng chuyển | Số tiền |
+| --- | --- | ---: |
+| Chi | Ăn uống | 120.000 |
+| Chi | Ăn uống | 80.000 |
+| Chi | Đi lại | 50.000 |
+| Chi | Đi lại | 50.000 |
+| Chi | Mua sắm | 200.000 |
+| Chi | Mua sắm | 100.000 |
+| Thu | Lương | 1.000.000 |
+| Thu | Thu khác | 200.000 |
+| Chuyển | Tiền mặt → Ngân hàng | 300.000 |
+| Chuyển | Ngân hàng → Tiền mặt | 100.000 |
+
+Cộng tay: Ăn uống 120.000 + 80.000 = **200.000**; Đi lại 50.000 + 50.000 =
+**100.000**; Mua sắm 200.000 + 100.000 = **300.000**. Tổng chi **600.000**.
+Thu 1.000.000 + 200.000 = **1.200.000**. Chênh lệch **+600.000**.
+
+Màn hình cần hiện chi theo thứ tự: Mua sắm **300.000 (50,0%)**, Ăn uống
+**200.000 (33,3%)**, Đi lại **100.000 (16,7%)**; tổng phần trăm **100,0%**.
+Thu: Lương **1.000.000 (83,3%)**, Thu khác **200.000 (16,7%)**. Hai chuyển tiền
+không đổi bất kỳ tổng thu/chi/danh mục nào. Mỗi dòng chi mở đúng 2 giao dịch,
+mỗi dòng thu mở đúng 1 giao dịch. Test mẫu đã khớp các số cố định này.
+
+### Nghiệm thu còn lại
+
+- [x] Toàn bộ 64 unit test bước 1–4a đạt trên macOS, gồm ranh giới tháng, tháng
+      nhuận, archive, thiếu danh mục, tổng khớp, phần trăm và tràn Int64.
+- [x] Build app iOS đạt.
+- [ ] Cài runtime iOS Simulator (Xcode → Settings → Components) hoặc chọn iPhone.
+- [ ] Chạy smoke test/app trên iOS và nhập đúng 10 giao dịch mẫu trong tháng này.
+- [ ] Ghi tổng ra giấy, đối chiếu từng số và tổng/phần trăm với màn hình.
+- [ ] Thử 23:59 cuối tháng, 00:00 và 00:01 tháng sau, archive danh mục đã dùng.
+- [ ] Thử tháng trống, chỉ thu/chỉ chi/chỉ chuyển; không tiến quá tháng hiện tại.
+- [ ] Sửa/xóa ở Lịch sử, quay lại Thống kê và sheet chi tiết: cập nhật đúng.
+- [ ] Dynamic Type lớn nhất, chế độ tối, VoiceOver, vùng chạm trên iPhone.
+- [ ] Chạy trên iPhone thật.
+
+**Bước 4 chưa qua toàn bộ cổng nghiệm thu Phần C** cho tới khi các ô còn lại
+được kiểm tra trên màn hình và thiết bị. Chưa nhập dữ liệu thật trước backup.

@@ -2,8 +2,10 @@ import Foundation
 import XCTest
 #if SWIFT_PACKAGE
 @testable import SaveMoneyCore
+private typealias Category = SaveMoneyCore.Category
 #else
 @testable import SaveMoney
+private typealias Category = SaveMoney.Category
 #endif
 
 @MainActor

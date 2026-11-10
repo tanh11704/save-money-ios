@@ -28,6 +28,11 @@ struct ContentView: View {
                     }
                     .tabItem { Label("Ví", systemImage: "wallet.bifold") }
                     .tag(2)
+                    NavigationStack {
+                        StatsView(store: store)
+                    }
+                    .tabItem { Label("Thống kê", systemImage: "list.number") }
+                    .tag(3)
                 }
             } else {
                 VStack(spacing: 16) {
