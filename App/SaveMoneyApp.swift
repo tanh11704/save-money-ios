@@ -7,6 +7,7 @@ struct SaveMoneyApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [Wallet.self, Category.self, Transaction.self])
     }
 }
 
