@@ -27,14 +27,12 @@ final class RecurringServiceTests: XCTestCase {
         XCTAssertEqual(try RecurringService.generateDue(now: now, container: container).created, 4)
         XCTAssertEqual(try RecurringService.generateDue(now: now, container: container).created, 0)
         let context = ModelContext(container), transactions = try context.fetch(FetchDescriptor<Transaction>())
-        context.delete(transactions[0]); try context.save()
+        context.delete(try XCTUnwrap(transactions.min { $0.date < $1.date })); try context.save()
         XCTAssertEqual(try RecurringService.generateDue(now: now, container: container).created, 0)
-        // Rewind while keeping all remaining keys: only the explicitly rewound,
-        // deleted occurrence can be missing. A normal deletion never rewinds.
+        // Rewinding past existing November keys must still avoid duplicates.
         let rule = try XCTUnwrap(context.fetch(FetchDescriptor<RecurringRule>()).first)
         rule.generatedThrough = date(2026, 10, 5); try context.save()
-        let existingNovember = try records(container).contains { $0.date == now }
-        XCTAssertEqual(try RecurringService.generateDue(now: now, container: container).created, existingNovember ? 0 : 1)
+        XCTAssertEqual(try RecurringService.generateDue(now: now, container: container).created, 0)
         let keys = try records(container).compactMap(\.recurrenceKey)
         XCTAssertEqual(Set(keys).count, keys.count)
     }
@@ -76,4 +74,16 @@ final class RecurringServiceTests: XCTestCase {
         try RecurringPersistence(container: container).save(draft, editing: current.id)
         XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<RecurringRule>()).first?.generatedThrough, cursor)
     }
+    func testArchivedCategorySkipAndCategoryKindCannotChangeWithRule() async throws {
+        let container = try fixture(), context = ModelContext(container)
+        let rule = try XCTUnwrap(context.fetch(FetchDescriptor<RecurringRule>()).first)
+        let category = try XCTUnwrap(rule.category)
+        XCTAssertThrowsError(try CategoryService(container: container).update(id: category.id,
+            with: CategoryDraft(name: category.name, kind: .income, icon: "tag")))
+        category.isArchived = true; try context.save()
+        let result = try RecurringService.generateDue(now: date(2026, 11, 5), container: container)
+        XCTAssertEqual(result.created, 0); XCTAssertEqual(result.skipped.count, 1)
+        XCTAssertNil(try ModelContext(container).fetch(FetchDescriptor<RecurringRule>()).first?.generatedThrough)
+    }
+
 }

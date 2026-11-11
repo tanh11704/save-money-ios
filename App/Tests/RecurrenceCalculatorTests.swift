@@ -31,4 +31,14 @@ final class RecurrenceCalculatorTests: XCTestCase {
         XCTAssertEqual(result, [date(2030, 2, 28), date(2030, 3, 31)])
         XCTAssertEqual(RecurrenceCalculator.key(ruleID: id, occurrence: start), id.uuidString + ".20260131")
     }
+    func testExtremeIntervalsKeepFirstOccurrenceWithoutOverflowingCalendarMath() {
+        let start = date(2026, 1, 1), through = date(2026, 12, 31)
+        for frequency in RecurrenceFrequency.allCases {
+            XCTAssertEqual(RecurrenceCalculator.occurrences(start: start, frequency: frequency, interval: Int.max,
+                end: nil, after: nil, through: through), [start])
+            XCTAssertTrue(RecurrenceCalculator.occurrences(start: start, frequency: frequency, interval: Int.max,
+                end: nil, after: start, through: through).isEmpty)
+        }
+    }
+
 }

@@ -38,7 +38,11 @@ final class AppRuntime: ObservableObject {
         })
         observers.append(NotificationCenter.default.addObserver(forName: .ledgerDidRestore, object: nil, queue: .main) { [weak self] notification in
             guard let source = notification.object as? ModelContainer, source === container else { return }
-            MainActor.assumeIsolated { self?.scheduler.restored(); self?.settings.refresh() }
+            MainActor.assumeIsolated {
+                self?.scheduler.restored(); self?.settings.refresh()
+                self?.recurringMessage = nil; self?.recurringIssues = []
+                self?.generatedThisActivation = true // Resume generation on the next opening, not mid-restore.
+            }
         })
     }
     deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }

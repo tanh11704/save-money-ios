@@ -35,7 +35,7 @@ final class BackupBudgetTests: XCTestCase {
         XCTAssertEqual(captured.payload.wallets, validated.file.payload.wallets)
         XCTAssertEqual(captured.payload.categories, validated.file.payload.categories)
         XCTAssertEqual(captured.payload.budgets, validated.file.payload.budgets)
-        XCTAssertEqual(captured.payload.transactions.map(\.id), validated.file.payload.transactions.map(\.id))
+        XCTAssertEqual(captured.payload.transactions.map { var record = $0; record.includesRecurrenceKey = false; return record }, validated.file.payload.transactions)
         XCTAssertTrue(captured.payload.recurringRules.isEmpty)
         XCTAssertEqual(captured.summary.expectedBalances, validated.file.summary.expectedBalances)
         XCTAssertEqual(captured.payload.budgets.map(\.isArchived), [false, true])
@@ -45,7 +45,7 @@ final class BackupBudgetTests: XCTestCase {
         let v1 = try BackupValidator.read(fixture(1)).file
         XCTAssertEqual(v1Restored.payload.wallets, v1.payload.wallets)
         XCTAssertEqual(v1Restored.payload.categories, v1.payload.categories)
-        XCTAssertEqual(v1Restored.payload.transactions.map(\.id), v1.payload.transactions.map(\.id))
+        XCTAssertEqual(v1Restored.payload.transactions.map { var record = $0; record.includesRecurrenceKey = false; return record }, v1.payload.transactions)
         XCTAssertTrue(v1Restored.payload.transactions.allSatisfy { $0.recurrenceKey == nil })
         XCTAssertEqual(v1Restored.summary.expectedBalances, v1.summary.expectedBalances)
     }

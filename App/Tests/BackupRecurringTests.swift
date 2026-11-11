@@ -67,6 +67,18 @@ final class BackupRecurringTests: XCTestCase {
         XCTAssertEqual(try RecurringService.generateDue(now: Date(), container: container).created, 0)
         XCTAssertEqual(try ModelContext(container).fetchCount(FetchDescriptor<Transaction>()), 1)
     }
+    func testRestoreFailureRollsBackRecurringRulesAndTransactionKeys() async throws {
+        let container = try container(), folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let exporter = BackupExporter(container: container, directory: folder)
+        var restorer = BackupRestorer(container: container, exporter: exporter)
+        _ = try restorer.restore(fixture(3))
+        let now = Date(), original = try exporter.capture(now: now)
+        restorer.checkpoint = { _ in throw BackupError.balances }
+        XCTAssertThrowsError(try restorer.restore(fixture(2)))
+        XCTAssertEqual(try exporter.capture(now: now), original)
+    }
+
 }
 #if SWIFT_PACKAGE
 private typealias SaveMoneyCategory = SaveMoneyCore.Category
