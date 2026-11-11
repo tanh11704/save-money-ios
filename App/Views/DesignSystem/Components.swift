@@ -24,7 +24,7 @@ struct AmountText: View {
         switch kind { case .income: return "+" + formatted; case .expense: return "−" + formatted; default: return formatted }
     }
     var body: some View {
-        Text(text).font(style).monospacedDigit().fixedSize(horizontal: false, vertical: true)
+        Text(text).font(style).monospacedDigit().lineLimit(1).minimumScaleFactor(0.35)
             .foregroundStyle(kind.map { Color($0 == .income ? "Income" : $0 == .expense ? "Expense" : "Transfer") } ?? .primary)
             .contentTransition(reduceMotion ? .identity : .numericText())
     }
@@ -48,7 +48,7 @@ struct StatTile: View {
     var body: some View {
         Card { VStack(alignment: .leading, spacing: 8) {
             Label(title, systemImage: icon).font(.subheadline).foregroundStyle(.secondary)
-            Text(value).font(.title2.bold()).monospacedDigit().fixedSize(horizontal: false, vertical: true)
+            Text(value).font(.title2.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.35)
             if let trend { TrendBadge(delta: trend) }
         } }.accessibilityElement(children: .combine)
     }
