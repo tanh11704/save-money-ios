@@ -34,8 +34,19 @@ stage_dir="$(mktemp -d "$out_dir/staging.XXXXXX")"
 trap 'rm -rf -- "$stage_dir"' EXIT
 mkdir "$stage_dir/Payload"
 /usr/bin/ditto "$app_dir" "$stage_dir/Payload/SaveMoney.app"
+ipa_name="SaveMoney.ipa"
+if [[ "${INCLUDE_WIDGET_TRIAL:-0}" == "1" ]]; then
+    xcodebuild -project "$repo_dir/SaveMoney.xcodeproj" \
+        -target SaveMoneyWidgetTrial -configuration Release -sdk iphoneos \
+        SYMROOT="$out_dir/products" OBJROOT="$out_dir/widget-objects" \
+        CODE_SIGNING_ALLOWED=NO build > "$out_dir/widget-build.log" 2>&1
+    mkdir -p "$stage_dir/Payload/SaveMoney.app/PlugIns"
+    /usr/bin/ditto "$out_dir/products/Release-iphoneos/SaveMoneyWidgetTrial.appex" \
+        "$stage_dir/Payload/SaveMoney.app/PlugIns/SaveMoneyWidgetTrial.appex"
+    ipa_name="SaveMoney-WidgetTrial.ipa"
+fi
 /usr/bin/ditto -c -k --keepParent "$stage_dir/Payload" "$stage_dir/SaveMoney.ipa"
 /usr/bin/unzip -tq "$stage_dir/SaveMoney.ipa"
-mv -f -- "$stage_dir/SaveMoney.ipa" "$out_dir/SaveMoney.ipa"
-echo "Unsigned device IPA: $out_dir/SaveMoney.ipa"
+mv -f -- "$stage_dir/SaveMoney.ipa" "$out_dir/$ipa_name"
+echo "Unsigned device IPA: $out_dir/$ipa_name"
 echo "SideStore must sign it before installation; opening this file alone does not install it."
