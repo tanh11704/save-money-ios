@@ -9,6 +9,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = TransactionScreenStore()
+    @State private var showingRecurring = false
     @State private var selectedTab = 0
 
     var body: some View {
@@ -62,11 +63,16 @@ struct ContentView: View {
         }
         .overlay(alignment: .top) {
             if let message = runtime.recurringMessage {
-                Text(message).font(.footnote).padding().frame(maxWidth: .infinity).background(.regularMaterial)
+                Button { showingRecurring = true } label: {
+                    Text(message).font(.footnote).padding().frame(maxWidth: .infinity, minHeight: 44).background(.regularMaterial)
+                }
             } else if let error = settings.scheduler.lastError {
                 Text(error).font(.footnote).padding().frame(maxWidth: .infinity)
                     .background(.regularMaterial).accessibilityAddTraits(.isStaticText)
             }
+        }
+        .sheet(isPresented: $showingRecurring) {
+            NavigationStack { RecurringListView(store: store) }
         }
         .environment(\.locale, Locale(identifier: "vi_VN"))
         .environment(\.calendar, LocalCalendar.calendar)

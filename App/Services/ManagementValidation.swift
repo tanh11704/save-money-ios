@@ -13,7 +13,7 @@ enum ManagementError: LocalizedError, Equatable {
         case .invalidIcon: return "Hãy chọn một biểu tượng trong danh sách."
         case .invalidOpeningBalance: return "Số dư ban đầu tối đa là 999.999.999.999 đồng hoặc khoản nợ tương ứng."
         case .lastActiveWallet: return "Phải còn ít nhất một ví đang dùng. Hãy thêm hoặc khôi phục ví khác trước."
-        case .categoryInUse: return "Danh mục đã có giao dịch hoặc hạn mức, không thể đổi loại. Hãy tạo danh mục mới."
+        case .categoryInUse: return "Danh mục đã có giao dịch, hạn mức hoặc quy tắc định kỳ, không thể đổi loại. Hãy tạo danh mục mới."
         case .missingRecord: return "Dữ liệu không còn tồn tại. Hãy tải lại và thử lại."
         }
     }

@@ -8,19 +8,21 @@ final class AppRuntime: ObservableObject {
     let scheduler: BackupScheduler
     let lock: AppLockService
     let settings: BackupScreenStore
+    @Published private(set) var recurringIssues: [RecurringService.Skip] = []
     @Published private(set) var recurringMessage: String?
-    private let budgetAlerts = BudgetAlertService()
+    private let budgetAlerts: BudgetAlertService
     private var generatedThisActivation = false
     private var generating = false
     private var observers: [NSObjectProtocol] = []
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
-    init(container: ModelContainer) {
+    init(container: ModelContainer, scheduler suppliedScheduler: BackupScheduler? = nil, lock suppliedLock: AppLockService? = nil, budgetAlerts suppliedAlerts: BudgetAlertService? = nil) {
         self.container = container
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let exporter = BackupExporter(container: container, directory: documents.appendingPathComponent("Backups", isDirectory: true))
-        scheduler = BackupScheduler(exporter: exporter)
-        lock = AppLockService(authenticator: DeviceAuthenticator())
+        scheduler = suppliedScheduler ?? BackupScheduler(exporter: exporter)
+        lock = suppliedLock ?? AppLockService(authenticator: DeviceAuthenticator())
+        budgetAlerts = suppliedAlerts ?? BudgetAlertService()
         settings = BackupScreenStore(scheduler: scheduler)
         scheduler.onChange = { [weak settings] in settings?.refresh() }
         observers.append(NotificationCenter.default.addObserver(forName: .ledgerDidChange, object: nil, queue: .main) { [weak self] notification in
@@ -48,7 +50,7 @@ final class AppRuntime: ObservableObject {
     }
 
     func generateRecurring(force: Bool = false) {
-        guard lock.state == .unlocked, !settings.isRestoring, !generating,
+        guard UIApplication.shared.applicationState == .active, lock.state == .unlocked, !settings.isRestoring, !generating,
               force || !generatedThisActivation else { return }
         generating = true; generatedThisActivation = true
         defer { generating = false }
@@ -57,6 +59,7 @@ final class AppRuntime: ObservableObject {
             let rules = try context.fetch(FetchDescriptor<Budget>()).compactMap(\.rule)
             let before = try? BudgetService.progress(month: month, rules: rules, transactions: context.fetch(FetchDescriptor<Transaction>()))
             let result = try RecurringService.generateDue(now: Date(), container: container)
+            recurringIssues = result.skipped
             recurringMessage = result.skipped.isEmpty ? nil : "\(result.skipped.count) giao dịch định kỳ không sinh được. Xem lại."
             if result.hasMore { recurringMessage = [recurringMessage, "Còn giao dịch đến hạn; sẽ tiếp tục vào lần mở app sau."].compactMap { $0 }.joined(separator: " ") }
             if result.created > 0 {

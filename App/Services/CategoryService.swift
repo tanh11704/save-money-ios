@@ -40,7 +40,8 @@ struct CategoryService {
             guard let category = categories.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             let usedByTransactions = try context.fetch(FetchDescriptor<Transaction>()).contains { $0.category?.id == id }
             let usedByBudgets = try context.fetch(FetchDescriptor<Budget>()).contains { $0.category?.id == id }
-            let used = usedByTransactions || usedByBudgets
+            let usedByRecurring = try context.fetch(FetchDescriptor<RecurringRule>()).contains { $0.category?.id == id }
+            let used = usedByTransactions || usedByBudgets || usedByRecurring
             try Self.validate(draft, categories: categories, editing: category, hasTransactions: used)
             category.name = try ManagementValidation.name(draft.name)
             category.kindRaw = draft.kind.rawValue

@@ -28,7 +28,7 @@ struct TransactionPresentation {
 
     static func accessibilityLabel(_ transaction: Transaction) -> String {
         let kind = TransactionKind(rawValue: transaction.kindRaw).map(kindTitle) ?? "Giao dịch"
-        return "\(kind), \(title(transaction)), \(MoneyFormatter.string(from: transaction.amount))"
+        return "\(kind), \(title(transaction)), \(MoneyFormatter.string(from: transaction.amount))" + (transaction.recurrenceKey == nil ? "" : ", Định kỳ")
     }
 
     static func errorMessage(_ error: Error) -> String {

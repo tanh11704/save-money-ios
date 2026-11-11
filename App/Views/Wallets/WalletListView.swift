@@ -50,6 +50,9 @@ struct WalletListView: View {
                 .frame(minHeight: 44)
             }
             Section {
+                NavigationLink { RecurringListView(store: store) } label: {
+                    Label("Giao dịch định kỳ", systemImage: "arrow.triangle.2.circlepath").frame(minHeight: 44)
+                }
                 NavigationLink { BudgetListView(store: store) } label: {
                     Label("Ngân sách", systemImage: "chart.bar").frame(minHeight: 44)
                 }

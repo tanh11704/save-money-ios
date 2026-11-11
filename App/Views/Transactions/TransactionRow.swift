@@ -38,6 +38,9 @@ struct TransactionRow: View {
                 Text(TransactionPresentation.title(transaction))
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
+                if transaction.recurrenceKey != nil {
+                    Label("Định kỳ", systemImage: "arrow.triangle.2.circlepath").font(.caption).foregroundStyle(.secondary)
+                }
                 Text(transaction.wallet?.name ?? "Ví không xác định")
                     .font(.subheadline).foregroundStyle(.secondary)
                 if !transaction.note.isEmpty {

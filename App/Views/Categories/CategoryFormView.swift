@@ -40,7 +40,7 @@ struct CategoryFormView: View {
                     Text("Thu").tag(TransactionKind.income)
                 }.pickerStyle(.menu).disabled(lockedKind).frame(minHeight: 44)
                 if lockedKind {
-                    Text("Danh mục đã có giao dịch hoặc hạn mức nên không thể đổi loại. Muốn khác loại, hãy tạo danh mục mới.")
+                    Text("Danh mục đã có giao dịch, hạn mức hoặc quy tắc định kỳ nên không thể đổi loại. Muốn khác loại, hãy tạo danh mục mới.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Text("Biểu tượng").font(.headline)
