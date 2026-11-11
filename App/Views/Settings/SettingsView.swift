@@ -12,36 +12,42 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            Section { backupStatus }
             Section("Sao lưu") {
-                backupStatus
                 if let error = store.error ?? store.scheduler.lastError { Text(error).foregroundStyle(.red) }
                 if let message = store.message { Text(message).foregroundStyle(.secondary) }
-                Button { store.backupNow() } label: { Label("Sao lưu ngay", systemImage: "externaldrive").frame(minHeight: 44) }
+                Button { store.backupNow() } label: { IconRow(icon: "externaldrive", title: "Sao lưu ngay") }
                 Button {
                     if let latest = store.latest { sharing = ShareItem(url: latest) }
-                } label: { Label("Chia sẻ bản mới nhất", systemImage: "square.and.arrow.up").frame(minHeight: 44) }
+                } label: { IconRow(icon: "square.and.arrow.up", title: "Chia sẻ bản mới nhất") }
                     .disabled(store.latest == nil)
-                NavigationLink { backupList } label: { Text("Danh sách bản sao lưu").frame(minHeight: 44) }
-                Button { importing = true } label: { Text("Khôi phục từ file").frame(minHeight: 44) }
-                Text("Bật Cài đặt → [tên bạn] → iCloud → Sao lưu iCloud trên iPhone. Nhớ chép file JSON sang iCloud Drive.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                NavigationLink { backupList } label: { IconRow(icon: "doc.on.doc", title: "Danh sách bản sao lưu") }
+                Button { importing = true } label: { IconRow(icon: "arrow.counterclockwise", tint: .orange, title: "Khôi phục từ file") }
+                HStack { IconRow(icon: "icloud", title: "Sao lưu iCloud của iPhone"); InfoButton(text: "1. Mở Cài đặt → tên bạn → iCloud.\n2. Bật Sao lưu iCloud.\n3. Chia sẻ file backup sang iCloud Drive và giữ thêm một bản ngoài iPhone.") }
                 Text(store.scheduler.exporter.protection.enabled ? "Mọi bản sao lưu mới đều được mã hóa, kể cả trước khôi phục." : "Backup mới chưa mã hóa và có thể đọc từ ứng dụng Tệp dù app đang khóa.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            Section { NavigationLink { CSVExportView() } label: { Text("Xuất CSV").frame(minHeight: 44) } }
-            Section("Kiểm tra dữ liệu") {
+            Section("Dữ liệu") {
+                NavigationLink { CSVExportView() } label: { IconRow(icon: "tablecells", tint: .green, title: "Xuất CSV") }
                 if store.scheduler.defaults.object(forKey: "SaveMoney.lastIntegrityCheck") != nil && !store.scheduler.defaults.bool(forKey: "SaveMoney.lastIntegrityHealthy") {
                     Label("Kiểm tra gần nhất có lỗi. Hãy xem kết quả và sao lưu trước khi sửa.", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
                 }
-                NavigationLink { IntegrityView(store: store) } label: { Text("Kiểm tra dữ liệu").frame(minHeight: 44) }
+                NavigationLink { IntegrityView(store: store) } label: { IconRow(icon: "checkmark.shield", tint: .green, title: "Kiểm tra toàn vẹn") }
             }
             Section("Bảo mật") {
-                NavigationLink { BackupEncryptionView(store: store) } label: { Text("Mã hóa bản sao lưu").frame(minHeight: 44) }
+                NavigationLink { BackupEncryptionView(store: store) } label: { IconRow(icon: "lock.shield", tint: .purple, title: "Mã hóa bản sao lưu") }
                 Toggle("Khóa bằng Face ID", isOn: Binding(get: { lock.enabled }, set: { value in Task { _ = await lock.setEnabled(value) } }))
                     .frame(minHeight: 44).disabled(lock.state == .authenticating)
-                Text("Dùng Face ID hoặc mật mã máy. Khóa khi mở app và khi quay lại sau hơn 30 giây ở nền.")
+                Text("Khóa sau 30 giây ở nền")
                     .font(.footnote).foregroundStyle(.secondary)
                 if let message = lock.message { Text(message).foregroundStyle(.red) }
+            }
+            Section("Phím tắt") {
+                IconRow(icon: "square.stack.3d.up", tint: .purple, title: "Mở nhanh SaveMoney")
+                InfoButton(text: "Trong ứng dụng Phím tắt, tìm SaveMoney để mở Thêm chi, Thêm thu, Lịch sử hoặc Thống kê. Phím tắt luôn mở app và yêu cầu mở khóa trước khi nhập dữ liệu.")
+            }
+            Section("Thông tin") {
+                IconRow(icon: "info.circle", tint: .secondary, title: "Phiên bản", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
             }
         }
         .navigationTitle("Cài đặt")
@@ -67,14 +73,16 @@ struct SettingsView: View {
 
     private var backupStatus: some View {
         let health = store.health
-        return VStack(alignment: .leading, spacing: 8) {
+        return Card { VStack(alignment: .leading, spacing: 8) {
+            Illustration(name: health.level == .good ? "illus-backup-good" : health.level == .attention ? "illus-backup-attention" : "illus-backup-critical")
             Label(health.title, systemImage: health.level == .good ? "checkmark.shield" : "exclamationmark.triangle.fill").font(.headline)
-            ForEach(health.reasons, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
+            ForEach(health.reasons, id: \.self) { Label($0, systemImage: "circle.fill").font(.subheadline).fixedSize(horizontal: false, vertical: true) }
             if let date = health.lastBackup { Text("Backup gần nhất: " + TransactionPresentation.shortDate(date)) }
             Text("\(health.fileCount) bản, \(ByteCountFormatter.string(fromByteCount: health.totalBytes, countStyle: .file))")
             if let kind = health.lastBackupKind { Text("Loại gần nhất: " + (kind == .auto ? "Tự động" : kind == .manual ? "Thủ công" : "Trước khôi phục")) }
             if let age = store.scheduler.externalCopyAge { Text("Bản chép ra ngoài gần nhất: \(age) ngày trước") }
-        }
+            Button("Sao lưu ngay") { store.backupNow() }.buttonStyle(.borderedProminent).frame(minHeight: 44)
+        } }
         .foregroundStyle(health.level == .critical ? Color.red : health.level == .attention ? Color.orange : Color.primary)
         .accessibilityElement(children: .combine)
     }
@@ -94,12 +102,29 @@ struct SettingsView: View {
                         Text(entry.url.lastPathComponent).font(.caption).fixedSize(horizontal: false, vertical: true)
                         if entry.encrypted { Label("Đã mã hóa", systemImage: "lock.fill") }
                         if let file = entry.file {
-                            Text("\(file.summary.wallets) ví, \(file.summary.categories) danh mục, \(file.summary.transactions) giao dịch, \(file.payload.budgets.count) hạn mức")
+                            BackupCounts(file: file)
                         } else { Text("Cần mật khẩu để xem dữ liệu.").foregroundStyle(.secondary) }
                     }.frame(minHeight: 44)
                 }.accessibilityHint("Xem tóm tắt trước khi khôi phục")
             }
         }
+    }
+}
+
+private struct BackupCounts: View {
+    let file: BackupFile
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack { counts }
+            VStack(alignment: .leading) { counts }
+        }.font(.caption).monospacedDigit()
+    }
+    @ViewBuilder private var counts: some View {
+        Label(String(file.summary.wallets), systemImage: "wallet.bifold").accessibilityLabel("\(file.summary.wallets) ví")
+        Label(String(file.summary.categories), systemImage: "tag").accessibilityLabel("\(file.summary.categories) danh mục")
+        Label(String(file.summary.transactions), systemImage: "arrow.left.arrow.right").accessibilityLabel("\(file.summary.transactions) giao dịch")
+        Label(String(file.payload.budgets.count), systemImage: "target").accessibilityLabel("\(file.payload.budgets.count) hạn mức")
+        Label(String(file.payload.recurringRules.count), systemImage: "calendar").accessibilityLabel("\(file.payload.recurringRules.count) quy tắc định kỳ")
     }
 }
 
@@ -109,30 +134,31 @@ struct RestoreSummaryView: View {
     @ObservedObject var store: BackupScreenStore
     @Environment(\.dismiss) private var dismiss
     @State private var confirm = false
+    @State private var current: BackupValidator.Validated?
     var body: some View {
         List {
-            Section("Dữ liệu trong file") {
-                Text("\(candidate.summary.file.summary.wallets) ví")
-                Text("\(candidate.summary.file.payload.recurringRules.count) giao dịch định kỳ")
-                Text("\(candidate.summary.file.payload.budgets.count) hạn mức")
-                Text("\(candidate.summary.file.summary.categories) danh mục")
-                Text("\(candidate.summary.file.summary.transactions) giao dịch")
-                Text("Tổng số dư: \(MoneyFormatter.string(from: candidate.summary.totalBalance))")
-                    .fixedSize(horizontal: false, vertical: true)
-                if let first = candidate.summary.firstDate, let last = candidate.summary.lastDate {
-                    Text("Từ \(TransactionPresentation.shortDate(first)) đến \(TransactionPresentation.shortDate(last))")
-                }
+            Section("So sánh dữ liệu") {
+                if let current {
+                    Card { VStack(alignment: .leading, spacing: 8) { Text("Hiện tại").font(.headline); BackupCounts(file: current.file); AmountText(amount: current.totalBalance, style: .title2.bold()) } }
+                } else { Text("Chưa đọc được tóm tắt hiện tại").foregroundStyle(.secondary) }
+                Card { VStack(alignment: .leading, spacing: 8) {
+                    Text("Trong file").font(.headline)
+                    BackupCounts(file: candidate.summary.file)
+                    AmountText(amount: candidate.summary.totalBalance, style: .title2.bold())
+                    if let first = candidate.summary.firstDate, let last = candidate.summary.lastDate { TrendBadge(delta: "\(TransactionPresentation.shortDate(first)) → \(TransactionPresentation.shortDate(last))") }
+                } }
                 ForEach(candidate.summary.file.payload.wallets, id: \.id) { wallet in
                     Text("\(wallet.name): \(MoneyFormatter.string(from: candidate.summary.file.summary.expectedBalances[wallet.id] ?? 0))")
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Section {
-                Text("Khôi phục sẽ thay thế toàn bộ dữ liệu. App sẽ tạo bản PreRestore và kiểm tra số dư trước khi lưu.")
+                Callout(level: .danger, title: "Thay thế toàn bộ dữ liệu", message: "App tạo bản PreRestore và kiểm tra số dư trước khi lưu.")
                 if let error = store.error { Text(error).foregroundStyle(.red) }
                 Button(role: .destructive) { confirm = true } label: { Text("Thay thế toàn bộ và khôi phục").frame(minHeight: 44) }
             }
         }
+        .task { current = try? BackupValidator.validate(store.scheduler.exporter.capture()) }
         .navigationTitle("Xác nhận khôi phục")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { store.error = nil; dismiss() } } }
         .confirmationDialog("Thay thế toàn bộ dữ liệu?", isPresented: $confirm, titleVisibility: .visible) {

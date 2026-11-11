@@ -14,6 +14,7 @@ struct CSVExportView: View {
     }
     var body: some View {
         Form {
+            Illustration(name: "illus-export-csv")
             Section("Khoảng ngày") {
                 Button("Tháng này") { from = ReportingMonth().interval.start; to = ReportingMonth().interval.end.addingTimeInterval(-1); url = nil }.frame(minHeight: 44)
                 Button("Tháng trước") { if let month = ReportingMonth().previous { from = month.interval.start; to = month.interval.end.addingTimeInterval(-1); url = nil } }.frame(minHeight: 44)
@@ -28,7 +29,7 @@ struct CSVExportView: View {
             }.frame(minHeight: 44)
             if let url { ShareLink("Chia sẻ CSV", item: url).frame(minHeight: 44) }
             if let error { Text(error).foregroundStyle(.red) }
-            Text("CSV nằm trong thư mục tạm, không phải bản sao lưu và không dùng để khôi phục. File chứa dữ liệu dạng chữ, hãy chia sẻ cẩn thận.").font(.footnote).foregroundStyle(.secondary)
+            Callout(level: .info, title: "Không dùng để khôi phục", message: "CSV chứa dữ liệu dạng chữ trong thư mục tạm, không được mã hóa. Chỉ chia sẻ với người bạn chọn.")
         }.navigationTitle("Xuất CSV")
         .onAppear { try? CSVExporter.cleanTemporaryFiles(); url = nil }
         .onChange(of: from) { _, _ in url = nil }.onChange(of: to) { _, _ in url = nil }

@@ -7,6 +7,22 @@ import UIKit
 
 @MainActor
 final class AccessibilityRenderingTests: XCTestCase {
+    func testSemanticAssetColorsAreOpaqueInBothAppearances() throws {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            for name in ["AccentColor", "Income", "Expense", "Transfer"] {
+                let color = try XCTUnwrap(UIColor(named: name, in: .main, compatibleWith: UITraitCollection(userInterfaceStyle: style)))
+                var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+                XCTAssertTrue(color.getRed(&red, green: &green, blue: &blue, alpha: &alpha))
+                XCTAssertGreaterThan(alpha, 0.99, name)
+                XCTAssertGreaterThan(max(red, green, blue), 0.4, name)
+            }
+        }
+    }
+    func testRenderUpdatedMainScreensForReview() async throws {
+        for (type, scheme, size, suffix) in [(DynamicTypeSize.accessibility5, ColorScheme.dark, CGSize(width: 375, height: 667), "AX5-dark-small"), (.xSmall, .light, CGSize(width: 430, height: 932), "smallest-light-large")] {
+            try await render(type: type, scheme: scheme, size: size, suffix: suffix, includeNames: ["add", "history", "stats", "wallets", "transfer", "wallet-detail", "settings", "encryption", "restore"])
+        }
+    }
     func testRenderScreensAtAX5DarkForVisualReview() async throws {
         try await render(type: .accessibility5, scheme: .dark, size: CGSize(width: 375, height: 667), suffix: "AX5-dark-small")
     }
@@ -47,6 +63,7 @@ final class AccessibilityRenderingTests: XCTestCase {
             ("wallet-form", AnyView(WalletFormView(store: store, original: wallet))), ("categories", AnyView(CategoryListView(store: store))),
             ("budgets", AnyView(BudgetListView(store: store))), ("budget-form", AnyView(BudgetFormView(store: store, scope: .category(category.id), month: ReportingMonth()))),
             ("recurring", AnyView(RecurringListView(store: store))), ("recurring-form", AnyView(RecurringFormView(store: store, original: recurring))),
+            ("transfer", AnyView(TransferSheet(store: store, source: wallet))), ("wallet-detail", AnyView(WalletDetailView(store: store, wallet: wallet))),
             ("stats", AnyView(StatsView(store: store))), ("category-detail", AnyView(StatsCategoryDetailView(month: ReportingMonth(), key: .init(kind: .expense, categoryID: category.id)))),
             ("daily-chart", AnyView(ScrollView { StatsDailyChart(days: daily, allowance: 66_666).padding() })),
             ("category-chart", AnyView(ScrollView { StatsCategoryChart(slices: StatsService.expenseSlices(report), total: report.expense).padding() })),

@@ -15,11 +15,12 @@ struct BackupEncryptionView: View {
     @FocusState private var focus: Field?
     var body: some View {
         Form {
+            Illustration(name: "illus-encryption")
             Section("Mã hóa bản sao lưu") {
                 Text(enabled ? "Đang bật: mọi bản mới đều mã hóa, kể cả trước khôi phục." : "Đang tắt. Bật sẽ mã hóa cả các bản rõ đang có trong Backups/ và tạo một bản mới đã kiểm tra.")
-                Text("Quên mật khẩu là mất khả năng mở file đã mã hóa. Không có cách lấy lại.").foregroundStyle(.red)
-                Text("Đổi Apple ID ký SideStore hoặc xóa/cài lại app có thể làm mất khóa Keychain. Khi đó phải nhập mật khẩu để khôi phục.")
-                Text("Tắt mã hóa không giải mã file cũ. Đổi mật khẩu không tự đổi mật khẩu các file cũ trừ khi chọn mã hóa lại.")
+                Callout(level: .danger, title: "Không thể lấy lại mật khẩu", message: "Quên mật khẩu sẽ không mở được file mã hóa.")
+                Callout(level: .warning, title: "Giữ mật khẩu ngoài máy", message: "Đổi Apple ID ký SideStore hoặc cài lại app có thể mất khóa Keychain. Khi đó cần mật khẩu để khôi phục.")
+                Callout(level: .info, title: "File cũ giữ mật khẩu cũ", message: "Chỉ đổi khi chọn mã hóa lại. Tắt mã hóa không giải mã file cũ.")
             }
             if enabled {
                 Section("Mật khẩu hiện tại") {

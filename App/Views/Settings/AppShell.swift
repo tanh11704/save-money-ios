@@ -68,13 +68,13 @@ struct LockScreen: View {
     var body: some View {
         VStack(spacing: 20) {
             VStack(spacing: 8) {
-                Image(systemName: "lock.fill").accessibilityHidden(true)
-                Text("SaveMoney đã khóa").multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                Illustration(name: "illus-lock-screen").opacity(0.6)
+                Text("SaveMoney").multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             }.font(.title).accessibilityElement(children: .combine)
             if lock.state == .authenticating { ProgressView("Đang xác thực…") }
             else {
                 Button { Task { await lock.unlock() } } label: {
-                    Text("Mở khóa").frame(minWidth: 100, minHeight: 44)
+                    Label("Mở khóa bằng Face ID", systemImage: "faceid").frame(minWidth: 100, minHeight: 44)
                 }.buttonStyle(.borderedProminent)
             }
             if let message = lock.message { Text(message).foregroundStyle(.secondary) }
