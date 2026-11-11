@@ -56,6 +56,7 @@ final class AppRuntime: ObservableObject {
     func generateRecurring(force: Bool = false) {
         guard UIApplication.shared.applicationState == .active, lock.state == .unlocked, !settings.isRestoring, !generating,
               force || !generatedThisActivation else { return }
+        settings.checkIntegrityIfDue()
         generating = true; generatedThisActivation = true
         defer { generating = false }
         do {
@@ -105,6 +106,8 @@ final class BackupScreenStore: ObservableObject {
         let data: Data
         let summary: BackupValidator.Validated
     }
+    @Published private(set) var integrityReport: IntegrityReport?
+    @Published private(set) var checkingIntegrity = false
     @Published private(set) var entries: [BackupCatalog.Entry] = []
     @Published private(set) var preRestore: [BackupCatalog.Entry] = []
     @Published private(set) var isRestoring = false
@@ -123,6 +126,27 @@ final class BackupScreenStore: ObservableObject {
             preRestore = try BackupCatalog.entries(in: scheduler.exporter.directory.appendingPathComponent("PreRestore"))
         } catch { self.error = "Không đọc được danh sách sao lưu." }
         refreshID = UUID()
+    }
+    func checkIntegrityIfDue() {
+        let last = scheduler.defaults.object(forKey: "SaveMoney.lastIntegrityCheck") as? Date
+        if last == nil || scheduler.clock.now.timeIntervalSince(last!) >= 7 * 86_400 { checkIntegrity() }
+    }
+    func checkIntegrity() {
+        guard !checkingIntegrity else { return }
+        checkingIntegrity = true
+        Task {
+            defer { checkingIntegrity = false }
+            do {
+                let data = try IntegrityChecker.check(container: scheduler.exporter.container, backupDirectory: nil)
+                let directory = scheduler.exporter.directory
+                let files = try await Task.detached { try IntegrityChecker.checkFiles(in: directory) }.value
+                let report = IntegrityReport(checkedAt: scheduler.clock.now, issues: data.issues + files.issues,
+                    transactionCount: data.transactionCount, totalBalance: data.totalBalance, backupFilesChecked: files.checked)
+                integrityReport = report
+                scheduler.defaults.set(report.checkedAt, forKey: "SaveMoney.lastIntegrityCheck")
+                scheduler.defaults.set(report.isHealthy, forKey: "SaveMoney.lastIntegrityHealthy")
+            } catch { self.error = "Không kiểm tra được dữ liệu. Hãy thử lại; dữ liệu chưa bị thay đổi." }
+        }
     }
     func backupNow() {
         do { _ = try scheduler.manual(); error = nil; message = "Đã tạo và kiểm tra bản sao lưu."; refresh() }

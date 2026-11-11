@@ -28,6 +28,12 @@ struct SettingsView: View {
                 Text("File JSON chưa mã hóa và có thể đọc từ ứng dụng Tệp dù app đang khóa.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+            Section("Kiểm tra dữ liệu") {
+                if store.scheduler.defaults.object(forKey: "SaveMoney.lastIntegrityCheck") != nil && !store.scheduler.defaults.bool(forKey: "SaveMoney.lastIntegrityHealthy") {
+                    Label("Kiểm tra gần nhất có lỗi. Hãy xem kết quả và sao lưu trước khi sửa.", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                }
+                NavigationLink { IntegrityView(store: store) } label: { Text("Kiểm tra dữ liệu").frame(minHeight: 44) }
+            }
             Section("Bảo mật") {
                 Toggle("Khóa bằng Face ID", isOn: Binding(get: { lock.enabled }, set: { value in Task { _ = await lock.setEnabled(value) } }))
                     .frame(minHeight: 44).disabled(lock.state == .authenticating)
