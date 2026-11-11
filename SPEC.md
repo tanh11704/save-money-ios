@@ -268,8 +268,8 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ### Bố cục màn hình Thêm (từ trên xuống)
 1. Chọn loại: Chi / Thu / Chuyển (segmented, mặc định Chi)
 2. Số tiền cỡ lớn
-3. Danh mục (lưới chip, mục dùng gần nhất lên đầu). Khi chọn Chuyển: thay bằng "Từ ví" và "Đến ví"
-4. Ví (chip, hiện kèm số dư hiện tại của ví)
+3. Danh mục (lưới ô icon: icon trong vòng tròn màu danh mục, tên bên dưới; mục dùng gần nhất lên đầu). Ô đang chọn có viền và dấu tích, không chỉ đổi màu. Khi chọn Chuyển: thay bằng "Từ ví" và "Đến ví"
+4. Ví (thẻ cuộn ngang, hiện kèm số dư hiện tại của ví; cỡ chữ Accessibility thì xếp dọc)
 5. Ngày: chip "Hôm nay", "Hôm qua", "Chọn ngày"
 6. Ghi chú (không bắt buộc, thu gọn mặc định)
 7. Bàn phím số và nút Lưu nằm cuối màn hình, vùng ngón cái với tới
@@ -285,17 +285,30 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 
 ### Danh sách lịch sử
 - Nhóm theo ngày (múi giờ Asia/Saigon), mới nhất trước. Tiêu đề: "Hôm nay", "Hôm qua", sau đó "Thứ ba, 10/11/2026".
-- Mỗi dòng: icon danh mục, tên danh mục (hoặc "Chuyển: A → B"), ghi chú và tên ví ở dòng phụ, số tiền căn phải.
+- Mỗi dòng: icon danh mục trong vòng tròn màu danh mục, tên danh mục (hoặc "Chuyển: A → B"), ghi chú và tên ví ở dòng phụ, số tiền căn phải.
 - Chi hiện dấu "−", thu hiện dấu "+", chuyển không dấu và màu trung tính. Không dùng riêng màu để phân biệt, luôn có dấu.
 - Trên cùng hiện tổng số dư (từ `BalanceCalculator`).
 - Trạng thái rỗng: "Chưa có giao dịch. Sang tab Thêm để ghi khoản đầu tiên."
 
+### Ô nhập chữ
+- Mọi ô nhập chữ phải đóng được bàn phím bằng ít nhất hai cách: phím Return hoặc nút "Xong" trên thanh bàn phím, và kéo cuộn xuống (`.scrollDismissesKeyboard(.interactively)`).
+- Ô tên (ví, danh mục, người, quy tắc định kỳ) là ô **một dòng** với `.submitLabel(.done)`. Không dùng `TextField(axis: .vertical)` cho ô tên.
+- Ô ghi chú được nhiều dòng, nhưng màn hình chứa nó phải có nút "Xong" trên thanh bàn phím (modifier dùng chung, gắn một lần mỗi màn hình).
+- Mỗi form dùng một `@FocusState` kiểu enum. Return ở ô không phải ô cuối thì chuyển sang ô kế tiếp.
+
 ### Phong cách chung
-- Chỉ dùng thành phần và màu hệ thống của SwiftUI, SF Symbols, Dynamic Type, hỗ trợ chế độ tối. Không tự dựng theme.
+- Nền tảng là thành phần SwiftUI và SF Symbols, Dynamic Type, hỗ trợ chế độ tối. Chữ và nền dùng màu ngữ nghĩa của hệ thống (`.primary`, `.secondary`, `systemBackground`, `secondarySystemGroupedBackground`).
+- **Bộ màu riêng chỉ gồm**: màu nhấn theo logo (`AccentColor`), màu cho Thu/Chi/Chuyển, và 10 màu danh mục. Tất cả nằm trong Asset Catalog, mỗi màu có biến thể sáng và tối. Không thêm màu cứng (hex, `Color.black`, `Color.white` cho nền) trong View.
+- **Màu danh mục tự suy ra từ icon** theo một bảng cố định, icon lạ thì băm ổn định (không dùng `hashValue`). Người dùng không chọn màu, không có UI chọn màu.
+- Thành phần giao diện dùng chung nằm trong `App/Views/DesignSystem/` (icon danh mục, số tiền, thẻ, thẻ chỉ số, khung cảnh báo, nút ⓘ, trạng thái rỗng, vòng tiến độ, thông báo nhỏ). Không có logic tiền trong thư mục này.
+- **Màu không bao giờ là tín hiệu duy nhất**: số tiền luôn có dấu, trạng thái luôn có chữ hoặc icon.
+- **Giảm chữ thuần**: giải thích không cần đọc mỗi lần thì đặt sau nút ⓘ. Cảnh báo dùng khung có icon, tiêu đề ngắn. Con số quan trọng đặt trên thẻ. Câu hướng dẫn ngắn (khoảng 12 chữ).
+- **Hình minh họa** chỉ dùng cho trạng thái rỗng và trạng thái hệ thống (sao lưu, toàn vẹn, mã hóa, khóa app). PNG trong Asset Catalog, không có chữ trong hình, `accessibilityHidden(true)`, ẩn ở cỡ chữ Accessibility. Thiếu hình thì lùi về SF Symbol. Không dùng hình thay icon danh mục.
+- **Chuyển động**: chỉ dùng hiệu ứng có sẵn của hệ thống (`contentTransition(.numericText())`, `symbolEffect`, `sensoryFeedback`). Tắt mọi hiệu ứng tùy chọn khi bật Giảm chuyển động. Không animation tự dựng phức tạp.
 - Vùng chạm tối thiểu 44x44 pt.
 - Mọi nhãn tiếng Việt, ngày giờ theo `vi_VN` và Asia/Saigon.
 - VoiceOver: số tiền đọc là "một triệu hai trăm năm mươi nghìn đồng" hoặc tối thiểu có nhãn rõ loại giao dịch.
-- Không animation phức tạp, không onboarding, không tính năng của bước sau.
+- Không onboarding, không tính năng của bước sau.
 
 ## 13. Quy tắc quản lý ví và danh mục (Bước 3)
 
@@ -339,9 +352,11 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Xóa hoàn toàn đoạn tạo dữ liệu mẫu tạm của bước 2.
 
 ### Phong cách chung
-- Giữ các quy tắc ở mục 12: thành phần hệ thống, Dynamic Type, chế độ tối, vùng chạm 44pt, tiếng Việt, VoiceOver.
-- Lỗi hiện dòng chữ đỏ ngay dưới trường, không dùng alert (trừ hộp xác nhận hành động).
-- Không thêm: sắp xếp kéo thả, đổi màu danh mục. Ngân sách hiện vào từ tab Ví.
+- Giữ các quy tắc ở mục 12: thành phần hệ thống, bộ màu riêng tối thiểu, Dynamic Type, chế độ tối, vùng chạm 44pt, tiếng Việt, VoiceOver, ô nhập chữ đóng được bàn phím.
+- Lỗi hiện một dòng ngắn màu đỏ kèm icon ngay dưới trường, không dùng alert (trừ hộp xác nhận hành động).
+- Màu danh mục suy ra từ icon (mục 12). Bộ chọn icon trong form hiện ô icon đúng màu sẽ thấy ngoài danh sách.
+- Ví hiển thị dạng thẻ, nền chuyển màu nhẹ theo loại ví, vẽ bằng `LinearGradient` trong code (không dùng ảnh).
+- Không thêm: sắp xếp kéo thả, chọn màu danh mục thủ công. Danh mục, Ngân sách, Định kỳ vào từ mục "Công cụ" ở tab Ví, không thêm tab.
 
 ## 14. Quy tắc thống kê tháng (Bước 4)
 
