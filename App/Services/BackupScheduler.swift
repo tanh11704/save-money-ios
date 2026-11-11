@@ -34,12 +34,15 @@ final class BackupScheduler {
     let defaults: UserDefaults
     let clock: any Clock
     private(set) var lastError: String?
+    var onAutomaticFailure: ((Int) -> Void)?
+    var consecutiveFailures: Int { defaults.integer(forKey: "SaveMoney.backupFailures") }
     var onChange: (() -> Void)?
     private let counterKey = "SaveMoney.backupMutationCount"
     static let externalCopyKey = "SaveMoney.lastExternalCopy"
 
     init(exporter: BackupExporter, defaults: UserDefaults = .standard, clock: any Clock = SystemClock()) {
         self.exporter = exporter; self.defaults = defaults; self.clock = clock
+        lastError = defaults.string(forKey: "SaveMoney.lastBackupError")
     }
     var changes: Int { defaults.integer(forKey: counterKey) }
     var lastExternalCopy: Date? { defaults.object(forKey: Self.externalCopyKey) as? Date }
@@ -56,7 +59,7 @@ final class BackupScheduler {
         defaults.set(changes + 1, forKey: counterKey)
         if changes >= 20 { _ = automatic() }
     }
-    func restored() { defaults.set(0, forKey: counterKey); lastError = nil; onChange?() }
+    func restored() { defaults.set(0, forKey: counterKey); lastError = nil; defaults.removeObject(forKey: "SaveMoney.lastBackupError"); defaults.set(0, forKey: "SaveMoney.backupFailures"); onChange?() }
 
     @discardableResult func automatic() -> URL? {
         do {
@@ -64,16 +67,19 @@ final class BackupScheduler {
             let previous = try BackupCatalog.entries(in: exporter.directory).first
             if let previous {
                 if previous.file.checksum == captured.checksum {
-                    defaults.set(0, forKey: counterKey); lastError = nil; onChange?(); return nil
+                    defaults.set(0, forKey: counterKey); lastError = nil; defaults.removeObject(forKey: "SaveMoney.lastBackupError"); defaults.set(0, forKey: "SaveMoney.backupFailures"); onChange?(); return nil
                 }
                 if captured.payload.isEmpty && !previous.file.payload.isEmpty { return nil }
             }
             let url = try exporter.export(kind: .auto, now: clock.now, captured: captured)
             try BackupCatalog.rotate(directory: exporter.directory)
-            defaults.set(0, forKey: counterKey); lastError = nil; onChange?()
+            defaults.set(0, forKey: counterKey); lastError = nil; defaults.removeObject(forKey: "SaveMoney.lastBackupError"); defaults.set(0, forKey: "SaveMoney.backupFailures"); onChange?()
             return url
         } catch {
             lastError = "Sao lưu tự động thất bại. Hãy sao lưu lại trong Cài đặt."
+            defaults.set(lastError, forKey: "SaveMoney.lastBackupError")
+            defaults.set(consecutiveFailures + 1, forKey: "SaveMoney.backupFailures")
+            onAutomaticFailure?(consecutiveFailures)
             onChange?(); return nil
         }
     }
@@ -81,8 +87,8 @@ final class BackupScheduler {
         do {
             let url = try exporter.export(kind: .manual, now: clock.now)
             try BackupCatalog.rotate(directory: exporter.directory)
-            lastError = nil; defaults.set(0, forKey: counterKey); onChange?(); return url
-        } catch { lastError = "Sao lưu thất bại. Các bản sao lưu cũ vẫn được giữ nguyên."; onChange?(); throw error }
+            lastError = nil; defaults.removeObject(forKey: "SaveMoney.lastBackupError"); defaults.set(0, forKey: "SaveMoney.backupFailures"); defaults.set(0, forKey: counterKey); onChange?(); return url
+        } catch { lastError = "Sao lưu thất bại. Các bản sao lưu cũ vẫn được giữ nguyên."; defaults.set(lastError, forKey: "SaveMoney.lastBackupError"); onChange?(); throw error }
     }
 }
 

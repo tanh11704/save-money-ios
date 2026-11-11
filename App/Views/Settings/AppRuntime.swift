@@ -24,6 +24,8 @@ final class AppRuntime: ObservableObject {
         lock = suppliedLock ?? AppLockService(authenticator: DeviceAuthenticator())
         budgetAlerts = suppliedAlerts ?? BudgetAlertService()
         settings = BackupScreenStore(scheduler: scheduler)
+        let failureNotifier = BackupFailureNotifier(client: SystemReminderClient(), defaults: scheduler.defaults)
+        scheduler.onAutomaticFailure = { count in Task { await failureNotifier.notify(consecutiveFailures: count, now: Date()) } }
         scheduler.onChange = { [weak settings] in settings?.refresh() }
         observers.append(NotificationCenter.default.addObserver(forName: .ledgerDidChange, object: nil, queue: .main) { [weak self] notification in
             guard let source = notification.object as? ModelContainer, source === container else { return }
@@ -119,6 +121,19 @@ final class BackupScreenStore: ObservableObject {
     private let reminders = ReminderService(client: SystemReminderClient())
 
     init(scheduler: BackupScheduler) { self.scheduler = scheduler; refresh() }
+    var health: BackupHealth {
+        let last = entries.first
+        let integrityDate = scheduler.defaults.object(forKey: "SaveMoney.lastIntegrityCheck") as? Date
+        let bytes = (entries + preRestore).reduce(Int64(0)) { total, entry in
+            total + (((try? FileManager.default.attributesOfItem(atPath: entry.url.path)[.size]) as? NSNumber)?.int64Value ?? 0)
+        }
+        let context = ModelContext(scheduler.exporter.container)
+        return BackupHealth.evaluate(now: scheduler.clock.now, lastBackup: last.flatMap { try? BackupFile.date($0.file.createdAt) },
+            lastBackupKind: last.map { $0.url.lastPathComponent.contains("-Auto") ? .auto : .manual }, fileCount: entries.count + preRestore.count,
+            totalBytes: bytes, lastExternalCopy: scheduler.lastExternalCopy,
+            lastIntegrityCheck: integrityDate.map { .init(date: $0, healthy: scheduler.defaults.bool(forKey: "SaveMoney.lastIntegrityHealthy")) },
+            changesSinceBackup: scheduler.changes, lastError: scheduler.lastError, transactionCount: (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0)
+    }
     var latest: URL? { entries.first?.url }
     func refresh() {
         do {

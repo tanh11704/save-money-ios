@@ -34,16 +34,16 @@ final class SystemReminderClient: ReminderClient {
 
 @MainActor
 struct ReminderService {
-    static let ids = [14, 21, 28].map { "SaveMoney.backupReminder.\($0)" }
+    static let ids = [14, 21, 24, 27].map { "SaveMoney.backupReminder.\($0)" }
     let client: any ReminderClient
     var clock: any Clock = SystemClock()
 
     func externalCopyCompleted(at date: Date? = nil) async throws -> Bool {
         let authorized = try await client.requestPermission()
-        client.remove(ids: Self.ids)
+        client.remove(ids: Self.ids + ["SaveMoney.backupReminder.28"])
         guard authorized else { return false }
         let date = date ?? clock.now
-        for (index, days) in [14, 21, 28].enumerated() {
+        for (index, days) in [14, 21, 24, 27].enumerated() {
             let due = LocalCalendar.calendar.date(byAdding: .day, value: days, to: date)!
             try await client.add(BackupReminder(id: Self.ids[index], date: due, body: "Chép file backup sang iCloud Drive"))
         }

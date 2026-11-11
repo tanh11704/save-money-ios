@@ -62,19 +62,16 @@ struct SettingsView: View {
     }
 
     private var backupStatus: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let latest = store.entries.first, let date = try? BackupFile.date(latest.file.createdAt) {
-                Text("Backup gần nhất: \(TransactionPresentation.shortDate(date))")
-            } else { Text("Chưa có bản sao lưu.") }
-            if let age = store.scheduler.externalCopyAge {
-                Text("Bản chép ra ngoài gần nhất: \(age) ngày trước")
-            } else { Text("Chưa ghi nhận chép bản sao lưu ra ngoài.") }
-            if store.scheduler.status == .yellow { Label("Đã hơn 7 ngày chưa chép ra ngoài", systemImage: "exclamationmark.triangle") }
-            if store.scheduler.status == .red || store.scheduler.status == .never {
-                Label("Hãy chép bản sao lưu ra iCloud Drive", systemImage: "exclamationmark.triangle.fill")
-            }
+        let health = store.health
+        return VStack(alignment: .leading, spacing: 8) {
+            Label(health.title, systemImage: health.level == .good ? "checkmark.shield" : "exclamationmark.triangle.fill").font(.headline)
+            ForEach(health.reasons, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
+            if let date = health.lastBackup { Text("Backup gần nhất: " + TransactionPresentation.shortDate(date)) }
+            Text("\(health.fileCount) bản, \(ByteCountFormatter.string(fromByteCount: health.totalBytes, countStyle: .file))")
+            if let kind = health.lastBackupKind { Text("Loại gần nhất: " + (kind == .auto ? "Tự động" : kind == .manual ? "Thủ công" : "Trước khôi phục")) }
+            if let age = store.scheduler.externalCopyAge { Text("Bản chép ra ngoài gần nhất: \(age) ngày trước") }
         }
-        .foregroundStyle(store.scheduler.status == .red || store.scheduler.status == .never ? Color.red : store.scheduler.status == .yellow ? Color.orange : Color.primary)
+        .foregroundStyle(health.level == .critical ? Color.red : health.level == .attention ? Color.orange : Color.primary)
         .accessibilityElement(children: .combine)
     }
 

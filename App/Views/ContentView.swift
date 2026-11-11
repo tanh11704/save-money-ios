@@ -38,7 +38,8 @@ struct ContentView: View {
                     .tabItem { Label("Thống kê", systemImage: "list.number") }
                     .tag(3)
                     NavigationStack { SettingsView(store: settings, lock: lock) }
-                        .tabItem { Label("Cài đặt", systemImage: "gearshape") }.tag(4)
+                        .tabItem { Label("Cài đặt", systemImage: "gearshape") }
+                        .badge(settings.health.level == .critical ? "!" : nil).tag(4)
                 }
             } else {
                 VStack(spacing: 16) {

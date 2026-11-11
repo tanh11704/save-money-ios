@@ -158,15 +158,15 @@ private final class FakeReminderClient: ReminderClient {
 
 @MainActor
 final class ReminderServiceTests: XCTestCase {
-    func testShareResetsFourteenTwentyOneTwentyEightDaysWithGenericContent() async throws {
+    func testShareResetsFourteenThenTwentyOneTwentyFourTwentySevenAndStops() async throws {
         let clock = BackupTestClock()
         let client = FakeReminderClient()
         let service = ReminderService(client: client, clock: clock)
         let authorizedFirst = try await service.externalCopyCompleted()
         XCTAssertTrue(authorizedFirst)
-        XCTAssertEqual(client.reminders.count, 3)
+        XCTAssertEqual(client.reminders.count, 4)
         let original = client.reminders
-        for (reminder, days) in zip(original, [14, 21, 28]) {
+        for (reminder, days) in zip(original, [14, 21, 24, 27]) {
             XCTAssertEqual(reminder.date, LocalCalendar.calendar.date(byAdding: .day, value: days, to: clock.now))
             XCTAssertEqual(reminder.body, "Chép file backup sang iCloud Drive")
         }
@@ -174,7 +174,7 @@ final class ReminderServiceTests: XCTestCase {
         let authorizedAgain = try await service.externalCopyCompleted()
         XCTAssertTrue(authorizedAgain)
         XCTAssertEqual(client.removed.count, 2)
-        XCTAssertEqual(client.reminders.count, 3)
+        XCTAssertEqual(client.reminders.count, 4)
         XCTAssertNotEqual(client.reminders.first?.date, original.first?.date)
         XCTAssertEqual(Set(client.reminders.map(\.id)), Set(ReminderService.ids))
     }
@@ -182,6 +182,6 @@ final class ReminderServiceTests: XCTestCase {
         let client = FakeReminderClient(); client.permission = false
         let allowed = try await ReminderService(client: client).externalCopyCompleted()
         XCTAssertFalse(allowed)
-        XCTAssertEqual(client.removed, [ReminderService.ids]); XCTAssertTrue(client.reminders.isEmpty)
+        XCTAssertEqual(client.removed, [ReminderService.ids + ["SaveMoney.backupReminder.28"]]); XCTAssertTrue(client.reminders.isEmpty)
     }
 }
