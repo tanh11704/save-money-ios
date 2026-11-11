@@ -20,7 +20,7 @@ final class BackupTests: XCTestCase {
         let defaults: UserDefaults
         var exporter: BackupExporter { BackupExporter(container: container, directory: folder) }
         init() throws {
-            let schema = Schema([Wallet.self, Category.self, Transaction.self])
+            let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
             container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
             container.mainContext.autosaveEnabled = false
             folder = FileManager.default.temporaryDirectory.appendingPathComponent("BackupTests-\(UUID().uuidString)").appendingPathComponent("Backups")
@@ -47,7 +47,7 @@ final class BackupTests: XCTestCase {
     }
 
     func testStoreConfigurationIsOutsideSharedDocuments() async throws {
-        let schema = Schema([Wallet.self, Category.self, Transaction.self])
+        let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
         let configured = ModelConfiguration(schema: schema).url.standardizedFileURL
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].standardizedFileURL
         XCTAssertFalse(configured.path.hasPrefix(documents.path + "/"))

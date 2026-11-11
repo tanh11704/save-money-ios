@@ -10,9 +10,9 @@ struct SaveMoneyApp: App {
         do {
             let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            let schema = Schema([Wallet.self, Category.self, Transaction.self])
+            let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
             let configuration = ModelConfiguration(schema: schema, url: folder.appendingPathComponent("default.store"), cloudKitDatabase: .none)
-            container = try ModelContainer(for: schema, configurations: [configuration])
+            container = try ModelContainer(for: schema, migrationPlan: SaveMoneyMigrationPlan.self, configurations: [configuration])
         } catch {
             container = nil // Never delete or silently replace a store that failed to open.
         }

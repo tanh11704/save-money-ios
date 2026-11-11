@@ -12,7 +12,7 @@ private typealias Category = SaveMoney.Category
 @MainActor
 final class DefaultDataSeederTests: XCTestCase {
     private func container() throws -> ModelContainer {
-        let schema = Schema([Wallet.self, Category.self, Transaction.self])
+        let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
         return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
     }
 
