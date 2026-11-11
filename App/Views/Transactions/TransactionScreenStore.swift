@@ -16,6 +16,7 @@ final class TransactionScreenStore: ObservableObject {
     @Published private(set) var balanceValues: [UUID: Int64] = [:]
     @Published var errorMessage: String?
     let recent = RecentSelectionStore()
+    private let budgetAlerts = BudgetAlertService()
     private var container: ModelContainer?
     private var readContext: ModelContext?
     var statisticsContext: ModelContext? { readContext }
@@ -65,12 +66,26 @@ final class TransactionScreenStore: ObservableObject {
 
     func save(_ draft: TransactionDraft, editing id: UUID?) throws {
         guard let container else { throw TransactionService.ServiceError.missingRecord }
+        let month = ReportingMonth(containing: draft.date)
+        // Read the persisted graph before mutation, not the editable view's state.
+        let before = try? budgetProgress(month: month, container: container)
         let service = TransactionService(container: container, recentSelections: recent)
         if let id { try service.update(id: id, with: draft) }
         else { try service.create(draft) }
+        if draft.kind == .expense, let before,
+           let after = try? budgetProgress(month: month, container: container) {
+            let categories = self.categories
+            Task { await budgetAlerts.notify(month: month, before: before, after: after, categories: categories) }
+        }
         // A successful write must not be offered again if reading the snapshot fails.
         do { try reload() }
         catch { errorMessage = "Đã lưu, nhưng chưa tải lại được số dư. Hãy tải lại lịch sử." }
+    }
+
+    private func budgetProgress(month: ReportingMonth, container: ModelContainer) throws -> [BudgetService.Progress] {
+        let context = ModelContext(container); context.autosaveEnabled = false
+        return try BudgetService.progress(month: month, rules: context.fetch(FetchDescriptor<Budget>()).compactMap(\.rule),
+            transactions: context.fetch(FetchDescriptor<Transaction>()))
     }
 
     func delete(_ id: UUID) {
@@ -140,6 +155,7 @@ final class TransactionScreenStore: ObservableObject {
             try BudgetPersistence.setLimit(limit, scope: scope, from: month, context: context)
         }
         refreshAfterManagementWrite()
+        Task { _ = try? await SystemReminderClient().requestPermission() }
     }
 
     func turnOffBudget(scope: BudgetRule.Scope, month: ReportingMonth) throws {

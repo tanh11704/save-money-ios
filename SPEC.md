@@ -66,7 +66,7 @@ enum TransactionKind: String, Codable { case income, expense, transfer }
 }
 ```
 
-Các giai đoạn sau sẽ thêm `Budget`, `RecurringRule` (giai đoạn 2). Chưa tạo trước.
+`Budget` đã thêm ở schema V2 qua lightweight migration từ V1; `RecurringRule` để giai đoạn sau.
 
 ## 4. Cấu trúc thư mục
 
@@ -117,12 +117,15 @@ App/
 
 (Chỉ bắt đầu sau khi giai đoạn 1 đã dùng ổn định với dữ liệu thật vài tuần.)
 
-- Hạn mức ngân sách theo danh mục và theo tháng
-- Cảnh báo khi đạt 80% và 100% hạn mức, dùng thông báo cục bộ
+- [x] Hạn mức tổng và theo danh mục chi, lặp hàng tháng; bản sửa có tháng bắt đầu để giữ lịch sử. Đặt/tắt từ Ví → Ngân sách, không thêm tab.
+- [x] Tiến độ trong Thống kê theo tháng đang xem và số tiền còn/vượt trên chip danh mục chi. Tính cả danh mục đã lưu trữ; không tính thu/chuyển.
+- [x] Cảnh báo 80% và 100% bằng thông báo cục bộ sau khi lưu thành công; mỗi scope/mốc/tháng chỉ gửi một lần, giữ key khi xóa/sửa giảm chi. Nhảy qua cả hai mốc gửi hai thông báo. Giao dịch tháng cũ không gửi.
+- Xin quyền thông báo bằng cơ chế ReminderService khi đặt hạn mức. Khi lưu giao dịch, không có quyền hoặc gửi lỗi thì im lặng, không chặn lưu.
+- Tổng hạn mức danh mục lớn hơn hạn mức tổng: cảnh báo có chữ nhưng vẫn cho lưu. Trạng thái tiến độ luôn có chữ “Sắp hết”/“Đã vượt”, màu hệ thống chỉ hỗ trợ.
 - Biểu đồ chi tiêu (Swift Charts): theo danh mục, theo ngày trong tháng
 - So sánh tháng này với tháng trước
 - Giao dịch định kỳ: **sinh giao dịch khi mở app** (kiểm tra các lần đến hạn chưa được sinh), không dựa vào tác vụ nền. Mỗi lần sinh phải chống trùng.
-- Thêm `Budget`, `RecurringRule` vào schema: **xuất backup trước khi đổi schema**, viết migration, thử trên bản sao.
+- `Budget` đã thêm ở schema V2; trước khi thêm `RecurringRule` vào schema: **xuất backup trước khi đổi schema**, viết migration, thử trên bản sao.
 
 ## 7. Giai đoạn 3 — Bảo vệ và duy trì nâng cao
 
@@ -294,12 +297,12 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ### Phong cách chung
 - Giữ các quy tắc ở mục 12: thành phần hệ thống, Dynamic Type, chế độ tối, vùng chạm 44pt, tiếng Việt, VoiceOver.
 - Lỗi hiện dòng chữ đỏ ngay dưới trường, không dùng alert (trừ hộp xác nhận hành động).
-- Không thêm: sắp xếp kéo thả, đổi màu danh mục, ngân sách, thống kê.
+- Không thêm: sắp xếp kéo thả, đổi màu danh mục. Ngân sách hiện vào từ tab Ví.
 
 ## 14. Quy tắc thống kê tháng (Bước 4)
 
 ### Phạm vi
-- Thêm tab "Thống kê" (tab thứ 4). Chỉ thống kê **một tháng lịch** mỗi lần xem. Chưa có biểu đồ, so sánh tháng, ngân sách (thuộc giai đoạn 2).
+- Thêm tab "Thống kê" (tab thứ 4). Chỉ thống kê **một tháng lịch** mỗi lần xem. Chưa có biểu đồ, so sánh tháng. Đã thêm section Ngân sách ngay dưới tóm tắt.
 - Mọi phép tính nằm trong `StatsService`, dùng `LocalCalendar` (Asia/Saigon). View chỉ hiển thị.
 
 ### Định nghĩa số liệu
