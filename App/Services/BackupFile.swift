@@ -14,13 +14,53 @@ struct BackupFile: Codable, Equatable {
         var wallets: Int
         var categories: Int
         var transactions: Int
+        var budgets: Int? = nil
         var expectedBalances: [String: Int64]
     }
     struct Payload: Codable, Equatable {
         var wallets: [WalletRecord]
         var categories: [CategoryRecord]
         var transactions: [TransactionRecord]
-        var isEmpty: Bool { wallets.isEmpty && categories.isEmpty && transactions.isEmpty }
+        var budgets: [BudgetRecord] = []
+        private(set) var includesBudgets: Bool = false
+        var isEmpty: Bool { wallets.isEmpty && categories.isEmpty && transactions.isEmpty && budgets.isEmpty }
+        enum CodingKeys: String, CodingKey { case wallets, categories, transactions, budgets }
+        init(wallets: [WalletRecord], categories: [CategoryRecord], transactions: [TransactionRecord], budgets: [BudgetRecord]? = nil) {
+            self.wallets = wallets; self.categories = categories; self.transactions = transactions
+            self.budgets = budgets ?? []; includesBudgets = budgets != nil
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            wallets = try c.decode([WalletRecord].self, forKey: .wallets)
+            categories = try c.decode([CategoryRecord].self, forKey: .categories)
+            transactions = try c.decode([TransactionRecord].self, forKey: .transactions)
+            includesBudgets = c.contains(.budgets)
+            budgets = includesBudgets ? try c.decode([BudgetRecord].self, forKey: .budgets) : []
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(wallets, forKey: .wallets); try c.encode(categories, forKey: .categories)
+            try c.encode(transactions, forKey: .transactions)
+            if includesBudgets || !budgets.isEmpty { try c.encode(budgets, forKey: .budgets) }
+        }
+    }
+    struct BudgetRecord: Codable, Equatable {
+        var id: String
+        var scopeRaw: String
+        var categoryID: String?
+        var limit: Int64
+        var startYear: Int
+        var startMonth: Int
+        var isArchived: Bool
+        var createdAt: Int64
+        enum CodingKeys: String, CodingKey { case id, scopeRaw, categoryID, limit, startYear, startMonth, isArchived, createdAt }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id); try c.encode(scopeRaw, forKey: .scopeRaw)
+            try c.encode(categoryID, forKey: .categoryID); try c.encode(limit, forKey: .limit)
+            try c.encode(startYear, forKey: .startYear); try c.encode(startMonth, forKey: .startMonth)
+            try c.encode(isArchived, forKey: .isArchived); try c.encode(createdAt, forKey: .createdAt)
+        }
     }
     struct WalletRecord: Codable, Equatable {
         var id: String

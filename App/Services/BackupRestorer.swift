@@ -20,6 +20,7 @@ struct BackupRestorer {
         let context = ModelContext(container)
         context.autosaveEnabled = false
         do {
+            for record in try context.fetch(FetchDescriptor<Budget>()) { context.delete(record) }
             for record in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(record) }
             for record in try context.fetch(FetchDescriptor<Wallet>()) { context.delete(record) }
             for record in try context.fetch(FetchDescriptor<Category>()) { context.delete(record) }
@@ -27,6 +28,7 @@ struct BackupRestorer {
             let graph = try BackupValidator.graph(validated.file.payload)
             graph.wallets.forEach { context.insert($0) }
             graph.categories.forEach { context.insert($0) }
+            graph.budgets.forEach { context.insert($0) }
             graph.transactions.forEach { context.insert($0) }
             try beforeSave?(context)
             guard try BackupValidator.expectedBalances(graph) == validated.file.summary.expectedBalances else { throw BackupError.balances }

@@ -5,6 +5,7 @@ struct BackupValidator {
         let wallets: [Wallet]
         let categories: [Category]
         let transactions: [Transaction]
+        var budgets: [Budget] = []
     }
     struct Validated {
         let file: BackupFile
@@ -19,7 +20,7 @@ struct BackupValidator {
         do { header = try JSONDecoder().decode(Header.self, from: data) }
         catch { throw BackupError.unreadable }
         guard header.format == "savemoney-backup" else { throw BackupError.wrongFormat }
-        guard header.schemaVersion == 1 else { throw BackupError.unsupportedVersion(header.schemaVersion) }
+        guard (1...2).contains(header.schemaVersion) else { throw BackupError.unsupportedVersion(header.schemaVersion) }
         let file: BackupFile
         do { file = try JSONDecoder().decode(BackupFile.self, from: data) }
         catch { throw BackupError.unreadable }
@@ -28,12 +29,19 @@ struct BackupValidator {
 
     static func validate(_ file: BackupFile) throws -> Validated {
         guard file.format == "savemoney-backup" else { throw BackupError.wrongFormat }
-        guard file.schemaVersion == 1 else { throw BackupError.unsupportedVersion(file.schemaVersion) }
+        guard (1...2).contains(file.schemaVersion) else { throw BackupError.unsupportedVersion(file.schemaVersion) }
         guard try BackupFile.digest(file.payload) == file.checksum else { throw BackupError.checksum }
         _ = try BackupFile.date(file.createdAt)
         let p = file.payload
         guard file.summary.wallets == p.wallets.count, file.summary.categories == p.categories.count,
               file.summary.transactions == p.transactions.count else { throw BackupError.structure("Số lượng không khớp tóm tắt.") }
+        if file.schemaVersion == 2 {
+            guard p.includesBudgets, file.summary.budgets == p.budgets.count else {
+                throw BackupError.structure("Thiếu hạn mức hoặc số lượng hạn mức không khớp.")
+            }
+        } else if p.includesBudgets || !p.budgets.isEmpty {
+            throw BackupError.structure("Bản sao lưu v1 không chứa hạn mức.")
+        }
         let graph = try graph(p)
         let balances = try expectedBalances(graph)
         guard balances == file.summary.expectedBalances else { throw BackupError.balances }
@@ -90,7 +98,32 @@ struct BackupValidator {
                 note: record.note, wallet: wallet, toWallet: destination, category: category)
             transaction.id = uuid; transactions.append(transaction)
         }
-        return Graph(wallets: Array(wallets.values), categories: Array(categories.values), transactions: transactions)
+        var budgets: [Budget] = []
+        var scopes = Set<String>()
+        for record in payload.budgets {
+            let uuid = try id(record.id)
+            guard (1...MoneyFormatter.maximumInput).contains(record.limit),
+                  (try? ReportingMonth(year: record.startYear, month: record.startMonth)) != nil else {
+                throw BackupError.structure("Số tiền hoặc tháng của hạn mức không hợp lệ.")
+            }
+            let category = record.categoryID.flatMap { categories[$0] }
+            switch record.scopeRaw {
+            case "total":
+                guard record.categoryID == nil else { throw BackupError.structure("Hạn mức tổng không có danh mục.") }
+            case "category":
+                guard let category, category.kindRaw == TransactionKind.expense.rawValue else {
+                    throw BackupError.structure("Hạn mức phải trỏ tới danh mục chi tồn tại.")
+                }
+            default: throw BackupError.structure("Phạm vi hạn mức không hợp lệ.")
+            }
+            let key = "\(record.scopeRaw).\(record.categoryID ?? "").\(record.startYear).\(record.startMonth)"
+            guard scopes.insert(key).inserted else { throw BackupError.structure("Hạn mức trùng phạm vi và tháng bắt đầu.") }
+            let budget = Budget(); budget.id = uuid; budget.scopeRaw = record.scopeRaw; budget.category = category
+            budget.limit = record.limit; budget.startYear = record.startYear; budget.startMonth = record.startMonth
+            budget.isArchived = record.isArchived; budget.createdAt = try BackupFile.date(record.createdAt)
+            budgets.append(budget)
+        }
+        return Graph(wallets: Array(wallets.values), categories: Array(categories.values), transactions: transactions, budgets: budgets)
     }
 
     static func expectedBalances(_ graph: Graph) throws -> [String: Int64] {

@@ -162,6 +162,12 @@ Chủ dự án bật Cài đặt → [tên] → iCloud → Sao lưu iCloud. App 
 - Chế độ khôi phục: thay thế toàn bộ. Thực hiện trong một transaction, lỗi thì hoàn tác
 - Sau khôi phục, hiển thị so sánh số dư từng ví với số dư ghi trong file (nếu file có lưu)
 
+### Hạn mức trong backup v2
+- Bản xuất mới dùng `schemaVersion: 2`, payload thêm `budgets` (id, scopeRaw, categoryID, limit, startYear, startMonth, isArchived, createdAt), được băm cùng payload; summary thêm số hạn mức.
+- Vẫn đọc/khôi phục v1, coi hạn mức là rỗng và giữ nguyên cách mã hóa checksum v1. Từ chối phiên bản lớn hơn 2.
+- Kiểm tra hạn mức dương trong phạm vi nhập, tháng hợp lệ, scope tổng không có danh mục; scope danh mục phải trỏ tới danh mục chi tồn tại. Không trùng scope và tháng bắt đầu.
+- Khôi phục thay thế xóa cả hạn mức trong cùng transaction, rollback toàn bộ nếu lỗi. Tóm tắt xác nhận có số hạn mức. Giữ cả golden-v1 và golden-v2 trong test.
+
 ### Test bắt buộc
 - Vòng tròn: tạo dữ liệu mẫu, export, xóa hết, import, so sánh toàn bộ (số lượng, từng giao dịch, số dư mỗi ví) phải khớp tuyệt đối
 - File bị sửa một ký tự: checksum phải phát hiện

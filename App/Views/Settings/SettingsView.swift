@@ -84,7 +84,7 @@ struct SettingsView: View {
                 Button { store.prepare(url: entry.url) } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(entry.url.lastPathComponent).font(.caption).fixedSize(horizontal: false, vertical: true)
-                        Text("\(entry.file.summary.wallets) ví, \(entry.file.summary.categories) danh mục, \(entry.file.summary.transactions) giao dịch")
+                        Text("\(entry.file.summary.wallets) ví, \(entry.file.summary.categories) danh mục, \(entry.file.summary.transactions) giao dịch, \(entry.file.payload.budgets.count) hạn mức")
                     }.frame(minHeight: 44)
                 }.accessibilityHint("Xem tóm tắt trước khi khôi phục")
             }
@@ -102,6 +102,7 @@ private struct RestoreSummaryView: View {
         List {
             Section("Dữ liệu trong file") {
                 Text("\(candidate.summary.file.summary.wallets) ví")
+                Text("\(candidate.summary.file.payload.budgets.count) hạn mức")
                 Text("\(candidate.summary.file.summary.categories) danh mục")
                 Text("\(candidate.summary.file.summary.transactions) giao dịch")
                 Text("Tổng số dư: \(MoneyFormatter.string(from: candidate.summary.totalBalance))")
