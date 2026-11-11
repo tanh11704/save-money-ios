@@ -4,6 +4,7 @@ struct StatsService {
     struct CategoryKey: Hashable {
         let kind: TransactionKind
         let categoryID: UUID?
+        var isOther = false
     }
     struct CategoryTotal: Identifiable {
         var id: CategoryKey { key }
@@ -58,6 +59,43 @@ struct StatsService {
                                      total: totals.expense, kind: .expense, categories: categories),
                       incomes: rows(totals.incomeByCategory, uncategorized: totals.uncategorizedIncome,
                                     total: totals.income, kind: .income, categories: categories), transactions: monthly)
+    }
+
+    struct DailyTotal: Identifiable, Equatable {
+        var id: Int { day }
+        let day: Int
+        let expense: Int64
+        var plotValue: Double { StatsService.plotValue(expense) }
+    }
+
+    // Display only: chart coordinates never flow back into money arithmetic.
+    static func plotValue(_ amount: Int64) -> Double { Double(amount) }
+
+    static func dailyExpenses(month: ReportingMonth, transactions: [Transaction]) throws -> [DailyTotal] {
+        let calendar = LocalCalendar.calendar
+        let count = calendar.range(of: .day, in: .month, for: month.interval.start)!.count
+        return try (1...count).map { day in
+            let start = calendar.date(byAdding: .day, value: day - 1, to: month.interval.start)!
+            let end = calendar.date(byAdding: .day, value: 1, to: start)!
+            return DailyTotal(day: day, expense: try BalanceCalculator.flowTotals(transactions: transactions,
+                during: DateInterval(start: start, end: end), allowMissingCategory: true).expense)
+        }
+    }
+
+    static func dailyAllowance(limit: Int64, month: ReportingMonth) -> Int64 {
+        limit / Int64(LocalCalendar.calendar.range(of: .day, in: .month, for: month.interval.start)!.count)
+    }
+
+    static func expenseSlices(_ report: Report, top: Int = 5) -> [CategoryTotal] {
+        let count = max(0, top)
+        guard report.expenses.count > count else { return report.expenses }
+        var slices = Array(report.expenses.prefix(count))
+        var remainder = report.expense
+        for slice in slices { remainder -= slice.amount }
+        slices.append(CategoryTotal(key: CategoryKey(kind: .expense, categoryID: nil, isOther: true),
+            name: "Khác", icon: "ellipsis.circle", amount: remainder,
+            percentageTenths: StatsPercentage.tenths(amount: remainder, total: report.expense)))
+        return slices
     }
 
     private static func rows(_ amounts: [UUID: Int64], uncategorized: Int64, total: Int64,

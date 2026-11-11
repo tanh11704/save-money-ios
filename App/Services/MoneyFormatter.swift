@@ -23,6 +23,16 @@ struct MoneyFormatter {
         return (amount < 0 ? "−" : "") + groups.reversed().joined(separator: ".") + " ₫"
     }
 
+    static func compact(_ amount: Int64) -> String {
+        let magnitude = amount.magnitude
+        let divisor: UInt64 = magnitude >= 1_000_000 ? 1_000_000 : magnitude >= 1_000 ? 1_000 : 1
+        guard divisor > 1 else { return String(amount).replacingOccurrences(of: "-", with: "−") }
+        let whole = magnitude / divisor, hundredths = (magnitude % divisor) * 100 / divisor
+        var decimals = hundredths == 0 ? "" : String(format: "%02llu", hundredths)
+        while decimals.hasSuffix("0") { decimals.removeLast() }
+        return (amount < 0 ? "−" : "") + String(whole) + (decimals.isEmpty ? "" : "," + decimals) + (divisor == 1_000 ? "k" : "tr")
+    }
+
     /// Strict inverse for nonnegative input amounts, not a permissive money parser.
     /// Keyboard state itself always stays Int64; this is for explicit text conversion.
     static func amount(from text: String) -> Int64? {
