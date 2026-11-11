@@ -14,9 +14,9 @@
 ### Về tiền
 1. Số tiền lưu bằng `Int64`, đơn vị đồng. Cấm dùng `Double` hoặc `Float` cho tiền.
 2. `Transaction.amount` luôn dương. Hướng thu/chi do `kind` quyết định.
-3. Số dư ví **không lưu cứng**. Luôn tính: `openingBalance + tổng thu − tổng chi + tiền chuyển đến − tiền chuyển đi`.
+3. Số dư ví **không lưu cứng**. Luôn tính: `openingBalance + tổng thu − tổng chi + tiền chuyển đến − tiền chuyển đi`. Ví người dương là khoản phải thu, âm là khoản phải trả. Tổng số dư chỉ cộng ví của bạn; tài sản ròng = tổng số dư + phải thu − phải trả, kiểm tra tràn số.
 4. Giao dịch chuyển tiền (`transfer`) **không tính vào thu hoặc chi** trong mọi thống kê, ngân sách, biểu đồ.
-5. Chuyển tiền phải có ví nguồn và ví đích khác nhau, không có danh mục.
+5. Chuyển tiền phải có ví nguồn và ví đích khác nhau, không có danh mục. Không chuyển giữa hai ví người; không ghi thu nhập vào ví người. Chi từ ví người là khoản người đó trả hộ, vẫn tính vào thống kê và ngân sách.
 6. Mọi logic tính tiền nằm trong `Services/`, không viết trong View, và phải có unit test.
 
 ### Về dữ liệu
@@ -37,11 +37,13 @@
 
 ```swift
 enum TransactionKind: String, Codable { case income, expense, transfer }
+enum WalletKind: String, Codable, CaseIterable { case cash, bank, card, other, person }
 
 @Model final class Wallet {
     var id: UUID = UUID()
-    var name: String
-    var openingBalance: Int64
+    var name: String = ""
+    var kindRaw: String = "cash" // cash, bank, card, other, person
+    var openingBalance: Int64 = 0
     var isArchived: Bool = false
     var createdAt: Date = Date()
 }
@@ -198,19 +200,19 @@ Chủ dự án bật Cài đặt → [tên] → iCloud → Sao lưu iCloud. App 
 - Chế độ khôi phục: thay thế toàn bộ. Thực hiện trong một transaction, lỗi thì hoàn tác
 - Sau khôi phục, hiển thị so sánh số dư từng ví với số dư ghi trong file (nếu file có lưu)
 
-### Hạn mức và định kỳ trong backup v3
+### Hạn mức, định kỳ và ví người trong backup v4
 - Backup v2 bổ sung `budgets` (id, scopeRaw, categoryID, limit, startYear, startMonth, isArchived, createdAt), được băm cùng payload; summary thêm số hạn mức.
-- Vẫn đọc/khôi phục v1, coi hạn mức là rỗng và giữ nguyên cách mã hóa checksum v1. Bản xuất mới là v3, vẫn đọc v1/v2 và từ chối phiên bản lớn hơn 3.
+- Vẫn đọc/khôi phục v1, coi hạn mức là rỗng và giữ nguyên cách mã hóa checksum v1. Bản xuất mới là v4, đọc v1/v2/v3 và từ chối phiên bản lớn hơn 4. V4 giữ nguyên payload của v3, cho phép Wallet.kind = person; file v1–v3 chứa person bị từ chối để tránh hiểu sai ở app cũ.
 - Kiểm tra hạn mức dương trong phạm vi nhập, tháng hợp lệ, scope tổng không có danh mục; scope danh mục phải trỏ tới danh mục chi tồn tại. Không trùng scope và tháng bắt đầu.
 - V3 thêm `recurringRules` và `TransactionRecord.recurrenceKey` trong checksum. Bản v1/v2 thiếu các trường này được coi là rỗng/nil, giữ nguyên checksum cũ. Kiểm tra chu kỳ ≥1, số tiền 1…max, tham chiếu đúng ví/danh mục/loại, ngày kết thúc ≥ bắt đầu và không trùng recurrenceKey.
-- Restore xóa/chèn quy tắc định kỳ trong cùng transaction; giữ con trỏ và khóa theo file. Lần mở sau chỉ sinh các lần còn đến hạn; lỗi restore giữ nguyên cả quy tắc, khóa và dữ liệu cũ. Tóm tắt có số giao dịch định kỳ. Giữ golden-v1/v2/v3.
+- Restore xóa/chèn quy tắc định kỳ trong cùng transaction; giữ con trỏ và khóa theo file. Lần mở sau chỉ sinh các lần còn đến hạn; lỗi restore giữ nguyên cả quy tắc, khóa và dữ liệu cũ. Tóm tắt có số giao dịch định kỳ. Giữ nguyên golden-v1/v2/v3 và thêm golden-v4.
 - Khôi phục thay thế xóa cả hạn mức trong cùng transaction, rollback toàn bộ nếu lỗi. Tóm tắt xác nhận có số hạn mức. Giữ cả golden-v1 và golden-v2 trong test.
 
-### Phong bì mã hóa (không đổi schema SwiftData hay backup v3 bên trong)
+### Phong bì mã hóa (không đổi schema SwiftData; file bên trong hiện là backup v4)
 - Đuôi .savemoney, tên hậu tố -encrypted. JSON có format = savemoney-backup-encrypted, envelopeVersion = 1, kdf { name = PBKDF2-HMAC-SHA256, iterations, salt base64 }, cipher = AES-GCM-256, keyID (8 byte SHA256 đầu dạng hex), createdAt (Int64 ms), sealed (combined nonce + ciphertext + tag base64).
 - AAD là JSON chuẩn tắc sortedKeys/withoutEscapingSlashes của toàn bộ header, trừ sealed. Từ chối version/cipher/KDF lạ, salt không đủ 16 byte hoặc iterations ngoài 100.000…10.000.000 **trước** dẫn xuất.
 - Ghi file tạm đã mã hóa, mở bằng khóa Keychain và kiểm tra BackupValidator/checksum trước đổi tên. Không có khóa thì dừng; không fallback plaintext. Catalog/rotation tính cả file mã hóa chưa có khóa, giữ 10 bản chính và 5 PreRestore.
-- Restore nhận file thường v1/v2/v3 không hỏi mật khẩu. File mã hóa có keyID khớp thì mở bằng Keychain; thiếu khóa thì sheet nhập mật khẩu. Sai mật khẩu/file bị sửa cùng thông báo, dữ liệu hiện tại giữ nguyên. Giải mã xong vẫn chạy đủ validator và xác nhận tóm tắt, tạo PreRestore theo cùng cài đặt mã hóa rồi mới thay dữ liệu.
+- Restore nhận file thường v1/v2/v3/v4 không hỏi mật khẩu. File mã hóa có keyID khớp thì mở bằng Keychain; thiếu khóa thì sheet nhập mật khẩu. Sai mật khẩu/file bị sửa cùng thông báo, dữ liệu hiện tại giữ nguyên. Giải mã xong vẫn chạy đủ validator và xác nhận tóm tắt, tạo PreRestore theo cùng cài đặt mã hóa rồi mới thay dữ liệu.
 - Quên mật khẩu sau khi mất khóa Keychain (xóa/cài lại hoặc đổi Apple ID ký app) thì không khôi phục được file. Bắt buộc ghi mật khẩu ra ngoài máy và diễn tập khôi phục bằng mật khẩu trước dùng thật.
 
 ### Test bắt buộc
@@ -318,8 +320,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Chưa thêm tab Thống kê và Cài đặt (bước sau).
 
 ### Tab Ví
-- Trên cùng: "Tổng số dư" cỡ lớn, lấy từ `BalanceCalculator`, chỉ cộng các ví **chưa archive**...
-  → **Quy tắc rõ ràng:** tổng số dư hiển thị mặc định gồm cả ví đã archive nếu số dư khác 0, để không có tiền "biến mất". Ví archive có số dư 0 thì không tính vào danh sách.
+- Trên cùng: "Tổng số dư" chỉ cộng ví của bạn, gồm cả ví đã lưu trữ. Không cộng ví người. `NetWorth` tính riêng phải thu, phải trả và tài sản ròng bằng Int64 có kiểm tra tràn số.
 - Danh sách ví đang dùng: tên, loại (icon), số dư căn phải. Số dư âm hiện màu đỏ và dấu "−".
 - Cuối danh sách: mục thu gọn "Đã lưu trữ (N)" chứa ví archive, mở ra xem được, có thao tác "Khôi phục".
 - Nút "+" thêm ví. Vuốt dòng: "Lưu trữ" (không có "Xóa").
@@ -339,13 +340,13 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 
 ### Archive
 - Lưu trữ ví/danh mục: hộp xác nhận ngắn nêu hậu quả: "Không hiện khi nhập mới. Lịch sử và số dư giữ nguyên."
-- Không cho lưu trữ ví cuối cùng còn đang dùng (phải còn ít nhất một ví hoạt động).
+- Không cho lưu trữ ví cuối cùng của bạn còn đang dùng; ví người không được tính vào điều kiện này. Người chỉ được lưu trữ khi số dư bằng 0.
 - Lưu trữ ví có số dư khác 0: cho phép nhưng cảnh báo rõ số dư còn lại.
 - Khôi phục: một chạm, không cần xác nhận.
 - Không có chức năng xóa thật ở bất kỳ đâu.
 
 ### Dữ liệu mặc định (lần chạy đầu)
-- Chỉ tạo khi cả ví và danh mục đều trống **và** cờ `didSeedDefaults` trong UserDefaults chưa bật. Bật cờ ngay sau khi tạo. Tránh tạo lại sau khi người dùng chủ động archive hết.
+- Chỉ tạo khi không có ví của bạn, danh mục và giao dịch đều trống **và** cờ `didSeedDefaults` trong UserDefaults chưa bật. Bật cờ ngay sau khi tạo. Tránh tạo lại sau khi người dùng chủ động archive hết.
 - Ví mặc định: "Tiền mặt" (số dư 0). Không tạo ví khác.
 - Danh mục chi: Ăn uống, Đi lại, Nhà ở, Hóa đơn, Mua sắm, Sức khỏe, Giải trí, Khác.
 - Danh mục thu: Lương, Thu nhập khác.
@@ -401,7 +402,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ```json
 {
   "format": "savemoney-backup",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "createdAt": 1789000000000,
   "appVersion": "1.0 (1)",
   "checksum": "<sha256 hex của payload>",
@@ -457,7 +458,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ### Tab Cài đặt (tab thứ 5)
 - Mục "Sao lưu": banner trạng thái, nút "Sao lưu ngay", "Chia sẻ bản mới nhất", "Danh sách bản sao lưu", "Khôi phục từ file", ghi chú nhắc bật iCloud Backup.
 - Mục "Bảo mật": công tắc "Khóa bằng Face ID".
-- Đã thêm Kiểm tra dữ liệu, Xuất CSV, tình trạng backup và Mã hóa bản sao lưu. Chưa có giao diện tùy biến.
+- Có Kiểm tra toàn vẹn, Xuất CSV, thẻ tình trạng backup, Mã hóa, Phím tắt và Thông tin. Dùng chung Card, IconRow, Callout; giải thích phụ mở qua InfoButton. Hình trang trí ẩn ở cỡ chữ Accessibility.
 
 ### Khóa ứng dụng
 - Dùng `LocalAuthentication`, chính sách `.deviceOwnerAuthentication` (sinh trắc học, tự rơi về mật mã máy).
@@ -468,3 +469,20 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Mặc định tắt trong code, nhưng bật là bắt buộc trong checklist nghiệm thu bước 7.
 - Backup tự động chạy nền không phụ thuộc trạng thái khóa.
 - Logic khóa (đếm thời gian, chuyển trạng thái) tách riêng và test được bằng đồng hồ giả và trình xác thực giả.
+
+
+## 17. Chuyển tiền và Sổ nợ
+
+- SwiftData giữ schema V3. `WalletKind.person` dùng chuỗi `kindRaw` có sẵn; không thêm model hay loại giao dịch.
+- Tab Ví chỉ hiện ví của bạn. Công cụ có Sổ nợ, Danh mục, Ngân sách và Định kỳ. Không thêm tab mới.
+- Chạm ví mở chi tiết: số dư, các nút Chi/Thu/Chuyển, lọc loại và lịch sử nhóm ngày. Số dư cuối ngày dùng WalletLedger/BalanceCalculator theo Asia/Saigon.
+- Sheet chuyển tiền có hai ví, đổi chiều, bàn phím biểu thức, Tất cả, ngày/ghi chú và số dư trước/sau. Nguồn âm chỉ cảnh báo, không chặn. Lưu qua TransactionScreenStore/TransactionService như giao dịch thường.
+- Shortcut Chuyển tiền và URL `savemoney://transfer?from=<UUID>` chỉ mở sheet sau mở khóa và khi store sẵn sàng; không tự đọc số dư trong intent hay tự lưu.
+- Ví người chỉ tạo từ Sổ nợ, tên tối đa 30 ký tự, số dư ban đầu bằng 0. Nợ cũ phải ghi thành giao dịch có ngày/ghi chú. Tên người kiểm tra trùng trong nhóm người, được trùng tên ví của bạn. Không đổi một ví thường thành ví người hoặc ngược lại.
+- Cho vay: ví bạn → người. Thu nợ: người → ví bạn. Đi vay: người → ví bạn. Trả nợ: ví bạn → người. Chi từ người là người trả hộ; không có thu nhập vào ví người hoặc chuyển giữa hai người.
+- Nhãn lịch sử dựa vào số dư người ngay trước giao dịch, sắp ngày rồi UUID để ổn định. Vượt qua 0 có dòng giải thích chiều nợ mới. Không lưu cứng nhãn hay số nợ.
+- Sổ nợ có hai nhóm Họ nợ bạn/Bạn nợ họ và nhóm Đã xong; có phục hồi người đã lưu trữ. Chi tiết có lịch sử, số dư sau từng giao dịch, ghi trả hộ và chia sẻ tóm tắt chỉ của người đó.
+- Sheet nợ cố định người và chiều theo hành động, chỉ chọn ví của bạn. Trả hết/Thu hết điền đúng số còn nợ; vượt số nợ chỉ cảnh báo và vẫn cho lưu.
+- Form Thêm loại Chi có mục Người khác trả hộ. Thu và chuyển thông thường chỉ chọn ví của bạn. Định kỳ chưa hỗ trợ ví người; lựa chọn gần nhất là người được bỏ qua trong form thường.
+- Backup v4 giữ nguyên cấu trúc v3, chứa ví người và các giao dịch liên quan trong checksum. CSV giữ tên người ở cột Ví/Ví đích và nhãn rõ cho khoản vay/trả hộ, vẫn chống công thức ở ô chữ.
+- Chưa làm phí chuyển khoản tùy chọn hoặc hạn trả/nhắc nợ U7.6. Nhắc nợ chỉ xem xét sau khi bản cơ bản đã dùng ổn, vì cần migration riêng.

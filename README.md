@@ -6,11 +6,14 @@
 
 Đã triển khai phần code giai đoạn 1–2 và phần bảo vệ giai đoạn 3 (F–J),
 cùng bản thử widget K0. K1 chờ người dùng thử SideStore trên máy thật.
-Có kiểm tra toàn vẹn, CSV, tình trạng/nhắc backup, mã hóa và 4 App Shortcuts.
-Không đổi schema SwiftData; backup v3 giữ nguyên bên trong phong bì mã hóa.
+Có kiểm tra toàn vẹn, CSV, tình trạng/nhắc backup, mã hóa và 5 App Shortcuts.
+Đã thêm bộ giao diện chung, tìm kiếm lịch sử, chi tiết ví, chuyển tiền và Sổ nợ.
+SwiftData giữ V3; backup mới là v4 để nhận diện ví người, đọc được v1–v3.
+Phong bì mã hóa không đổi.
 
-**Kiểm tra ngày 11/11/2026:** 181/181 test macOS và 190/190 test iOS Simulator
-đạt. Có kiểm tra bổ sung sau rà soát mã hóa và ảnh giao diện; xem checklist QA.
+**Kiểm tra ngày 11/11/2026:** 194/194 test core macOS; bộ iOS đầy đủ
+203/203 và lượt bổ sung 15/15; bốn UI test đóng bàn phím đều đạt.
+Các lượt render cuối và giới hạn nghiệm thu nằm trong checklist QA.
 IPA thử K0 build Release arm64, có appex và kiểm tra zip đạt. Không coi đây
 là bằng chứng cài/làm mới SideStore hay khôi phục mã hóa trên iPhone thật.
 
@@ -415,6 +418,9 @@ mỗi dòng thu mở đúng 1 giao dịch. Test mẫu đã khớp các số cố
 ưu tiên hơn mục 8. Không đổi schema SwiftData ở bước này.
 
 ### Định dạng đã chốt v1
+
+Phần này ghi lại mốc v1 ban đầu. Bản hiện tại xuất v4 và có phong bì mã hóa
+khi bật; vẫn đọc các file cũ. Xem phần trạng thái và hướng dẫn bảo vệ dữ liệu.
 
 - File `SaveMoney-yyyyMMdd-HHmmss-{Auto|Manual|PreRestore}.json`, ngày giờ tên
   theo Asia/Saigon. Cùng giây thì chọn tên giây kế tiếp còn trống, không ghi đè.
@@ -900,9 +906,9 @@ tạm dạng rõ, **không phải backup**, không dùng để restore và khôn
 ### Phím tắt và widget K0
 
 Trong app Phím tắt/Spotlight tìm SaveMoney: Thêm khoản chi, Thêm khoản thu,
-Mở lịch sử, Mở thống kê. Mỗi hành động mở app và đi qua Face ID; thêm chỉ điền
+Mở lịch sử, Mở thống kê, Chuyển tiền. Mỗi hành động mở app và đi qua Face ID; thêm chỉ điền
 loại/số tiền, vẫn cần chọn danh mục và Lưu. Siri tiếng Việt cần thử trên máy thật.
-URL dùng chung: savemoney://add?kind=expense&amount=50000 (cũng có history, stats).
+URL dùng chung: savemoney://add?kind=expense&amount=50000 (cũng có history, stats, transfer?from=<UUID>).
 
 Bản thường không nhúng widget. Tạo IPA thử riêng:
 
@@ -919,3 +925,21 @@ làm mới chữ ký và xác nhận widget còn mở app được. Chỉ sau k�
 Kết quả rà ảnh và các bước thiết bị còn mở: [checklist QA](docs/qa/phase3-accessibility.md).
 Ảnh render nằm trong xcresult và `build/AccessibilityReview/`; ảnh tĩnh không
 xác nhận cuộn/chạm hay VoiceOver. Có preview AX5 tối và chữ nhỏ nhất sáng.
+
+
+### UI/UX, chuyển tiền và Sổ nợ
+
+Các form chữ có nút Xong trên bàn phím và kéo để đóng. Tên là ô một dòng;
+ghi chú nhiều dòng. Màn Thêm dùng ô danh mục có icon/viền/dấu tích và thẻ ví.
+Lịch sử tìm theo ghi chú hoặc tên danh mục, lọc ví/danh mục/tháng.
+
+Tab Ví → chạm ví để xem chi tiết và số dư cuối ngày, hoặc Chuyển để xem trước
+số dư hai ví. Chuyển tiền không tăng thu/chi. Nguồn âm được cảnh báo và vẫn lưu được.
+
+Tab Ví → Sổ nợ → Thêm người. Cho vay/thu nợ/đi vay/trả nợ dùng chuyển tiền;
+người khác trả hộ dùng khoản chi từ ví người. Tổng số dư chỉ gồm ví của bạn.
+Sổ nợ hiển thị riêng phải thu, phải trả và tài sản ròng. Không có hạn trả, lãi suất
+hay nhắc nợ ở bản này. Backup mới v4 cần bản app mới để khôi phục ví người.
+
+Hình bổ sung và prompt: [UI illustrations](docs/qa/ui-illustrations.md).
+Kiểm tra giao diện và phần cần thử trên thiết bị: [UI/UX QA](docs/qa/ui-ux-verification.md).
