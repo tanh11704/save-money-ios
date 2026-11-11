@@ -24,7 +24,7 @@ final class ManagementServicesTests: XCTestCase {
         var wallets: WalletService { WalletService(container: container) }
         var categories: CategoryService { CategoryService(container: container) }
         init() throws {
-            let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+            let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
             container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
             container.mainContext.autosaveEnabled = false
         }

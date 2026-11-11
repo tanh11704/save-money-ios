@@ -12,7 +12,7 @@ private typealias Category = SaveMoney.Category
 @MainActor
 final class BalanceCalculatorTests: XCTestCase {
     private func store() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
         return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
     }
 

@@ -10,7 +10,7 @@ struct SaveMoneyApp: App {
         do {
             let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+            let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
             let configuration = ModelConfiguration(schema: schema, url: folder.appendingPathComponent("default.store"), cloudKitDatabase: .none)
             container = try ModelContainer(for: schema, migrationPlan: SaveMoneyMigrationPlan.self, configurations: [configuration])
         } catch {

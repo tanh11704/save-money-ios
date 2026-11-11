@@ -11,6 +11,7 @@ final class Transaction {
     var amount: Int64 = 1
     var kindRaw: String = TransactionKind.expense.rawValue
     var date: Date = Date()
+    var recurrenceKey: String? = nil
     var note: String = ""
     var wallet: Wallet?
     var toWallet: Wallet?

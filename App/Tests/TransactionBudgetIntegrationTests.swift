@@ -13,7 +13,7 @@ final class TransactionBudgetIntegrationTests: XCTestCase {
         func schedule(_ alert: BudgetAlert) async throws { alerts.append(alert); scheduled?() }
     }
     private func fixture() throws -> (ModelContainer, TransactionScreenStore, Scheduler, UserDefaults, String) {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let context = container.mainContext
         let wallet = Wallet(name: "Ví"), category = SaveMoney.Category(name: "Ăn uống", kind: .expense)

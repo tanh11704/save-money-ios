@@ -12,7 +12,7 @@ private typealias Category = SaveMoney.Category
 @MainActor
 final class BudgetPersistenceTests: XCTestCase {
     private func context() throws -> ModelContext {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let context = ModelContext(container); context.autosaveEnabled = false
         return context

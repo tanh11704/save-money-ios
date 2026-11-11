@@ -23,7 +23,7 @@ final class StatsTests: XCTestCase {
         var reader: ModelContext?
 
         init() throws {
-            let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+            let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
             container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
             container.mainContext.autosaveEnabled = false
             [a, b].forEach { container.mainContext.insert($0) }

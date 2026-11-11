@@ -38,7 +38,7 @@ final class TransactionServiceTests: XCTestCase {
     }
 
     private func fixture() throws -> Fixture {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         container.mainContext.autosaveEnabled = false
         let a = Wallet(name: "A", openingBalance: 1_000)

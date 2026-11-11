@@ -30,7 +30,7 @@ final class BudgetMigrationTests: XCTestCase {
             try context.save()
         }
         try seed()
-        let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
         let container = try ModelContainer(for: schema, migrationPlan: SaveMoneyMigrationPlan.self,
             configurations: [ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)])
         let context = ModelContext(container)
@@ -60,7 +60,7 @@ final class BudgetMigrationTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        let schema = Schema(versionedSchema: SaveMoneySchemaV2.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
         let configuration = ModelConfiguration(schema: schema, url: folder.appendingPathComponent("fresh.store"), cloudKitDatabase: .none)
         func create() throws {
             let container = try ModelContainer(for: schema, migrationPlan: SaveMoneyMigrationPlan.self, configurations: [configuration])
