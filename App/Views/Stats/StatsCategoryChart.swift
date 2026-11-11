@@ -19,10 +19,5 @@ struct StatsCategoryChart: View {
                 .minimumScaleFactor(0.5).accessibilityHidden(true)
         }
         if typeSize.isAccessibilitySize { Text(MoneyFormatter.string(from: total)).font(.headline).monospacedDigit().fixedSize(horizontal: false, vertical: true) }
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(slices.enumerated()), id: \.element.id) { index, slice in
-                HStack { CategoryIcon(icon: slice.icon, size: 28); Text("\(slice.name), \(slice.percentageText)").font(.caption).fixedSize(horizontal: false, vertical: true) }
-            }
-        }
     }
 }

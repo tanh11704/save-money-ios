@@ -216,17 +216,33 @@ private struct BackupPasswordView: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
-            Form {
-                Text(request.name).font(.caption).fixedSize(horizontal: false, vertical: true)
-                SecureField("Mật khẩu backup", text: $password).focused($focus, equals: .password).submitLabel(.done).onSubmit { focus = nil }.textInputAutocapitalization(.never).autocorrectionDisabled().frame(minHeight: 44)
-                if let error = store.error { Text(error).foregroundStyle(.red) }
-                if store.unlockingBackup { ProgressView("Đang giải mã…") }
-                Button("Mở bản sao lưu") { store.unlockBackup(password: password); password = "" }.frame(minHeight: 44).disabled(password.isEmpty || store.unlockingBackup)
-                Text("Sai mật khẩu hoặc file bị sửa đều không mở được. Dữ liệu hiện tại được giữ nguyên.").font(.footnote).foregroundStyle(.secondary)
-            }.scrollDismissesKeyboard(.interactively)
-                .keyboardDoneButton($focus)
-                .navigationTitle("Mở backup mã hóa")
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.l) {
+                    Label(request.name, systemImage: "lock.doc").font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    FormField(label: "Mật khẩu backup", text: $password, prompt: "Mật khẩu đã đặt khi mã hóa", error: store.error,
+                              secure: true, focus: $focus, field: .password, onSubmit: unlock, identifier: "backup.password")
+                    if store.unlockingBackup { ProgressView("Đang giải mã…") }
+                    Text("Sai mật khẩu hoặc file bị sửa đều không mở được. Dữ liệu hiện tại được giữ nguyên.")
+                        .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }.padding()
+            }
+            .appScreenBackground()
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PrimaryActionBar(title: "Mở bản sao lưu", systemImage: "lock.open", enabled: !password.isEmpty && !store.unlockingBackup, action: unlock)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .keyboardDoneButton($focus)
+            .navigationTitle("Mở backup mã hóa")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
+            .onAppear { focus = .password }
         }
+        .appSheet(.compact)
+    }
+
+    private func unlock() {
+        guard !password.isEmpty, !store.unlockingBackup else { return }
+        store.unlockBackup(password: password); password = ""
     }
 }

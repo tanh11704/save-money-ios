@@ -45,29 +45,47 @@ struct WalletFormView: View {
         catch { return TransactionPresentation.errorMessage(error) }
     }
 
+    private static let kindOptions: [(value: WalletKind, title: String, icon: String)] =
+        WalletKind.allCases.filter { $0 != .person && $0 != .adjustment }.map { ($0, $0.title, $0.icon) }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Tên ví").font(.headline)
-                TextField("Tên ví, tối đa 30 ký tự", text: $name)
-                    .textFieldStyle(.roundedBorder).focused($focus, equals: .name).submitLabel(.done).onSubmit { focus = nil }.frame(minHeight: 44)
-                    .accessibilityIdentifier("wallet.name")
-                if let nameMessage { InlineError(message: nameMessage) }
-                Text("Loại ví").font(.headline)
-                Picker("Loại ví", selection: $kind) {
-                    ForEach(WalletKind.allCases.filter { $0 != .person }, id: \.self) { kind in Text(kind.title).tag(kind) }
-                }.pickerStyle(.menu).labelsHidden().frame(minHeight: 44)
-                    .accessibilityLabel("Loại ví").accessibilityIdentifier("wallet.kind")
-                Text("Số dư ban đầu").font(.headline)
-                Button { keypadVisible.toggle() } label: {
-                    Text(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))
-                        .font(.largeTitle).monospacedDigit().fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-                }.buttonStyle(.plain)
-                    .accessibilityLabel("Số dư ban đầu \(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))")
-                    .accessibilityHint("Ẩn hoặc hiện bàn phím số tiền")
-                Toggle("Đang nợ", isOn: $isDebt).frame(minHeight: 44)
-                if let amountMessage { InlineError(message: amountMessage) }
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                // An empty name is the starting state, not an error worth showing in red.
+                FormField(label: "Tên ví", text: $name, prompt: "Ví dụ: Tiền mặt, Vietcombank", error: name.isEmpty ? nil : nameMessage,
+                          limit: 30, focus: $focus, field: .name, onSubmit: { focus = nil }, identifier: "wallet.name")
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    FieldLabel("Loại ví")
+                    ChoiceChips(options: Self.kindOptions, selection: $kind)
+                        .accessibilityIdentifier("wallet.kind")
+                }
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    FieldLabel("Số dư ban đầu")
+                    Card {
+                        VStack(alignment: .leading, spacing: Spacing.m) {
+                            Button { focus = nil; keypadVisible.toggle() } label: {
+                                HStack {
+                                    Text(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))
+                                        .font(.system(.largeTitle, design: .rounded).bold()).monospacedDigit()
+                                        .foregroundStyle(isDebt && magnitude > 0 ? Color("Expense") : .primary)
+                                        .lineLimit(1).minimumScaleFactor(0.4)
+                                    Spacer(minLength: 8)
+                                    Image(systemName: keypadVisible ? "keyboard.chevron.compact.down" : "keyboard")
+                                        .foregroundStyle(.tint).accessibilityHidden(true)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                                .accessibilityLabel("Số dư ban đầu \(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))".replacingOccurrences(of: "₫", with: "đồng"))
+                                .accessibilityHint("Ẩn hoặc hiện bàn phím số tiền")
+                            Divider()
+                            Toggle(isOn: $isDebt) {
+                                Label("Đang nợ (số dư âm)", systemImage: "minus.circle")
+                            }.frame(minHeight: 44)
+                        }
+                    }
+                    if let amountMessage { InlineError(message: amountMessage) }
+                }
                 openingBalanceWarning
                 if let message = saveError {
                     InlineError(message: message)
@@ -77,15 +95,14 @@ struct WalletFormView: View {
         }
         .appScreenBackground()
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 8) {
-                if focus == nil {
+            if focus == nil {
+                PrimaryActionBar(title: original == nil ? "Thêm ví" : "Lưu thay đổi", enabled: validationMessage == nil, action: save) {
                     if keypadVisible { MoneyKeypad { magnitude = MoneyFormatter.applying($0, to: magnitude); saveError = nil } }
-                    Button(action: save) { Text("Lưu ví").frame(maxWidth: .infinity, minHeight: 44) }
-                        .appProminentButton()
-                        .disabled(validationMessage != nil)
                 }
-            }.padding(8).background(.bar)
+            }
         }
+        .appSheet(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
         .keyboardDoneButton($focus)
         .task { if typeSize.isAccessibilitySize { keypadVisible = false } }
@@ -101,13 +118,8 @@ struct WalletFormView: View {
             if let input = try? draft(), input.openingBalance != original.openingBalance {
                 if let preview = try? WalletService.preview(wallet: original, openingBalance: input.openingBalance, transactions: store.transactions) {
                     if preview.hasTransactions {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Số dư hiện tại của ví sẽ thay đổi theo").font(.headline)
-                            Text("Trước: \(MoneyFormatter.string(from: preview.before))")
-                            Text("Sau: \(MoneyFormatter.string(from: preview.after))")
-                        }
-                        .foregroundStyle(.primary)
-                        .accessibilityElement(children: .combine)
+                        Callout(level: .warning, title: "Số dư hiện tại sẽ đổi",
+                                message: "\(MoneyFormatter.string(from: preview.before)) → \(MoneyFormatter.string(from: preview.after))")
                     }
                 } else { Text("Không thể tính số dư sau thay đổi. Hãy kiểm tra dữ liệu.").foregroundStyle(.red) }
             }

@@ -90,7 +90,7 @@ final class DebtTests: XCTestCase {
         try container.mainContext.save()
         let exporter = BackupExporter(container: container, directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
         let file = try exporter.capture()
-        XCTAssertEqual(file.schemaVersion, 4)
+        XCTAssertEqual(file.schemaVersion, 5)
         XCTAssertNoThrow(try BackupValidator.validate(file))
         let graph = try BackupValidator.graph(file.payload)
         XCTAssertEqual(try NetWorth.make(wallets: graph.wallets, transactions: graph.transactions), try NetWorth.make(wallets: wallets, transactions: transactions))
@@ -117,5 +117,122 @@ final class DebtTests: XCTestCase {
         let service = WalletService(container: container)
         XCTAssertThrowsError(try service.archive(id: cash.id)) { XCTAssertEqual($0 as? ManagementError, .lastActiveWallet) }
         XCTAssertThrowsError(try service.archive(id: person.id)) { XCTAssertEqual($0 as? ManagementError, .personOutstanding) }
+    }
+}
+
+@MainActor
+final class BalanceAdjustmentTests: XCTestCase {
+    private func makeContainer() throws -> ModelContainer {
+        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+    }
+
+    private func fetch(_ container: ModelContainer) throws -> (wallets: [Wallet], transactions: [Transaction]) {
+        let context = ModelContext(container)
+        return (try context.fetch(FetchDescriptor<Wallet>()), try context.fetch(FetchDescriptor<Transaction>()))
+    }
+
+    func testDifferenceRules() throws {
+        XCTAssertEqual(try BalanceAdjustmentService.difference(current: 5_400_000, actual: 5_450_000), 50_000)
+        XCTAssertEqual(try BalanceAdjustmentService.difference(current: 100, actual: -200), -300)
+        XCTAssertThrowsError(try BalanceAdjustmentService.difference(current: 7, actual: 7)) {
+            XCTAssertEqual($0 as? BalanceAdjustmentService.AdjustmentError, .alreadyMatches)
+        }
+        XCTAssertThrowsError(try BalanceAdjustmentService.difference(current: 0, actual: MoneyFormatter.maximumInput + 1)) {
+            XCTAssertEqual($0 as? BalanceAdjustmentService.AdjustmentError, .outOfRange)
+        }
+        XCTAssertThrowsError(try BalanceAdjustmentService.difference(current: Int64.min, actual: Int64.max)) {
+            XCTAssertEqual($0 as? BalanceAdjustmentService.AdjustmentError, .outOfRange)
+        }
+    }
+
+    func testAdjustmentSetsRealBalanceWithoutTouchingStatsOrNetWorthTotals() throws {
+        let container = try makeContainer()
+        let bank = Wallet(name: "Tài khoản", openingBalance: 5_000_000, kind: .bank)
+        let cash = Wallet(name: "Tiền mặt", openingBalance: 100_000)
+        let food = Category(name: "Ăn uống", kind: .expense)
+        container.mainContext.insert(bank); container.mainContext.insert(cash); container.mainContext.insert(food)
+        container.mainContext.insert(Transaction(amount: 30_000, kind: .expense, wallet: bank, category: food))
+        try container.mainContext.save()
+        let before = try fetch(container)
+        let statsBefore = try StatsService.report(month: ReportingMonth(), transactions: before.transactions)
+
+        let service = BalanceAdjustmentService(container: container)
+        try service.adjust(walletID: bank.id, to: 5_020_000)          // +50.000
+        try service.adjust(walletID: cash.id, to: 80_000, note: "Lẻ") // −20.000
+
+        let after = try fetch(container)
+        let adjustmentWallets = after.wallets.filter(\.isAdjustment)
+        XCTAssertEqual(adjustmentWallets.count, 1, "the hidden wallet is created once and reused")
+        XCTAssertEqual(adjustmentWallets.first?.openingBalance, 0)
+        let balances = try BalanceCalculator.balances(wallets: after.wallets, transactions: after.transactions, allowMissingCategory: true)
+        XCTAssertEqual(balances[bank.id], 5_020_000)
+        XCTAssertEqual(balances[cash.id], 80_000)
+
+        let adjustments = after.transactions.filter(TransactionPresentation.isAdjustment)
+        XCTAssertEqual(adjustments.count, 2)
+        XCTAssertTrue(adjustments.allSatisfy { $0.kindRaw == TransactionKind.transfer.rawValue && $0.category == nil })
+        XCTAssertEqual(adjustments.map(TransactionPresentation.amount).sorted(), ["+50.000 ₫", "−20.000 ₫"].sorted())
+
+        let statsAfter = try StatsService.report(month: ReportingMonth(), transactions: after.transactions)
+        XCTAssertEqual(statsAfter.expense, statsBefore.expense)
+        XCTAssertEqual(statsAfter.income, statsBefore.income)
+
+        let worth = try NetWorth.make(wallets: after.wallets, transactions: after.transactions)
+        XCTAssertEqual(worth.ownWallets, 5_100_000)
+        XCTAssertEqual(worth.receivable, 0)
+        XCTAssertEqual(worth.payable, 0)
+        // Invariant: own wallets + adjustment wallet == every wallet's balance.
+        let all = try BalanceCalculator.totalBalance(wallets: after.wallets, transactions: after.transactions, allowMissingCategory: true)
+        XCTAssertEqual(worth.ownWallets + (balances[adjustmentWallets[0].id] ?? 0), all)
+    }
+
+    func testRejectsPeopleArchivedWalletsAndMatchingBalance() throws {
+        let container = try makeContainer()
+        let cash = Wallet(name: "Tiền mặt", openingBalance: 1_000)
+        let lan = Wallet(name: "Lan", kind: .person)
+        let old = Wallet(name: "Cũ", openingBalance: 5); old.isArchived = true
+        [cash, lan, old].forEach { container.mainContext.insert($0) }
+        try container.mainContext.save()
+        let service = BalanceAdjustmentService(container: container)
+        XCTAssertThrowsError(try service.adjust(walletID: lan.id, to: 10)) { XCTAssertEqual($0 as? BalanceAdjustmentService.AdjustmentError, .notOwnWallet) }
+        XCTAssertThrowsError(try service.adjust(walletID: old.id, to: 10)) { XCTAssertEqual($0 as? BalanceAdjustmentService.AdjustmentError, .notOwnWallet) }
+        XCTAssertThrowsError(try service.adjust(walletID: cash.id, to: 1_000)) { XCTAssertEqual($0 as? BalanceAdjustmentService.AdjustmentError, .alreadyMatches) }
+        XCTAssertTrue(try fetch(container).transactions.isEmpty, "failed adjustments leave no data")
+        XCTAssertFalse(try fetch(container).wallets.contains(where: \.isAdjustment))
+    }
+
+    func testValidatorOnlyAllowsTransfersBetweenAdjustmentAndOwnWallets() {
+        let cash = Wallet(name: "Tiền mặt"), lan = Wallet(name: "Lan", kind: .person)
+        let system = Wallet(name: BalanceAdjustmentService.walletName, kind: .adjustment)
+        let food = Category(name: "Ăn uống", kind: .expense)
+        XCTAssertTrue(TransactionValidator.validationErrors(TransactionDraft(amount: 1, kind: .transfer, wallet: system, toWallet: cash)).isEmpty)
+        XCTAssertTrue(TransactionValidator.validationErrors(TransactionDraft(amount: 1, kind: .transfer, wallet: cash, toWallet: system)).isEmpty)
+        XCTAssertTrue(TransactionValidator.validationErrors(TransactionDraft(amount: 1, kind: .expense, wallet: system, category: food)).contains(.adjustmentMisuse))
+        XCTAssertTrue(TransactionValidator.validationErrors(TransactionDraft(amount: 1, kind: .transfer, wallet: system, toWallet: lan)).contains(.adjustmentMisuse))
+        XCTAssertFalse(system.isOwn)
+        XCTAssertFalse(lan.isOwn)
+        XCTAssertTrue(cash.isOwn)
+    }
+
+    func testAdjustmentWalletCannotBeEditedOrArchivedAndBackupIsV5() throws {
+        let container = try makeContainer()
+        let cash = Wallet(name: "Tiền mặt", openingBalance: 1_000), bank = Wallet(name: "Bank", openingBalance: 0, kind: .bank)
+        container.mainContext.insert(cash); container.mainContext.insert(bank)
+        try container.mainContext.save()
+        try BalanceAdjustmentService(container: container).adjust(walletID: cash.id, to: 1_500)
+        let system = try XCTUnwrap(try fetch(container).wallets.first(where: \.isAdjustment))
+        let wallets = WalletService(container: container)
+        XCTAssertThrowsError(try wallets.archive(id: system.id)) { XCTAssertEqual($0 as? ManagementError, .invalidKind) }
+        XCTAssertThrowsError(try wallets.update(id: system.id, with: WalletDraft(name: "X", kind: .cash))) { XCTAssertEqual($0 as? ManagementError, .invalidKind) }
+        XCTAssertThrowsError(try WalletService.validate(WalletDraft(name: "Y", kind: .adjustment), wallets: [])) { XCTAssertEqual($0 as? ManagementError, .invalidKind) }
+
+        let exporter = BackupExporter(container: container, directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let file = try exporter.capture()
+        XCTAssertEqual(file.schemaVersion, 5)
+        let validated = try BackupValidator.validate(file)
+        XCTAssertEqual(validated.totalBalance, 1_500, "restore summary counts only own wallets")
+        var downgraded = file; downgraded.schemaVersion = 4
+        XCTAssertThrowsError(try BackupValidator.validate(downgraded))
     }
 }

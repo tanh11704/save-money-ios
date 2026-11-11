@@ -17,9 +17,9 @@ struct TransferSheet: View {
     init(store: TransactionScreenStore, source: Wallet? = nil, mode: Mode = .transfer, amount: Int64 = 0) {
         self.store = store
         self.mode = mode
-        let wallets = store.wallets.filter { !$0.isPerson }
+        let wallets = store.wallets.filter { $0.isOwn }
         var draft = TransactionFormSelection.restoring(TransactionDraft(kind: .transfer), wallets: wallets, categories: store.categories, recent: store.recent)
-        if let source, !source.isPerson { draft = TransactionFormSelection.selectingWallet(source, in: draft, available: wallets) }
+        if let source, source.isOwn { draft = TransactionFormSelection.selectingWallet(source, in: draft, available: wallets) }
         if case .debt(let person, let action) = mode {
             let own = draft.wallet ?? wallets.first { !$0.isArchived }
             draft.wallet = action == .lend || action == .repay ? own : person
@@ -79,28 +79,32 @@ struct TransferSheet: View {
                             Callout(level: .warning, title: "Số tiền vượt số còn nợ", message: DebtPresentation.balanceText(after, person: person))
                         }
                     }
-                    if preview.sourceGoesNegative && draft.wallet?.isPerson != true { Callout(level: .warning, title: "Ví nguồn sẽ âm", message: MoneyFormatter.string(from: preview.sourceAfter)) }
+                    if preview.sourceGoesNegative && draft.wallet?.isOwn == true { Callout(level: .warning, title: "Ví nguồn sẽ âm", message: MoneyFormatter.string(from: preview.sourceAfter)) }
                 }
                 HStack { Button("Hôm nay") { draft.date = Date() }; Button("Hôm qua") { draft.date = TransactionPresentation.yesterday() } }.buttonStyle(.bordered).frame(minHeight: 44)
                 VStack(alignment: .leading, spacing: Spacing.s) {
-                    Text("Ngày chuyển").font(.headline)
+                    FieldLabel("Ngày chuyển")
                     DatePicker("Ngày chuyển", selection: $draft.date, displayedComponents: .date).labelsHidden().dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44)
                 }
-                TextField("Ghi chú", text: $draft.note, axis: .vertical).focused($focus, equals: .note).textFieldStyle(.roundedBorder).frame(minHeight: 44)
+                FormField(label: "Ghi chú", text: $draft.note, prompt: "Không bắt buộc", multiline: true,
+                          submitLabel: .return, focus: $focus, field: .note, identifier: "transfer.note")
             }.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).padding()
         }
         .scrollDismissesKeyboard(.interactively).keyboardDoneButton($focus)
         .appScreenBackground()
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if focus == nil {
-                VStack(spacing: 8) {
+                PrimaryActionBar(title: draft.amount == 0 ? "Nhập số tiền" : title, systemImage: draft.amount == 0 ? "keyboard" : "arrow.left.arrow.right",
+                                 enabled: validation == nil && !saved, identifier: "transfer.save", action: save) {
                     if !typeSize.isAccessibilitySize { MoneyKeypad(showsOperators: true) { expression.apply($0); draft.amount = expression.result ?? 0; error = nil } }
                     else { DisclosureGroup("Bàn phím số") { MoneyKeypad(showsOperators: true) { expression.apply($0); draft.amount = expression.result ?? 0; error = nil } } }
-                    Button(title, action: save).appProminentButton().frame(minHeight: 44).disabled(validation != nil || saved)
-                    if let message = error ?? validation { InlineError(message: message) }
-                }.padding(8).background(.bar)
+                    // A zero amount is the starting state; only explain other problems.
+                    if let message = error ?? (draft.amount == 0 ? nil : validation) { InlineError(message: message) }
+                }
             }
         }
+        .appSheet(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(title)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
         .sensoryFeedback(.success, trigger: saved) { _, _ in !reduceMotion }
@@ -113,7 +117,7 @@ struct TransferSheet: View {
             WalletCard(wallet: person, balance: store.balanceValues[person.id])
         } else {
         Menu {
-            ForEach(store.wallets.filter { !$0.isPerson && !$0.isArchived && $0.id != (destination ? draft.wallet?.id : draft.toWallet?.id) }, id: \.id) { wallet in
+            ForEach(store.wallets.filter { $0.isOwn && !$0.isArchived && $0.id != (destination ? draft.wallet?.id : draft.toWallet?.id) }, id: \.id) { wallet in
                 Button(wallet.name) { if destination { draft.toWallet = wallet } else { draft.wallet = wallet }; error = nil }
             }
         } label: {

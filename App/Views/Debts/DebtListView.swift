@@ -74,24 +74,38 @@ struct DebtPersonForm: View {
     private enum Field: Hashable { case name }
     @FocusState private var focus: Field?
     var body: some View {
-        Form {
-            TextField("Tên, tối đa 30 ký tự", text: $name).focused($focus, equals: .name).submitLabel(.done).onSubmit { focus = nil }.frame(minHeight: 44).accessibilityIdentifier("debt.name")
-            if let error { InlineError(message: error) }
-            Button("Lưu") {
-                do {
-                    let existingIDs = Set(store.wallets.map(\.id))
-                    try store.saveWallet(WalletDraft(name: name, kind: .person), editing: original?.id)
-                    if let person = store.wallets.first(where: {
-                        $0.isPerson && (original != nil ? $0.id == original?.id : !existingIDs.contains($0.id))
-                    }), let onSaved {
-                        onSaved(person)
-                    } else { dismiss() }
-                }
-                catch { self.error = error.localizedDescription }
-            }.frame(minHeight: 44)
-        }.scrollDismissesKeyboard(.interactively).keyboardDoneButton($focus)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.l) {
+                FormField(label: "Tên người", text: $name, prompt: "Ví dụ: anh Nam", error: error, limit: 30,
+                          focus: $focus, field: .name, onSubmit: save, identifier: "debt.name")
+                Text("Ghi khoản cho vay, đi vay và trả hộ với người này trong Sổ nợ.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }.padding()
+        }
+        .appScreenBackground()
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            PrimaryActionBar(title: original == nil ? "Thêm người" : "Lưu tên", enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty,
+                             identifier: "debt.save", action: save)
+        }
+        .scrollDismissesKeyboard(.interactively).keyboardDoneButton($focus)
         .navigationTitle(original == nil ? "Thêm người" : "Sửa tên")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
+        .appSheet(.compact)
+        .onAppear { if original == nil { focus = .name } }
+        .onChange(of: name) { _, _ in error = nil }
         .task { name = original?.name ?? "" }
+    }
+
+    private func save() {
+        do {
+            let existingIDs = Set(store.wallets.map(\.id))
+            try store.saveWallet(WalletDraft(name: name, kind: .person), editing: original?.id)
+            if let person = store.wallets.first(where: {
+                $0.isPerson && (original != nil ? $0.id == original?.id : !existingIDs.contains($0.id))
+            }), let onSaved {
+                onSaved(person)
+            } else { dismiss() }
+        } catch { self.error = error.localizedDescription }
     }
 }

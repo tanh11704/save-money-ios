@@ -23,6 +23,7 @@ struct WalletService {
         guard (-MoneyFormatter.maximumInput...MoneyFormatter.maximumInput).contains(draft.openingBalance) else {
             throw ManagementError.invalidOpeningBalance
         }
+        guard draft.kind != .adjustment else { throw ManagementError.invalidKind }
         guard draft.kind != .person || draft.openingBalance == 0 else { throw ManagementError.personOpeningBalance }
         guard !wallets.contains(where: { $0.id != id && $0.isPerson == (draft.kind == .person) && ManagementValidation.matches($0.name, name) }) else {
             throw ManagementError.duplicateName
@@ -63,7 +64,7 @@ struct WalletService {
         try ManagementPersistence(container: container, origin: origin).write { context in
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
             guard let wallet = wallets.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
-            guard wallet.isPerson == (draft.kind == .person) else { throw ManagementError.invalidKind }
+            guard !wallet.isAdjustment, wallet.isPerson == (draft.kind == .person) else { throw ManagementError.invalidKind }
             try Self.validate(draft, wallets: wallets, editing: id)
             _ = try Self.preview(wallet: wallet, openingBalance: draft.openingBalance,
                                  transactions: context.fetch(FetchDescriptor<Transaction>()))
@@ -78,10 +79,11 @@ struct WalletService {
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
             guard let wallet = wallets.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             guard !wallet.isArchived else { return }
+            guard !wallet.isAdjustment else { throw ManagementError.invalidKind }
             if wallet.isPerson {
                 guard try BalanceCalculator.balance(for: wallet, transactions: context.fetch(FetchDescriptor<Transaction>()), allowMissingCategory: true) == 0 else { throw ManagementError.personOutstanding }
             } else {
-                guard wallets.filter({ !$0.isArchived && !$0.isPerson }).count > 1 else { throw ManagementError.lastActiveWallet }
+                guard wallets.filter({ !$0.isArchived && $0.isOwn }).count > 1 else { throw ManagementError.lastActiveWallet }
             }
             wallet.isArchived = true
         }
@@ -92,6 +94,75 @@ struct WalletService {
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
             guard let wallet = wallets.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             wallet.isArchived = false
+        }
+    }
+}
+
+/// Records the difference between the app's balance and the real balance of one wallet.
+/// The difference is a transfer to or from a hidden adjustment wallet, so it never counts as
+/// income or expense (statistics, budgets and alerts already exclude transfers) and the opening
+/// balance — and therefore every earlier day's balance — stays untouched.
+@MainActor
+struct BalanceAdjustmentService {
+    enum AdjustmentError: LocalizedError, Equatable {
+        case alreadyMatches, notOwnWallet, outOfRange
+        var errorDescription: String? {
+            switch self {
+            case .alreadyMatches: return "Số dư đã khớp, không cần điều chỉnh."
+            case .notOwnWallet: return "Chỉ điều chỉnh được ví của bạn đang dùng."
+            case .outOfRange: return "Chênh lệch tối đa 999.999.999.999 đồng mỗi lần điều chỉnh."
+            }
+        }
+    }
+
+    /// Same text as `WalletKind.adjustment.title`; nonisolated so any context can read it.
+    nonisolated static var walletName: String { WalletKind.adjustment.title }
+
+    let container: ModelContainer
+    var origin: UUID? = nil
+
+    /// `actual − current`, overflow-checked and limited to one transaction's maximum amount.
+    static func difference(current: Int64, actual: Int64) throws -> Int64 {
+        let (delta, overflow) = actual.subtractingReportingOverflow(current)
+        guard !overflow, delta != Int64.min, abs(delta) <= MoneyFormatter.maximumInput else { throw AdjustmentError.outOfRange }
+        guard delta != 0 else { throw AdjustmentError.alreadyMatches }
+        return delta
+    }
+
+    /// Creates exactly one transfer, and the adjustment wallet on first use, in a single save.
+    @discardableResult
+    func adjust(walletID: UUID, to actual: Int64, date: Date = Date(), note: String = "") throws -> UUID {
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        do {
+            let wallets = try context.fetch(FetchDescriptor<Wallet>())
+            guard let wallet = wallets.first(where: { $0.id == walletID }), wallet.isOwn, !wallet.isArchived else {
+                throw AdjustmentError.notOwnWallet
+            }
+            let transactions = try context.fetch(FetchDescriptor<Transaction>())
+            let current = try BalanceCalculator.balance(for: wallet, transactions: transactions, allowMissingCategory: true)
+            let delta = try Self.difference(current: current, actual: actual)
+            let system: Wallet
+            if let existing = wallets.first(where: \.isAdjustment) {
+                system = existing
+                system.isArchived = false
+            } else {
+                system = Wallet(name: Self.walletName, openingBalance: 0, kind: .adjustment)
+                context.insert(system)
+            }
+            let draft = TransactionDraft(amount: abs(delta), kind: .transfer, date: date, note: note,
+                                         wallet: delta > 0 ? system : wallet, toWallet: delta > 0 ? wallet : system)
+            try TransactionValidator.validate(draft)
+            let transaction = Transaction(amount: draft.amount, kind: .transfer, date: date, note: note,
+                                          wallet: draft.wallet!, toWallet: draft.toWallet)
+            context.insert(transaction)
+            try context.save()
+            NotificationCenter.default.post(name: .ledgerDidChange, object: container,
+                                            userInfo: ["transaction": true, "origin": origin?.uuidString ?? ""])
+            return transaction.id
+        } catch {
+            context.rollback()
+            throw error
         }
     }
 }

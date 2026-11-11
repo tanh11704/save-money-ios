@@ -32,12 +32,13 @@ struct TransactionValidator {
     enum ValidationError: String, LocalizedError, CaseIterable {
         case invalidAmount, amountTooLarge, missingWallet, missingCategory
         case missingDestination, sameWallet, unexpectedCategory, unexpectedDestination
-        case categoryKindMismatch, archivedWallet, archivedDestination, archivedCategory, personToPerson, incomeToPerson
+        case categoryKindMismatch, archivedWallet, archivedDestination, archivedCategory, personToPerson, incomeToPerson, adjustmentMisuse
 
         var errorDescription: String? {
             switch self {
             case .personToPerson: return "Không chuyển tiền giữa hai người. Chọn một ví của bạn."
             case .incomeToPerson: return "Ghi thu nợ trong Sổ nợ, không ghi thu nhập vào ví người."
+            case .adjustmentMisuse: return "Ví điều chỉnh chỉ dùng để điều chỉnh số dư một ví của bạn."
             case .invalidAmount: return "Số tiền phải lớn hơn 0 đồng."
             case .amountTooLarge: return "Số tiền tối đa là 999.999.999.999 đồng."
             case .missingWallet: return "Chọn ví."
@@ -69,6 +70,11 @@ struct TransactionValidator {
         } else { errors.append(.missingWallet) }
         if draft.kind == .income && draft.wallet?.isPerson == true { errors.append(.incomeToPerson) }
         if draft.kind == .transfer && draft.wallet?.isPerson == true && draft.toWallet?.isPerson == true { errors.append(.personToPerson) }
+        // The adjustment wallet may only move money to or from one of the user's own wallets.
+        let touchesAdjustment = draft.wallet?.isAdjustment == true || draft.toWallet?.isAdjustment == true
+        if touchesAdjustment && (draft.kind != .transfer || draft.wallet?.isPerson == true || draft.toWallet?.isPerson == true) {
+            errors.append(.adjustmentMisuse)
+        }
         switch draft.kind {
         case .transfer:
             if draft.category != nil { errors.append(.unexpectedCategory) }

@@ -17,6 +17,8 @@ struct StatsService {
     }
     struct Report {
         let month: ReportingMonth
+        /// The exact window reported; equals `month.interval` for monthly reports.
+        var interval: DateInterval
         let income: Int64
         let expense: Int64
         let difference: Int64
@@ -40,7 +42,14 @@ struct StatsService {
     }
 
     static func report(month: ReportingMonth, transactions: [Transaction]) throws -> Report {
-        let interval = month.interval
+        try report(interval: month.interval, month: month, transactions: transactions)
+    }
+
+    static func report(period: StatsPeriod, transactions: [Transaction]) throws -> Report {
+        try report(interval: period.interval, month: period.month, transactions: transactions)
+    }
+
+    private static func report(interval: DateInterval, month: ReportingMonth, transactions: [Transaction]) throws -> Report {
         let monthly = transactions.filter { $0.date >= interval.start && $0.date < interval.end }.sorted {
             $0.date == $1.date ? $0.id.uuidString < $1.id.uuidString : $0.date > $1.date
         }
@@ -54,7 +63,7 @@ struct StatsService {
         for transaction in monthly {
             if let category = transaction.category { categories[category.id] = category }
         }
-        return Report(month: month, income: totals.income, expense: totals.expense, difference: difference,
+        return Report(month: month, interval: interval, income: totals.income, expense: totals.expense, difference: difference,
                       expenses: rows(totals.expenseByCategory, uncategorized: totals.uncategorizedExpense,
                                      total: totals.expense, kind: .expense, categories: categories),
                       incomes: rows(totals.incomeByCategory, uncategorized: totals.uncategorizedIncome,
@@ -63,8 +72,11 @@ struct StatsService {
 
     struct DailyTotal: Identifiable, Equatable {
         var id: Int { day }
+        /// 1-based position within the period (day of month for months, 1 = Monday for weeks).
         let day: Int
         let expense: Int64
+        /// Local midnight of this day.
+        var date = Date.distantPast
         var plotValue: Double { StatsService.plotValue(expense) }
     }
 
@@ -72,13 +84,34 @@ struct StatsService {
     static func plotValue(_ amount: Int64) -> Double { Double(amount) }
 
     static func dailyExpenses(month: ReportingMonth, transactions: [Transaction]) throws -> [DailyTotal] {
+        try dailyExpenses(period: StatsPeriod(month: month), transactions: transactions)
+    }
+
+    static func dailyExpenses(period: StatsPeriod, transactions: [Transaction]) throws -> [DailyTotal] {
         let calendar = LocalCalendar.calendar
-        let count = calendar.range(of: .day, in: .month, for: month.interval.start)!.count
-        return try (1...count).map { day in
-            let start = calendar.date(byAdding: .day, value: day - 1, to: month.interval.start)!
+        // One pass over the period's transactions, bucketed by local day.
+        let inPeriod = transactions.filter { period.contains($0.date) }
+        return try (1...period.dayCount).map { day in
+            let start = calendar.date(byAdding: .day, value: day - 1, to: period.interval.start)!
             let end = calendar.date(byAdding: .day, value: 1, to: start)!
-            return DailyTotal(day: day, expense: try BalanceCalculator.flowTotals(transactions: transactions,
-                during: DateInterval(start: start, end: end), allowMissingCategory: true).expense)
+            return DailyTotal(day: day, expense: try BalanceCalculator.flowTotals(transactions: inPeriod,
+                during: DateInterval(start: start, end: end), allowMissingCategory: true).expense, date: start)
+        }
+    }
+
+    struct PeriodTotal: Identifiable, Equatable {
+        var id: Date { period.interval.start }
+        let period: StatsPeriod
+        let income: Int64
+        let expense: Int64
+    }
+
+    /// Income and expense for `count` consecutive periods ending with `period`, oldest first.
+    /// Transfers are excluded exactly as in every other report.
+    static func trend(ending period: StatsPeriod, count: Int, transactions: [Transaction]) throws -> [PeriodTotal] {
+        try period.trailing(count).map { item in
+            let totals = try BalanceCalculator.flowTotals(transactions: transactions, during: item.interval, allowMissingCategory: true)
+            return PeriodTotal(period: item, income: totals.income, expense: totals.expense)
         }
     }
 

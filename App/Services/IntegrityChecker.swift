@@ -67,7 +67,7 @@ struct IntegrityChecker {
             for id in ids where !seen.insert(id).inserted { add(.duplicateID(id.uuidString)) }
         }
         let walletIDs = Set(wallets.map(\.id)), categoryIDs = Set(categories.map(\.id))
-        for wallet in wallets where WalletKind(rawValue: wallet.kindRaw) == nil || (wallet.isPerson && wallet.openingBalance != 0) { add(.invalidWallet(wallet.id)) }
+        for wallet in wallets where WalletKind(rawValue: wallet.kindRaw) == nil || (!wallet.isOwn && wallet.openingBalance != 0) { add(.invalidWallet(wallet.id)) }
         var keys = Set<String>()
         for t in transactions {
             if let wallet = t.wallet, !walletIDs.contains(wallet.id) { add(.transactionMissingWallet(t.id)) }
@@ -85,7 +85,7 @@ struct IntegrityChecker {
                     case .sameWallet: add(.transferSameWallet(t.id))
                     case .unexpectedCategory: add(.transferHasCategory(t.id))
                     case .categoryKindMismatch: add(.categoryKindMismatch(t.id))
-                    case .unexpectedDestination, .personToPerson, .incomeToPerson: add(.invalidTransaction(t.id))
+                    case .unexpectedDestination, .personToPerson, .incomeToPerson, .adjustmentMisuse: add(.invalidTransaction(t.id))
                     case .archivedWallet, .archivedDestination, .archivedCategory: break
                     }
                 }

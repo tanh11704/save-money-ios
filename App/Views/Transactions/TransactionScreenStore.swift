@@ -164,6 +164,21 @@ final class TransactionScreenStore: ObservableObject {
             refreshAfterManagementWrite()
         } catch { errorMessage = TransactionPresentation.errorMessage(error) }
     }
+    /// Records the real balance of an own wallet; the difference is undoable like any new transaction.
+    func adjustBalance(walletID: UUID, to actual: Int64, date: Date, note: String) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        isWriting = true
+        defer { isWriting = false }
+        let id = try BalanceAdjustmentService(container: container, origin: origin).adjust(walletID: walletID, to: actual, date: date, note: note)
+        do {
+            try reload()
+            if let transaction = transactions.first(where: { $0.id == id }) {
+                undoAction = UndoAction(snapshot: TransactionSnapshot(transaction), restore: false,
+                                        message: "Đã điều chỉnh · \(TransactionPresentation.title(transaction))")
+            }
+        } catch { errorMessage = "Đã điều chỉnh, nhưng chưa tải lại được số dư. Tải lại lịch sử." }
+    }
+
     func clearUndo() { undoAction = nil }
 
     func expireUndo(_ id: UUID) {
@@ -188,9 +203,8 @@ final class TransactionScreenStore: ObservableObject {
         defer { isWriting = false }
         guard let container else { throw ManagementError.missingRecord }
         let service = WalletService(container: container, origin: origin)
-        let savedID: UUID
-        if let id { try service.update(id: id, with: draft); savedID = id }
-        else { savedID = try service.create(draft) }
+        if let id { try service.update(id: id, with: draft) }
+        else { _ = try service.create(draft) }
         refreshAfterManagementWrite()
     }
 
@@ -215,9 +229,8 @@ final class TransactionScreenStore: ObservableObject {
         defer { isWriting = false }
         guard let container else { throw ManagementError.missingRecord }
         let service = CategoryService(container: container, origin: origin)
-        let savedID: UUID
-        if let id { try service.update(id: id, with: draft); savedID = id }
-        else { savedID = try service.create(draft) }
+        if let id { try service.update(id: id, with: draft) }
+        else { _ = try service.create(draft) }
         refreshAfterManagementWrite()
     }
 

@@ -96,7 +96,7 @@ struct ContentView: View {
                 }.padding(8).background(.regularMaterial)
             }
         }
-        .sheet(isPresented: $showingTransfer) { NavigationStack { TransferSheet(store: store, source: store.wallets.first { $0.id == transferSourceID && !$0.isArchived && !$0.isPerson }) } }
+        .sheet(isPresented: $showingTransfer) { NavigationStack { TransferSheet(store: store, source: store.wallets.first { $0.id == transferSourceID && !$0.isArchived && $0.isOwn }) } }
         .sheet(isPresented: $showingRecurring) {
             NavigationStack { RecurringListView(store: store) }
         }

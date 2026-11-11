@@ -21,12 +21,18 @@ struct TransactionHistoryView: View {
                         Text("Tổng số dư").font(.subheadline).foregroundStyle(.secondary)
                         Text(store.totalBalance).font(.title2.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
                         if let report = store.currentMonthReport {
-                            Text("Tháng \(ReportingMonth().month) · Thu +\(MoneyFormatter.compact(report.income)) · Chi −\(MoneyFormatter.compact(report.expense))")
+                            Text("Tháng \(ReportingMonth().month) · Thu \(report.income > 0 ? "+" : "")\(MoneyFormatter.compact(report.income)) · Chi \(report.expense > 0 ? "−" : "")\(MoneyFormatter.compact(report.expense))")
                                 .font(.caption).foregroundStyle(.secondary)
                                 .accessibilityLabel("Tháng \(ReportingMonth().month), thu \(report.incomeText), chi \(report.expenseText)")
                         }
                     }
                 }.accessibilityIdentifier("history.totalBalance")
+            }
+            // Filters live in the list: a top safe-area inset collides with the search field.
+            Section {
+                filters
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
             }
             if let message = store.errorMessage {
                 Section {
@@ -50,7 +56,6 @@ struct TransactionHistoryView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { filters.background(.bar) }
         .searchable(text: $filter.query, prompt: "Người, ví, danh mục, số tiền")
         .task(id: RefreshKey(filter: filter, snapshot: store.snapshotVersion)) {
             if !filter.query.isEmpty {
@@ -106,7 +111,7 @@ struct TransactionHistoryView: View {
             HStack {
                 Menu {
                     Button("Tất cả ví") { filter.walletID = nil }
-                    ForEach(store.wallets, id: \.id) { wallet in Button(wallet.name) { filter.walletID = wallet.id } }
+                    ForEach(store.wallets.filter { !$0.isAdjustment }, id: \.id) { wallet in Button(wallet.name) { filter.walletID = wallet.id } }
                 } label: { Label(store.wallets.first { $0.id == filter.walletID }?.name ?? "Ví", systemImage: "wallet.bifold").frame(minHeight: 44) }
                 if filter.walletID != nil { Button { filter.walletID = nil } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Bỏ lọc ví") }
                 Menu {
@@ -124,7 +129,7 @@ struct TransactionHistoryView: View {
             }.font(.subheadline).controlSize(.small).buttonStyle(.bordered)
                 .padding(.vertical, 8)
         }
-        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .contentMargins(.horizontal, 20, for: .scrollContent)
     }
 
     private func requestDeletion(_ transaction: Transaction) {

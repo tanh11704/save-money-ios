@@ -17,7 +17,7 @@ struct RecurringFormView: View {
         self.store = store; self.original = original
         var initial = original?.draft ?? RecurringDraft()
         if original == nil {
-            initial.transaction = TransactionFormSelection.restoring(initial.transaction, wallets: store.wallets.filter { !$0.isPerson }, categories: store.categories, recent: store.recent)
+            initial.transaction = TransactionFormSelection.restoring(initial.transaction, wallets: store.wallets.filter { $0.isOwn }, categories: store.categories, recent: store.recent)
         }
         _draft = State(initialValue: initial)
         _expression = State(initialValue: AmountExpression(amount: initial.transaction.amount))
@@ -28,98 +28,125 @@ struct RecurringFormView: View {
         do { try RecurringValidator.validate(draft); return nil }
         catch { return error.localizedDescription }
     }
+    private static let frequencyOptions: [(value: RecurrenceFrequency, title: String, icon: String)] = [
+        (.daily, "Hằng ngày", "sun.max"), (.weekly, "Hằng tuần", "7.square"),
+        (.monthly, "Hằng tháng", "calendar"), (.yearly, "Hằng năm", "sparkles"),
+    ]
     private var columns: [GridItem] { [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 240 : 140))] }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                TextField("Tên (không bắt buộc)", text: $draft.name)
-                    .focused($focus, equals: .name).submitLabel(.next).onSubmit { focus = .note }
-                    .accessibilityIdentifier("recurring.name").textFieldStyle(.roundedBorder).frame(minHeight: 44)
-                Picker("Loại", selection: transaction.kind) {
-                    Text("Chi").tag(TransactionKind.expense); Text("Thu").tag(TransactionKind.income); Text("Chuyển").tag(TransactionKind.transfer)
-                }.pickerStyle(.menu).frame(minHeight: 44)
-                if expression.hasOperator { Text(expression.displayText).font(.title3).monospacedDigit().foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-                Button { keypadVisible.toggle() } label: {
-                    Text(MoneyFormatter.string(from: draft.transaction.amount)).font(.largeTitle).monospacedDigit().fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                }.buttonStyle(.plain).accessibilityHint("Ẩn hoặc hiện bàn phím số tiền")
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                KindSelector(kind: transaction.kind)
+                FormField(label: "Tên (không bắt buộc)", text: $draft.name, prompt: "Ví dụ: Tiền nhà, Netflix", limit: 60,
+                          submitLabel: .next, focus: $focus, field: .name, onSubmit: { focus = .note }, identifier: "recurring.name")
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    FieldLabel("Số tiền mỗi lần")
+                    Card {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if expression.hasOperator {
+                                Text(expression.displayText).font(.title3).monospacedDigit().foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true).accessibilityHidden(true)
+                            }
+                            Button { focus = nil; keypadVisible.toggle() } label: {
+                                HStack {
+                                    Text(MoneyFormatter.string(from: draft.transaction.amount)).font(.system(.largeTitle, design: .rounded).bold())
+                                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
+                                    Spacer(minLength: 8)
+                                    Image(systemName: keypadVisible ? "keyboard.chevron.compact.down" : "keyboard").foregroundStyle(.tint).accessibilityHidden(true)
+                                }.frame(maxWidth: .infinity, minHeight: 54, alignment: .leading).contentShape(Rectangle())
+                            }.buttonStyle(.plain).accessibilityHint("Ẩn hoặc hiện bàn phím số tiền")
+                        }
+                    }
+                }
                 if draft.transaction.kind != .transfer {
-                    Text("Danh mục").font(.headline)
-                    LazyVGrid(columns: columns) {
-                        ForEach(store.categories.filter { !$0.isArchived && $0.kindRaw == draft.transaction.kind.rawValue }, id: \.id) { category in
-                            SelectionChip(title: category.name, icon: category.icon, selected: draft.transaction.category?.id == category.id) {
-                                draft.transaction.category = category; keypadVisible = false
+                    VStack(alignment: .leading, spacing: Spacing.s) {
+                        FieldLabel("Danh mục")
+                        LazyVGrid(columns: columns) {
+                            ForEach(store.categories.filter { !$0.isArchived && $0.kindRaw == draft.transaction.kind.rawValue }, id: \.id) { category in
+                                SelectionChip(title: category.name, icon: category.icon, selected: draft.transaction.category?.id == category.id) {
+                                    draft.transaction.category = category; keypadVisible = false
+                                }
                             }
                         }
                     }
                 }
                 wallets(destination: false)
                 if draft.transaction.kind == .transfer { wallets(destination: true) }
-                TextField("Ghi chú", text: transaction.note, axis: .vertical).focused($focus, equals: .note).textFieldStyle(.roundedBorder).frame(minHeight: 44)
-                VStack(alignment: .leading) {
-                    Text("Chu kỳ").font(.headline)
-                    Picker("Chu kỳ", selection: $draft.frequency) {
-                        ForEach(RecurrenceFrequency.allCases, id: \.self) { Text("Hằng " + $0.title).tag($0) }
-                    }.labelsHidden().frame(minHeight: 44)
-                }
-                VStack(alignment: .leading) {
-                    Text("Mỗi \(draft.interval) \(draft.frequency.title)").fixedSize(horizontal: false, vertical: true)
-                    Stepper("Mỗi \(draft.interval) \(draft.frequency.title)", value: $draft.interval, in: 1...Int.max).labelsHidden().frame(minHeight: 44)
-                }
-                VStack(alignment: .leading) {
-                    Text("Ngày bắt đầu").font(.headline)
-                    DatePicker("Ngày bắt đầu", selection: $draft.startDate, displayedComponents: .date)
-                        .labelsHidden().dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44)
-                }
-                Toggle("Có ngày kết thúc", isOn: $hasEnd).frame(minHeight: 44)
-                if hasEnd {
-                    VStack(alignment: .leading) {
-                        Text("Ngày kết thúc").font(.headline)
-                        DatePicker("Ngày kết thúc", selection: Binding(get: { draft.endDate ?? draft.startDate }, set: { draft.endDate = $0 }), displayedComponents: .date)
-                            .labelsHidden().dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44)
+                FormField(label: "Ghi chú", text: transaction.note, prompt: "Không bắt buộc", multiline: true,
+                          submitLabel: .return, focus: $focus, field: .note, identifier: "recurring.note")
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    FieldLabel("Lặp lại")
+                    ChoiceChips(options: Self.frequencyOptions, selection: $draft.frequency)
+                    Card {
+                        VStack(spacing: 0) {
+                            Stepper(value: $draft.interval, in: 1...Int.max) {
+                                Text(draft.interval == 1 ? "Mỗi \(draft.frequency.title)" : "Mỗi \(draft.interval) \(draft.frequency.title)")
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }.frame(minHeight: 44)
+                            Divider()
+                            DatePicker("Bắt đầu", selection: $draft.startDate, displayedComponents: .date)
+                                .dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44)
+                            Divider()
+                            Toggle("Có ngày kết thúc", isOn: $hasEnd).frame(minHeight: 44)
+                            if hasEnd {
+                                Divider()
+                                DatePicker("Kết thúc", selection: Binding(get: { draft.endDate ?? draft.startDate }, set: { draft.endDate = $0 }), displayedComponents: .date)
+                                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44)
+                            }
+                        }
                     }
                 }
                 let preview = RecurringPresentation.preview(draft, generatedThrough: original?.generatedThrough)
-                Text(preview.upcoming).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if original?.isPaused == true { Text("Quy tắc đang tạm dừng. Chỉ sinh khi bạn bấm Tiếp tục.").font(.footnote) }
-                else if let catchUp = preview.catchUp { Text(catchUp).font(.footnote).fixedSize(horizontal: false, vertical: true) }
+                Label(preview.upcoming, systemImage: "calendar.badge.clock").font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if original?.isPaused == true { Callout(level: .info, title: "Đang tạm dừng", message: "Chỉ sinh khi bạn bấm Tiếp tục.") }
+                else if let catchUp = preview.catchUp { Callout(level: .warning, title: "Sẽ tạo bù giao dịch", message: catchUp) }
                 if original != nil { Callout(level: .info, title: "Chỉ áp dụng các lần sau", message: "Giao dịch đã sinh giữ nguyên.") }
             }.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).padding()
         }
         .keyboardDoneButton($focus)
         .scrollDismissesKeyboard(.interactively)
         .appScreenBackground()
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 8) {
-                if keypadVisible && focus == nil {
-                    Button(typeSize.isAccessibilitySize ? "Ẩn phím" : "Ẩn bàn phím") { keypadVisible = false }.frame(minHeight: 44).accessibilityLabel("Ẩn bàn phím")
-                    MoneyKeypad(showsOperators: true) { key in expression.apply(key); draft.transaction.amount = expression.result ?? 0 }
-                }
-                Button {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if focus == nil {
+                PrimaryActionBar(title: original == nil ? "Thêm định kỳ" : "Lưu thay đổi", enabled: validation == nil, action: {
                     do { try store.saveRecurring(draft, editing: original?.id); dismiss() }
                     catch { self.error = error.localizedDescription }
-                } label: { Text("Lưu").frame(maxWidth: .infinity, minHeight: 44) }
-                    .appProminentButton().disabled(validation != nil)
-                if let message = error ?? validation { Text(message).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-            }.padding().background(.bar)
+                }) {
+                    if keypadVisible {
+                        HStack {
+                            Spacer()
+                            Button { keypadVisible = false } label: {
+                                Label(typeSize.isAccessibilitySize ? "Ẩn phím" : "Ẩn bàn phím", systemImage: "keyboard.chevron.compact.down")
+                                    .font(.subheadline).frame(minHeight: 44)
+                            }.accessibilityLabel("Ẩn bàn phím")
+                        }
+                        MoneyKeypad(showsOperators: true) { key in expression.apply(key); draft.transaction.amount = expression.result ?? 0 }
+                    }
+                    // A zero amount is the starting state; only explain other problems.
+                    if let message = error ?? (draft.transaction.amount == 0 ? nil : validation) { InlineError(message: message) }
+                }
+            }
         }
+        .appSheet(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(original == nil ? "Thêm định kỳ" : "Sửa định kỳ")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
         .task { if typeSize.isAccessibilitySize { keypadVisible = false } }
         .onChange(of: hasEnd) { _, enabled in draft.endDate = enabled ? draft.startDate : nil }
         .onChange(of: draft.transaction.kind) { _, kind in
-            draft.transaction = TransactionFormSelection.restoring(draft.transaction.changingKind(to: kind), wallets: store.wallets.filter { !$0.isPerson },
+            draft.transaction = TransactionFormSelection.restoring(draft.transaction.changingKind(to: kind), wallets: store.wallets.filter { $0.isOwn },
                 categories: store.categories, recent: store.recent)
         }
     }
     private func wallets(destination: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(destination ? "Đến ví" : "Ví").font(.headline)
+            FieldLabel(destination ? "Đến ví" : "Ví")
             LazyVGrid(columns: columns) {
-                ForEach(store.wallets.filter { !$0.isPerson && !$0.isArchived && (!destination || $0.id != draft.transaction.wallet?.id) }, id: \.id) { wallet in
+                ForEach(store.wallets.filter { $0.isOwn && !$0.isArchived && (!destination || $0.id != draft.transaction.wallet?.id) }, id: \.id) { wallet in
                     SelectionChip(title: wallet.name, selected: (destination ? draft.transaction.toWallet?.id : draft.transaction.wallet?.id) == wallet.id) {
                         if destination { draft.transaction.toWallet = wallet }
-                        else { draft.transaction = TransactionFormSelection.selectingWallet(wallet, in: draft.transaction, available: store.wallets.filter { !$0.isPerson }) }
+                        else { draft.transaction = TransactionFormSelection.selectingWallet(wallet, in: draft.transaction, available: store.wallets.filter { $0.isOwn }) }
                         keypadVisible = false
                     }
                 }

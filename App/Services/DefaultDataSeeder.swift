@@ -9,7 +9,7 @@ struct DefaultDataSeeder {
         guard !defaults.bool(forKey: marker) else { return }
         let context = ModelContext(container)
         context.autosaveEnabled = false
-        guard try context.fetch(FetchDescriptor<Wallet>()).allSatisfy({ $0.isPerson }),
+        guard try context.fetch(FetchDescriptor<Wallet>()).allSatisfy({ !$0.isOwn }),
               try context.fetchCount(FetchDescriptor<Category>()) == 0,
               try context.fetchCount(FetchDescriptor<Transaction>()) == 0 else { return }
         context.insert(Wallet(name: "Tiền mặt"))

@@ -10,6 +10,7 @@ struct WalletCard: View {
         case .bank: return Color("Transfer")
         case .card: return .purple
         case .person: return CategoryStyle.tint(for: "person.crop.circle")
+        case .adjustment: return .secondary
         case .other: return .secondary
         }
     }

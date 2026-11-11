@@ -242,7 +242,14 @@ struct LedgerRow: View {
     var trailingSubtitle: String? = nil
     var progress: Double? = nil
     var tint: Color = .accentColor
+    /// Draw the icon as a coloured category disc so rows match chart colours.
+    var categoryIcon = false
     @Environment(\.dynamicTypeSize) private var typeSize
+
+    @ViewBuilder private var iconView: some View {
+        if categoryIcon { CategoryIcon(icon: icon, size: 32) }
+        else { Image(systemName: icon).foregroundStyle(tint).frame(width: 32, height: 32).accessibilityHidden(true) }
+    }
 
     private var leading: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -259,7 +266,7 @@ struct LedgerRow: View {
     var body: some View {
         VStack(spacing: 6) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: icon).foregroundStyle(tint).frame(width: 28, height: 28).accessibilityHidden(true)
+                iconView
                 if typeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 8) { leading; trailing }
                 } else {
@@ -274,5 +281,222 @@ struct LedgerRow: View {
             }
         }.frame(minHeight: 44).foregroundStyle(.primary)
             .accessibilityElement(children: .combine)
+    }
+}
+
+/// Large, labelled Chi/Thu/Chuyển switcher. A segmented Picker in a navigation bar
+/// collapses Labels to icons and limits height, so this stays in content space.
+struct KindSelector: View {
+    @Binding var kind: TransactionKind
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var pill
+
+    static let items: [(kind: TransactionKind, title: String, icon: String)] = [
+        (.expense, "Chi", "arrow.down.circle.fill"),
+        (.income, "Thu", "arrow.up.circle.fill"),
+        (.transfer, "Chuyển", "arrow.left.arrow.right.circle.fill"),
+    ]
+
+    static func colorName(_ kind: TransactionKind) -> String {
+        switch kind { case .expense: "Expense"; case .income: "Income"; case .transfer: "Transfer" }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Self.items, id: \.kind) { item in
+                let selected = kind == item.kind
+                Button {
+                    guard kind != item.kind else { return }
+                    if reduceMotion { kind = item.kind } else { withAnimation(.snappy(duration: 0.25)) { kind = item.kind } }
+                } label: {
+                    HStack(spacing: 6) {
+                        if !typeSize.isAccessibilitySize { Image(systemName: item.icon).imageScale(.medium) }
+                        Text(item.title).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .font(.headline)
+                    .foregroundStyle(selected ? Color("OnAccent") : Color.primary)
+                    .frame(maxWidth: .infinity, minHeight: typeSize.isAccessibilitySize ? 56 : 48)
+                    .background {
+                        if selected {
+                            Capsule().fill(Color(Self.colorName(item.kind)))
+                                .matchedGeometryEffect(id: "pill", in: pill)
+                        }
+                    }
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(item.title)
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
+                .accessibilityIdentifier("transaction.kind.\(item.kind.rawValue)")
+            }
+        }
+        .padding(4)
+        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Loại giao dịch")
+        .accessibilityIdentifier("transaction.kind")
+    }
+}
+
+// MARK: - Form inputs and sheets
+
+/// Labelled text input: filled 52pt field, focus/error border, clear button, optional counter.
+struct FormField<F: Hashable>: View {
+    let label: String
+    @Binding var text: String
+    var prompt: String = ""
+    var error: String? = nil
+    var limit: Int? = nil
+    var multiline = false
+    var secure = false
+    var submitLabel: SubmitLabel = .done
+    let focus: FocusState<F?>.Binding
+    let field: F
+    var onSubmit: () -> Void = {}
+    var identifier: String? = nil
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private var isFocused: Bool { focus.wrappedValue == field }
+    private var border: Color {
+        if error != nil { return Color("Expense") }
+        if isFocused { return .accentColor }
+        return contrast == .increased ? .secondary : Color(uiColor: .separator).opacity(0.6)
+    }
+
+    @ViewBuilder private var input: some View {
+        if secure {
+            SecureField(prompt, text: $text)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+        } else if multiline {
+            TextField(prompt, text: $text, axis: .vertical).lineLimit(2...6)
+        } else {
+            TextField(prompt, text: $text).lineLimit(1)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if let limit {
+                    Text("\(text.count)/\(limit)").font(.caption).monospacedDigit()
+                        .foregroundStyle(text.count > limit ? Color("Expense") : Color.secondary)
+                        .accessibilityLabel("\(text.count) trên \(limit) ký tự")
+                }
+            }
+            HStack(alignment: multiline ? .top : .center, spacing: 8) {
+                input
+                    .focused(focus, equals: field)
+                    .submitLabel(submitLabel)
+                    .onSubmit(onSubmit)
+                    .accessibilityLabel(label)
+                    .accessibilityIdentifier(identifier ?? "")
+                if !text.isEmpty && isFocused {
+                    Button { text = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).frame(minWidth: 28, minHeight: 28)
+                    }
+                    .buttonStyle(.plain).accessibilityLabel("Xóa nội dung \(label)")
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 14)
+            .frame(minHeight: 52)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(border, lineWidth: isFocused || error != nil ? 2 : 1))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .onTapGesture { focus.wrappedValue = field }
+            if let error { InlineError(message: error) }
+        }
+    }
+}
+
+/// Small heading above a form group; consistent with FormField labels.
+struct FieldLabel: View {
+    let title: String
+    init(_ title: String) { self.title = title }
+    var body: some View {
+        Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Large tappable options (icon + title) replacing menu pickers for short lists.
+struct ChoiceChips<Value: Hashable>: View {
+    let options: [(value: Value, title: String, icon: String)]
+    @Binding var selection: Value
+    var disabled = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 240 : 140), spacing: 8)], spacing: 8) {
+            ForEach(options, id: \.value) { option in
+                let selected = selection == option.value
+                Button { selection = option.value } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: option.icon).frame(width: 22).accessibilityHidden(true)
+                        Text(option.title).lineLimit(typeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.85)
+                        Spacer(minLength: 0)
+                        if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor).accessibilityHidden(true) }
+                    }
+                    .font(.body.weight(selected ? .semibold : .regular))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .disabled(disabled)
+                .opacity(disabled && !selected ? 0.5 : 1)
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
+            }
+        }
+    }
+}
+
+/// Bottom bar with optional extra content (e.g. a keypad) above one prominent action.
+struct PrimaryActionBar<Extra: View>: View {
+    let title: String
+    var systemImage: String = "checkmark"
+    var enabled = true
+    var identifier: String? = nil
+    let action: () -> Void
+    @ViewBuilder var extra: Extra
+    var body: some View {
+        VStack(spacing: Spacing.s) {
+            extra
+            Button(action: action) {
+                Label(title, systemImage: systemImage).frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .appProminentButton()
+            .disabled(!enabled)
+            .accessibilityIdentifier(identifier ?? "")
+        }
+        .padding(.horizontal)
+        .padding(.top, Spacing.s)
+        .padding(.bottom, Spacing.s)
+        .background(.bar)
+    }
+}
+extension PrimaryActionBar where Extra == EmptyView {
+    init(title: String, systemImage: String = "checkmark", enabled: Bool = true, identifier: String? = nil, action: @escaping () -> Void) {
+        self.init(title: title, systemImage: systemImage, enabled: enabled, identifier: identifier, action: action) { EmptyView() }
+    }
+}
+
+enum SheetSize { case compact, medium, large }
+extension View {
+    /// Consistent sheet chrome: sized to content, visible grabber, rounded corners.
+    func appSheet(_ size: SheetSize) -> some View {
+        let detents: Set<PresentationDetent> = switch size {
+            case .compact: [.height(340), .medium]
+            case .medium: [.medium, .large]
+            case .large: [.large]
+        }
+        return presentationDetents(detents)
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(24)
+            .presentationBackground(Color(uiColor: .systemGroupedBackground))
     }
 }

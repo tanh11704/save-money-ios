@@ -23,7 +23,23 @@ struct TransactionPresentation {
         }
     }
 
+    /// A balance adjustment: a transfer between an own wallet and the hidden adjustment wallet.
+    static func isAdjustment(_ transaction: Transaction) -> Bool {
+        transaction.kindRaw == TransactionKind.transfer.rawValue
+            && (transaction.wallet?.isAdjustment == true || transaction.toWallet?.isAdjustment == true)
+    }
+
+    /// The adjusted own wallet and whether its balance went up.
+    static func adjustment(_ transaction: Transaction) -> (wallet: Wallet?, increased: Bool)? {
+        guard isAdjustment(transaction) else { return nil }
+        let increased = transaction.wallet?.isAdjustment == true
+        return (increased ? transaction.toWallet : transaction.wallet, increased)
+    }
+
     static func amount(_ transaction: Transaction) -> String {
+        if let adjustment = adjustment(transaction) {
+            return (adjustment.increased ? "+" : "−") + MoneyFormatter.string(from: transaction.amount)
+        }
         let prefix: String
         switch TransactionKind(rawValue: transaction.kindRaw) {
         case .income: prefix = "+"
@@ -34,6 +50,7 @@ struct TransactionPresentation {
     }
 
     static func title(_ transaction: Transaction) -> String {
+        if isAdjustment(transaction) { return WalletKind.adjustment.title }
         if transaction.kindRaw == TransactionKind.transfer.rawValue {
             return "Chuyển: \(transaction.wallet?.name ?? "Ví không xác định") → \(transaction.toWallet?.name ?? "Ví không xác định")"
         }
@@ -41,6 +58,9 @@ struct TransactionPresentation {
     }
 
     static func accessibilityLabel(_ transaction: Transaction) -> String {
+        if let adjustment = adjustment(transaction) {
+            return "Điều chỉnh số dư \(adjustment.wallet?.name ?? ""), \(adjustment.increased ? "tăng" : "giảm") \(MoneyFormatter.string(from: transaction.amount))"
+        }
         let kind = TransactionKind(rawValue: transaction.kindRaw).map(kindTitle) ?? "Giao dịch"
         return "\(kind), \(title(transaction)), \(MoneyFormatter.string(from: transaction.amount))" + (transaction.recurrenceKey == nil ? "" : ", Định kỳ")
     }
@@ -50,6 +70,7 @@ struct TransactionPresentation {
         if let error = error as? ManagementError { return error.localizedDescription }
         if let error = error as? TransactionValidator.ValidationError { return error.localizedDescription }
         if let error = error as? TransactionService.ServiceError { return error.localizedDescription }
+        if let error = error as? BalanceAdjustmentService.AdjustmentError { return error.localizedDescription }
         if error is BalanceCalculator.CalculationError {
             return "Không thể tính số dư. Dữ liệu không hợp lệ hoặc số tiền vượt giới hạn."
         }

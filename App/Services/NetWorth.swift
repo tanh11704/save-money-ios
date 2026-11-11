@@ -14,7 +14,9 @@ struct NetWorth: Equatable {
         var own: Int64 = 0, receivable: Int64 = 0, payable: Int64 = 0
         for wallet in wallets {
             guard let balance = balances[wallet.id] else { throw BalanceCalculator.CalculationError.overflow }
-            if !wallet.isPerson { own = try add(own, balance) }
+            // The adjustment wallet is bookkeeping only: it is neither money held nor a debt.
+            if wallet.isAdjustment { continue }
+            if wallet.isOwn { own = try add(own, balance) }
             else if balance >= 0 { receivable = try add(receivable, balance) }
             else {
                 guard let magnitude = Int64(exactly: balance.magnitude) else { throw BalanceCalculator.CalculationError.overflow }

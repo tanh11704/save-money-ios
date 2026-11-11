@@ -61,7 +61,7 @@ final class SmokeTests: XCTestCase {
         name.tap()
         name.typeText("Lan")
         app.buttons["keyboard.done"].tap()
-        app.buttons["Lưu"].tap()
+        app.buttons["debt.save"].tap()
         let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: name)
         XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed)
         XCTAssertTrue(app.staticTexts["Lan trả hộ"].waitForExistence(timeout: 5))

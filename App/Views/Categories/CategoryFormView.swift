@@ -26,46 +26,67 @@ struct CategoryFormView: View {
         } catch { return TransactionPresentation.errorMessage(error) }
     }
 
+    private static let kindOptions: [(value: TransactionKind, title: String, icon: String)] = [
+        (.expense, "Chi", "arrow.down.circle"), (.income, "Thu", "arrow.up.circle"),
+    ]
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Tên danh mục").font(.headline)
-                TextField("Tên danh mục, tối đa 30 ký tự", text: $draft.name)
-                    .textFieldStyle(.roundedBorder).frame(minHeight: 44)
-                    .accessibilityIdentifier("category.name")
-                    .focused($focus, equals: .name).submitLabel(.done).onSubmit { focus = nil }
-                if let message = saveError ?? validationMessage {
-                    InlineError(message: message)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                // Preview of how the category will look everywhere else in the app.
+                HStack(spacing: Spacing.m) {
+                    CategoryIcon(icon: draft.icon, size: 56)
+                    Text(draft.name.isEmpty ? "Danh mục mới" : draft.name)
+                        .font(.title3.weight(.semibold)).foregroundStyle(draft.name.isEmpty ? .secondary : .primary)
+                        .lineLimit(1)
                 }
-                Picker("Loại danh mục", selection: $draft.kind) {
-                    Text("Chi").tag(TransactionKind.expense)
-                    Text("Thu").tag(TransactionKind.income)
-                }.pickerStyle(.menu).disabled(lockedKind).frame(minHeight: 44)
-                if lockedKind {
-                    HStack { Label("Đã khóa loại", systemImage: "lock"); InfoButton(text: "Danh mục đã có giao dịch, hạn mức hoặc quy tắc định kỳ. Tạo danh mục mới để dùng loại khác.") }
-                }
-                Text("Biểu tượng").font(.headline)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 140 : 88))], spacing: 8) {
-                    ForEach(CategorySymbols.all) { symbol in
-                        Button { draft.icon = symbol.name; saveError = nil } label: {
-                            VStack(spacing: 6) {
-                                CategoryIcon(icon: symbol.name)
-                                Text(symbol.label).font(.caption).fixedSize(horizontal: false, vertical: true)
-                                if draft.icon == symbol.name { Image(systemName: "checkmark.circle.fill").accessibilityHidden(true) }
-                            }.frame(maxWidth: .infinity, minHeight: 44).padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+                FormField(label: "Tên danh mục", text: $draft.name, prompt: "Ví dụ: Cà phê, Gửi xe",
+                          error: draft.name.isEmpty ? nil : (saveError ?? validationMessage), limit: 30,
+                          focus: $focus, field: .name, onSubmit: { focus = nil }, identifier: "category.name")
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    HStack {
+                        FieldLabel("Loại")
+                        if lockedKind {
+                            Label("Đã khóa", systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
+                            InfoButton(text: "Danh mục đã có giao dịch, hạn mức hoặc quy tắc định kỳ. Tạo danh mục mới để dùng loại khác.")
                         }
-                        .buttonStyle(.bordered)
-                        .tint(draft.icon == symbol.name ? Color.accentColor : Color.secondary)
-                        .accessibilityLabel("Biểu tượng \(symbol.label)")
-                        .accessibilityAddTraits(draft.icon == symbol.name ? [.isSelected] : [])
+                    }
+                    ChoiceChips(options: Self.kindOptions, selection: $draft.kind, disabled: lockedKind)
+                }
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    FieldLabel("Biểu tượng")
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 120 : 72), spacing: 8)], spacing: 12) {
+                        ForEach(CategorySymbols.all) { symbol in
+                            let selected = draft.icon == symbol.name
+                            Button { draft.icon = symbol.name; saveError = nil } label: {
+                                VStack(spacing: 6) {
+                                    CategoryIcon(icon: symbol.name, size: 44)
+                                        .overlay(alignment: .topTrailing) {
+                                            if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color("OnAccent"), Color.accentColor).accessibilityHidden(true) }
+                                        }
+                                    Text(symbol.label).font(.caption2).lineLimit(typeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.8)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 76).padding(4)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
+                                .contentShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Biểu tượng \(symbol.label)")
+                            .accessibilityAddTraits(selected ? [.isSelected] : [])
+                        }
                     }
                 }
-                Button(action: save) { Text("Lưu danh mục").frame(maxWidth: .infinity, minHeight: 44) }
-                    .appProminentButton().disabled(validationMessage != nil)
             }.padding()
         }
         .appScreenBackground()
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if focus == nil {
+                PrimaryActionBar(title: original == nil ? "Thêm danh mục" : "Lưu thay đổi", enabled: validationMessage == nil, action: save)
+            }
+        }
+        .appSheet(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .keyboardDoneButton($focus)
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(original == nil ? "Thêm danh mục" : "Sửa danh mục")

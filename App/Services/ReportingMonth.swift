@@ -52,3 +52,86 @@ struct StatsPercentage {
     }
     static func text(tenths: Int) -> String { "\(tenths / 10),\(tenths % 10)%" }
 }
+
+enum StatsPeriodKind: String, CaseIterable, Hashable {
+    case week, month
+    var title: String { self == .week ? "Tuần" : "Tháng" }
+}
+
+/// A statistics window: a Monday–Sunday week or a calendar month, both in Asia/Saigon.
+/// The interval end is exclusive, matching `ReportingMonth.interval`.
+struct StatsPeriod: Hashable, Comparable {
+    let kind: StatsPeriodKind
+    let interval: DateInterval
+
+    /// Vietnamese weeks start on Monday (Thứ Hai) regardless of the device locale.
+    static var weekCalendar: Calendar {
+        var calendar = LocalCalendar.calendar
+        calendar.firstWeekday = 2
+        calendar.minimumDaysInFirstWeek = 4
+        return calendar
+    }
+
+    init(kind: StatsPeriodKind, containing date: Date = Date()) {
+        self.kind = kind
+        switch kind {
+        case .week: interval = Self.weekCalendar.dateInterval(of: .weekOfYear, for: date)!
+        case .month: interval = LocalCalendar.month(containing: date)
+        }
+    }
+
+    init(month: ReportingMonth) {
+        kind = .month
+        interval = month.interval
+    }
+
+    /// The month containing the first day; for a week spanning two months this is the earlier one.
+    var month: ReportingMonth { ReportingMonth(containing: interval.start) }
+    var dayCount: Int { LocalCalendar.calendar.dateComponents([.day], from: interval.start, to: interval.end).day! }
+    var lastDay: Date { LocalCalendar.calendar.date(byAdding: .day, value: -1, to: interval.end)! }
+    var previous: StatsPeriod { StatsPeriod(kind: kind, containing: interval.start.addingTimeInterval(-1)) }
+    var next: StatsPeriod { StatsPeriod(kind: kind, containing: interval.end) }
+
+    func next(upTo current: StatsPeriod) -> StatsPeriod? {
+        let candidate = next
+        return candidate <= current ? candidate : nil
+    }
+
+    func contains(_ date: Date) -> Bool { date >= interval.start && date < interval.end }
+
+    /// `count` periods ending with this one, oldest first.
+    func trailing(_ count: Int) -> [StatsPeriod] {
+        guard count > 0 else { return [] }
+        var periods = [self]
+        while periods.count < count { periods.insert(periods[0].previous, at: 0) }
+        return periods
+    }
+
+    var title: String {
+        switch kind {
+        case .month: return month.title
+        case .week: return "Tuần \(Self.dayMonth(interval.start)) – \(Self.dayMonth(lastDay))"
+        }
+    }
+
+    /// Axis label for trend charts: "T11" (or "T1/27" in January) for months, "9/11" for weeks.
+    var shortTitle: String {
+        switch kind {
+        case .month: return month.month == 1 ? "T1/\(String(month.year % 100))" : "T\(month.month)"
+        case .week: return Self.dayMonth(interval.start)
+        }
+    }
+
+    static func dayMonth(_ date: Date) -> String {
+        let parts = LocalCalendar.calendar.dateComponents([.day, .month], from: date)
+        return "\(parts.day!)/\(parts.month!)"
+    }
+
+    /// "T2" … "T7", "CN" for a date, independent of device locale.
+    static func weekdayLabel(_ date: Date) -> String {
+        let weekday = LocalCalendar.calendar.component(.weekday, from: date) // 1 = Sunday
+        return weekday == 1 ? "CN" : "T\(weekday)"
+    }
+
+    static func < (lhs: Self, rhs: Self) -> Bool { lhs.interval.start < rhs.interval.start }
+}

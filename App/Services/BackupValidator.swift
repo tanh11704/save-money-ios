@@ -25,7 +25,7 @@ struct BackupValidator {
         do { header = try JSONDecoder().decode(Header.self, from: data) }
         catch { throw BackupError.unreadable }
         guard header.format == "savemoney-backup" else { throw BackupError.wrongFormat }
-        guard (1...4).contains(header.schemaVersion) else { throw BackupError.unsupportedVersion(header.schemaVersion) }
+        guard (1...5).contains(header.schemaVersion) else { throw BackupError.unsupportedVersion(header.schemaVersion) }
         let file: BackupFile
         do { file = try JSONDecoder().decode(BackupFile.self, from: data) }
         catch { throw BackupError.unreadable }
@@ -34,7 +34,7 @@ struct BackupValidator {
 
     static func validate(_ file: BackupFile) throws -> Validated {
         guard file.format == "savemoney-backup" else { throw BackupError.wrongFormat }
-        guard (1...4).contains(file.schemaVersion) else { throw BackupError.unsupportedVersion(file.schemaVersion) }
+        guard (1...5).contains(file.schemaVersion) else { throw BackupError.unsupportedVersion(file.schemaVersion) }
         guard try BackupFile.digest(file.payload) == file.checksum else { throw BackupError.checksum }
         _ = try BackupFile.date(file.createdAt)
         let p = file.payload
@@ -56,11 +56,12 @@ struct BackupValidator {
             throw BackupError.structure("Bản sao lưu cũ không chứa dữ liệu định kỳ.")
         }
         guard file.schemaVersion >= 4 || p.wallets.allSatisfy({ $0.kind != WalletKind.person.rawValue }) else { throw BackupError.structure("Ví người cần bản sao lưu v4.") }
+        guard file.schemaVersion >= 5 || p.wallets.allSatisfy({ $0.kind != WalletKind.adjustment.rawValue }) else { throw BackupError.structure("Điều chỉnh số dư cần bản sao lưu v5.") }
         let graph = try graph(p)
         let balances = try expectedBalances(graph)
         guard balances == file.summary.expectedBalances else { throw BackupError.balances }
         let dates = graph.transactions.map(\.date)
-        return Validated(file: file, totalBalance: try BalanceCalculator.totalBalance(wallets: graph.wallets.filter { !$0.isPerson }, transactions: graph.transactions),
+        return Validated(file: file, totalBalance: try BalanceCalculator.totalBalance(wallets: graph.wallets.filter { $0.isOwn }, transactions: graph.transactions),
                          firstDate: dates.min(), lastDate: dates.max())
     }
 
@@ -79,6 +80,7 @@ struct BackupValidator {
             let uuid = try id(record.id)
             guard let kind = WalletKind(rawValue: record.kind) else { throw BackupError.structure("Loại ví không hợp lệ.") }
             guard kind != .person || record.openingBalance == 0 else { throw BackupError.structure("Ví người phải có số dư ban đầu bằng 0.") }
+            guard kind != .adjustment || record.openingBalance == 0 else { throw BackupError.structure("Ví điều chỉnh phải có số dư ban đầu bằng 0.") }
             let wallet = Wallet(name: record.name, openingBalance: record.openingBalance, kind: kind)
             wallet.id = uuid; wallet.isArchived = record.isArchived; wallet.createdAt = try BackupFile.date(record.createdAt)
             wallets[record.id] = wallet
@@ -111,6 +113,10 @@ struct BackupValidator {
                 }
             }
             guard !(kind == .income && wallet.isPerson), !(kind == .transfer && wallet.isPerson && destination?.isPerson == true) else { throw BackupError.structure("Giao dịch với ví người không hợp lệ.") }
+            let touchesAdjustment = wallet.isAdjustment || destination?.isAdjustment == true
+            guard !touchesAdjustment || (kind == .transfer && !wallet.isPerson && destination?.isPerson != true) else {
+                throw BackupError.structure("Điều chỉnh số dư chỉ được chuyển giữa ví điều chỉnh và ví của bạn.")
+            }
             let transaction = Transaction(amount: record.amount, kind: kind, date: try BackupFile.date(record.date),
                 note: record.note, wallet: wallet, toWallet: destination, category: category)
             if let key = record.recurrenceKey {
@@ -163,7 +169,7 @@ struct BackupValidator {
             } else {
                 guard destination == nil, let category, category.kindRaw == kind.rawValue else { throw BackupError.structure("Danh mục định kỳ không đúng loại.") }
             }
-            guard !wallet.isPerson && destination?.isPerson != true else { throw BackupError.structure("Định kỳ chưa hỗ trợ ví người.") }
+            guard wallet.isOwn && destination?.isOwn != false else { throw BackupError.structure("Định kỳ chỉ dùng ví của bạn.") }
             let start = try BackupFile.date(record.startDate), end = try record.endDate.map(BackupFile.date)
             guard end.map({ $0 >= start }) ?? true else { throw BackupError.structure("Ngày kết thúc định kỳ trước ngày bắt đầu.") }
             let rule = RecurringRule(); rule.id = uuid; rule.name = record.name; rule.kindRaw = record.kindRaw; rule.amount = record.amount; rule.note = record.note

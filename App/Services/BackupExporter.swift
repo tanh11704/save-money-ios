@@ -41,7 +41,7 @@ struct BackupExporter {
                 endDate: try $0.endDate.map(BackupFile.milliseconds), generatedThrough: try $0.generatedThrough.map(BackupFile.milliseconds),
                 isPaused: $0.isPaused, createdAt: try BackupFile.milliseconds($0.createdAt)) })
         let graph = BackupValidator.Graph(wallets: wallets, categories: categories, transactions: transactions)
-        let file = BackupFile(schemaVersion: 4, createdAt: try BackupFile.milliseconds(now), appVersion: appVersion,
+        let file = BackupFile(schemaVersion: 5, createdAt: try BackupFile.milliseconds(now), appVersion: appVersion,
             checksum: try BackupFile.digest(payload), summary: .init(wallets: wallets.count, categories: categories.count,
                 transactions: transactions.count, budgets: budgets.count, recurringRules: recurringRules.count, expectedBalances: try BackupValidator.expectedBalances(graph)), payload: payload)
         _ = try BackupValidator.validate(file)

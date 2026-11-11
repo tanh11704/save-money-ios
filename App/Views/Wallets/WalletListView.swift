@@ -8,6 +8,7 @@ struct WalletListView: View {
     @State private var selectedArchivedWallet: UUID?
     @State private var showingTransfer = false
     @State private var transferSource: Wallet?
+    @State private var adjustingWallet: Wallet?
     @State private var archiveCandidate: Wallet?
     @State private var confirmingArchive = false
     @State private var message: String?
@@ -24,11 +25,11 @@ struct WalletListView: View {
                 }.accessibilityElement(children: .contain)
             }
             if let message = message ?? store.errorMessage { Text(message).foregroundStyle(.red) }
-            if !store.wallets.contains(where: { !$0.isArchived && !$0.isPerson }) {
+            if !store.wallets.contains(where: { !$0.isArchived && $0.isOwn }) {
                 EmptyState(image: "illus-empty-wallet", title: "Chưa có ví", message: "Thêm ví để bắt đầu", symbol: "wallet.bifold", actionTitle: "Thêm ví") { showingAdd = true }
             }
             Section("Đang dùng") {
-                ForEach(store.wallets.filter { !$0.isArchived && !$0.isPerson }, id: \.id) { wallet in
+                ForEach(store.wallets.filter { !$0.isArchived && $0.isOwn }, id: \.id) { wallet in
                     activeWalletRow(wallet)
                 }
             }
@@ -49,6 +50,7 @@ struct WalletListView: View {
         .refreshable { reload() }
         .sheet(isPresented: $showingTransfer) { NavigationStack { TransferSheet(store: store, source: transferSource) } }
         .sheet(isPresented: $showingAdd) { NavigationStack { WalletFormView(store: store) } }
+        .sheet(item: $adjustingWallet) { wallet in NavigationStack { BalanceAdjustmentSheet(store: store, wallet: wallet) } }
         .confirmationDialog("Lưu trữ ví \(archiveCandidate?.name ?? "")?", isPresented: $confirmingArchive, titleVisibility: .visible) {
             Button("Lưu trữ") {
                 guard let wallet = archiveCandidate else { return }
@@ -72,7 +74,11 @@ struct WalletListView: View {
             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Xem lịch sử và thao tác với ví")
-            .contextMenu { Button("Chuyển tiền", systemImage: "arrow.left.arrow.right") { transferSource = wallet; showingTransfer = true } }
+            .contextMenu {
+                Button("Chuyển tiền", systemImage: "arrow.left.arrow.right") { transferSource = wallet; showingTransfer = true }
+                Button("Điều chỉnh số dư", systemImage: "slider.horizontal.3") { adjustingWallet = wallet }
+            }
+            .accessibilityAction(named: Text("Điều chỉnh số dư")) { adjustingWallet = wallet }
             .accessibilityAction(named: Text("Lưu trữ ví")) { requestArchive(wallet) }
             .swipeActions(allowsFullSwipe: false) {
                 Button { requestArchive(wallet) } label: { Label("Lưu trữ", systemImage: "archivebox") }.tint(.orange)
@@ -83,12 +89,12 @@ struct WalletListView: View {
         NavigationLink { BudgetListView(store: store) } label: { IconRow(icon: "target", tint: .orange, title: "Ngân sách") }
         NavigationLink { RecurringListView(store: store) } label: { IconRow(icon: "arrow.triangle.2.circlepath", title: "Định kỳ", value: String(store.recurringRules.count)) }
         NavigationLink { CategoryListView(store: store) } label: { IconRow(icon: "tag", tint: .purple, title: "Danh mục") }
-        NavigationLink { archivedWallets } label: { IconRow(icon: "archivebox", tint: .secondary, title: "Đã lưu trữ", value: String(store.wallets.filter { $0.isArchived && !$0.isPerson }.count)) }
+        NavigationLink { archivedWallets } label: { IconRow(icon: "archivebox", tint: .secondary, title: "Đã lưu trữ", value: String(store.wallets.filter { $0.isArchived && $0.isOwn }.count)) }
     }
 
     private var archivedWallets: some View {
         List {
-            ForEach(store.wallets.filter { $0.isArchived && !$0.isPerson }, id: \.id) { wallet in
+            ForEach(store.wallets.filter { $0.isArchived && $0.isOwn }, id: \.id) { wallet in
                 VStack(alignment: .leading, spacing: 8) {
                     Button { selectedArchivedWallet = wallet.id } label: { walletRow(wallet) }
                         .buttonStyle(.plain)

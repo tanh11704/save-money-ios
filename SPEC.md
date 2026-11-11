@@ -37,12 +37,12 @@
 
 ```swift
 enum TransactionKind: String, Codable { case income, expense, transfer }
-enum WalletKind: String, Codable, CaseIterable { case cash, bank, card, other, person }
+enum WalletKind: String, Codable, CaseIterable { case cash, bank, card, other, person, adjustment }
 
 @Model final class Wallet {
     var id: UUID = UUID()
     var name: String = ""
-    var kindRaw: String = "cash" // cash, bank, card, other, person
+    var kindRaw: String = "cash" // cash, bank, card, other, person, adjustment (ví hệ thống ẩn)
     var openingBalance: Int64 = 0
     var isArchived: Bool = false
     var createdAt: Date = Date()
@@ -203,7 +203,7 @@ Chủ dự án bật Cài đặt → [tên] → iCloud → Sao lưu iCloud. App 
 
 ### Hạn mức, định kỳ và ví người trong backup v4
 - Backup v2 bổ sung `budgets` (id, scopeRaw, categoryID, limit, startYear, startMonth, isArchived, createdAt), được băm cùng payload; summary thêm số hạn mức.
-- Vẫn đọc/khôi phục v1, coi hạn mức là rỗng và giữ nguyên cách mã hóa checksum v1. Bản xuất mới là v4, đọc v1/v2/v3 và từ chối phiên bản lớn hơn 4. V4 giữ nguyên payload của v3, cho phép Wallet.kind = person; file v1–v3 chứa person bị từ chối để tránh hiểu sai ở app cũ.
+- Vẫn đọc/khôi phục v1, coi hạn mức là rỗng và giữ nguyên cách mã hóa checksum v1. Bản xuất mới là v5 (giống v4, thêm ví điều chỉnh), đọc v1–v4 và từ chối phiên bản lớn hơn 5. V4 giữ nguyên payload của v3, cho phép Wallet.kind = person; file v1–v3 chứa person bị từ chối để tránh hiểu sai ở app cũ.
 - Kiểm tra hạn mức dương trong phạm vi nhập, tháng hợp lệ, scope tổng không có danh mục; scope danh mục phải trỏ tới danh mục chi tồn tại. Không trùng scope và tháng bắt đầu.
 - V3 thêm `recurringRules` và `TransactionRecord.recurrenceKey` trong checksum. Bản v1/v2 thiếu các trường này được coi là rỗng/nil, giữ nguyên checksum cũ. Kiểm tra chu kỳ ≥1, số tiền 1…max, tham chiếu đúng ví/danh mục/loại, ngày kết thúc ≥ bắt đầu và không trùng recurrenceKey.
 - Restore xóa/chèn quy tắc định kỳ trong cùng transaction; giữ con trỏ và khóa theo file. Lần mở sau chỉ sinh các lần còn đến hạn; lỗi restore giữ nguyên cả quy tắc, khóa và dữ liệu cũ. Tóm tắt có số giao dịch định kỳ. Giữ nguyên golden-v1/v2/v3 và thêm golden-v4.
@@ -372,7 +372,8 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ## 14. Quy tắc thống kê tháng (Bước 4)
 
 ### Phạm vi
-- Thêm tab "Thống kê" (tab thứ 4). Chỉ thống kê **một tháng lịch** mỗi lần xem. Có biểu đồ ngày, vòng danh mục và so sánh cùng kỳ. Section Ngân sách nằm dưới biểu đồ ngày.
+- Thêm tab "Thống kê" (tab thứ 4). Mỗi lần xem **một tuần (Thứ Hai–Chủ Nhật) hoặc một tháng lịch**, chọn bằng bộ chọn Tuần | Tháng (nhớ lựa chọn). Có biểu đồ ngày (tuần ghi T2…CN), vòng danh mục, so sánh cùng kỳ và biểu đồ xu hướng 8 tuần hoặc 6 tháng gần nhất (chạm cột để xem kỳ đó). Ngân sách chỉ theo tháng: chế độ tuần có link sang tháng.
+- So sánh tuần đang diễn ra dùng cùng số ngày đã qua của tuần trước (ví dụ T2–T4); tuần đã qua so cả tuần.
 - Mọi phép tính nằm trong `StatsService`, dùng `LocalCalendar` (Asia/Saigon). View chỉ hiển thị.
 
 ### Định nghĩa số liệu
@@ -495,6 +496,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Sheet nợ cố định người và chiều theo hành động, chỉ chọn ví của bạn. Trả hết/Thu hết điền đúng số còn nợ; vượt số nợ chỉ cảnh báo và vẫn cho lưu.
 - Form Thêm loại Chi có mục Người khác trả hộ. Thu và chuyển thông thường chỉ chọn ví của bạn. Định kỳ chưa hỗ trợ ví người; lựa chọn gần nhất là người được bỏ qua trong form thường.
 - Backup v4 giữ nguyên cấu trúc v3, chứa ví người và các giao dịch liên quan trong checksum. CSV giữ tên người ở cột Ví/Ví đích và nhãn rõ cho khoản vay/trả hộ, vẫn chống công thức ở ô chữ.
+- Điều chỉnh số dư (U9.5): người dùng nhập số dư thực tế của một ví của bạn; app ghi **một chuyển tiền** giữa ví đó và ví hệ thống ẩn `adjustment` ("Điều chỉnh số dư"), tạo khi dùng lần đầu, số dư ban đầu 0, không sửa/lưu trữ được. Không đổi `openingBalance`. Vì là chuyển tiền nên không tính vào thu/chi, thống kê, ngân sách, cảnh báo. Ví điều chỉnh bị loại khỏi Tổng số dư, Tài sản ròng, danh sách ví và bộ lọc; chỉ được chuyển với ví của bạn (không thu/chi, không với người, không định kỳ). Có Hoàn tác 5 giây như giao dịch mới. Backup v5 (payload không đổi) mới được chứa ví này; v1–v4 có ví điều chỉnh bị từ chối.
 - Chưa làm phí chuyển khoản tùy chọn hoặc hạn trả/nhắc nợ U7.6. Nhắc nợ chỉ xem xét sau khi bản cơ bản đã dùng ổn, vì cần migration riêng.
 
 ### Cập nhật theo review hệ thống 11/11/2026 (chưa nghiệm thu)
@@ -503,5 +505,5 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Cache tiến độ ngân sách theo tháng và snapshot, báo cáo tháng hiện tại, tháng có dữ liệu và ngày hoạt động gần nhất của ví. Đổi snapshot xóa cache; không cache ngược vào số dư gốc.
 - Tìm kiếm lịch sử theo ghi chú/danh mục/người/ví/số tiền, debounce 200ms, lọc và nhóm một lần mỗi lần cập nhật bộ lọc hoặc snapshot.
 - Các danh sách tài chính dùng hàng gọn hai dòng ở cỡ thường, cho mở rộng ở cỡ Accessibility và giữ VoiceOver đọc số đầy đủ.
-- Thống kê: Tóm tắt → Ngân sách (có Sửa hạn mức) → Chi theo danh mục → Chi theo ngày → Thu theo danh mục. Chênh lệch âm có màu chi; tiến độ có giá trị phần trăm cho VoiceOver.
+- Thống kê: Tóm tắt → Ngân sách (có Sửa hạn mức; chỉ chế độ tháng) → Chi theo danh mục → Chi theo ngày → Xu hướng → Thu theo danh mục. Chênh lệch âm có màu chi; tiến độ có giá trị phần trăm cho VoiceOver.
 - Giữ ký hiệu tiền tệ ₫. Widget K1 vẫn chờ thử K0 trên thiết bị; chưa tự đánh dấu nghiệm thu.
