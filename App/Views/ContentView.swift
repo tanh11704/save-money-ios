@@ -11,6 +11,8 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = TransactionScreenStore()
     @State private var showingRecurring = false
+    @State private var showingTransfer = false
+    @State private var transferSourceID: UUID?
     @State private var dismissedBanner: String?
     @State private var selectedTab = 0
 
@@ -59,6 +61,7 @@ struct ContentView: View {
         .onChange(of: router.pending?.id, initial: true) { _, _ in
             guard let route = router.take(unlocked: lock.state == .unlocked) else { return }
             switch route {
+            case .transfer(let from): selectedTab = 2; transferSourceID = from; showingTransfer = true
             case .history: selectedTab = 1
             case .stats: selectedTab = 3
             case .add(let kind, let amount): selectedTab = 0; store.addPrefill = .init(kind: kind, amount: amount)
@@ -85,6 +88,7 @@ struct ContentView: View {
                 }.padding(8).background(.regularMaterial)
             }
         }
+        .sheet(isPresented: $showingTransfer) { NavigationStack { TransferSheet(store: store, source: store.wallets.first { $0.id == transferSourceID && !$0.isArchived }) } }
         .sheet(isPresented: $showingRecurring) {
             NavigationStack { RecurringListView(store: store) }
         }

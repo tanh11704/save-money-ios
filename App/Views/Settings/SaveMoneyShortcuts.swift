@@ -30,11 +30,17 @@ struct OpenStatsIntent: AppIntent {
     static var openAppWhenRun = true
     @MainActor func perform() async throws -> some IntentResult { AppRouter.shared.enqueue(.stats); return .result() }
 }
+struct TransferIntent: AppIntent {
+    static var title: LocalizedStringResource = "Chuyển tiền giữa các ví"
+    static var openAppWhenRun = true
+    @MainActor func perform() async throws -> some IntentResult { AppRouter.shared.enqueue(.transfer(from: nil)); return .result() }
+}
 struct SaveMoneyShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: AddExpenseIntent(), phrases: ["Ghi chi tiêu \(.applicationName)", "Thêm khoản chi \(.applicationName)"], shortTitle: "Thêm khoản chi", systemImageName: "minus.circle")
         AppShortcut(intent: AddIncomeIntent(), phrases: ["Thêm khoản thu \(.applicationName)"], shortTitle: "Thêm khoản thu", systemImageName: "plus.circle")
         AppShortcut(intent: OpenHistoryIntent(), phrases: ["Mở lịch sử \(.applicationName)"], shortTitle: "Lịch sử", systemImageName: "list.bullet")
+        AppShortcut(intent: TransferIntent(), phrases: ["Chuyển tiền \(.applicationName)"], shortTitle: "Chuyển tiền", systemImageName: "arrow.left.arrow.right")
         AppShortcut(intent: OpenStatsIntent(), phrases: ["Mở thống kê \(.applicationName)"], shortTitle: "Thống kê", systemImageName: "chart.bar")
     }
 }

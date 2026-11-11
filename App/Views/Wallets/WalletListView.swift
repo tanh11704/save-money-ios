@@ -4,6 +4,8 @@ import SwiftUI
 struct WalletListView: View {
     @ObservedObject var store: TransactionScreenStore
     @State private var showingAdd = false
+    @State private var showingTransfer = false
+    @State private var transferSource: Wallet?
     @State private var editing: Wallet?
     @State private var archiveCandidate: Wallet?
     @State private var confirmingArchive = false
@@ -15,20 +17,21 @@ struct WalletListView: View {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Tổng số dư").font(.headline)
-                    Text(store.totalBalance).font(.largeTitle).monospacedDigit()
+                    Button { transferSource = nil; showingTransfer = true } label: { Label("Chuyển", systemImage: "arrow.left.arrow.right").frame(minHeight: 44) }
+                    Text(store.totalBalance).font(.system(.largeTitle, design: .rounded).bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.35)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Gồm cả số dư của ví đã lưu trữ.").font(.footnote).foregroundStyle(.secondary)
+                    InfoButton(text: "Gồm cả số dư của ví đã lưu trữ.")
                 }.accessibilityElement(children: .combine)
             }
             if let message = message ?? store.errorMessage { Text(message).foregroundStyle(.red) }
             if !store.wallets.contains(where: { !$0.isArchived }) {
-                Text("Chưa có ví. Thêm ví đầu tiên để bắt đầu.").foregroundStyle(.secondary)
+                EmptyState(image: "illus-empty-wallet", title: "Chưa có ví", message: "Thêm ví để bắt đầu", symbol: "wallet.bifold", actionTitle: "Thêm ví") { showingAdd = true }
             }
             Section("Đang dùng") {
                 ForEach(store.wallets.filter { !$0.isArchived }, id: \.id) { wallet in
-                    Button { editing = wallet } label: { walletRow(wallet) }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Chạm hai lần để sửa ví")
+                    NavigationLink { WalletDetailView(store: store, wallet: wallet) } label: { walletRow(wallet) }
+                        .accessibilityHint("Xem lịch sử và thao tác với ví")
+                        .contextMenu { Button("Chuyển tiền", systemImage: "arrow.left.arrow.right") { transferSource = wallet; showingTransfer = true } }
                         .accessibilityAction(named: Text("Lưu trữ ví")) { requestArchive(wallet) }
                         .swipeActions(allowsFullSwipe: false) {
                             Button { requestArchive(wallet) } label: { Label("Lưu trữ", systemImage: "archivebox") }
@@ -49,15 +52,15 @@ struct WalletListView: View {
                 }
                 .frame(minHeight: 44)
             }
-            Section {
+            Section("Công cụ") {
                 NavigationLink { RecurringListView(store: store) } label: {
-                    Label("Giao dịch định kỳ", systemImage: "arrow.triangle.2.circlepath").frame(minHeight: 44)
+                    IconRow(icon: "arrow.triangle.2.circlepath", title: "Định kỳ", value: String(store.recurringRules.count))
                 }
                 NavigationLink { BudgetListView(store: store) } label: {
-                    Label("Ngân sách", systemImage: "chart.bar").frame(minHeight: 44)
+                    IconRow(icon: "target", tint: .orange, title: "Ngân sách")
                 }
                 NavigationLink { CategoryListView(store: store) } label: {
-                    Label("Quản lý danh mục", systemImage: "tag").frame(minHeight: 44)
+                    IconRow(icon: "tag", tint: .purple, title: "Danh mục")
                 }
             }
         }
@@ -69,9 +72,10 @@ struct WalletListView: View {
             }
         }
         .refreshable { reload() }
+        .sheet(isPresented: $showingTransfer) { NavigationStack { TransferSheet(store: store, source: transferSource) } }
         .sheet(isPresented: $showingAdd) { NavigationStack { WalletFormView(store: store) } }
         .sheet(item: $editing) { wallet in NavigationStack { WalletFormView(store: store, original: wallet) } }
-        .confirmationDialog("Lưu trữ ví?", isPresented: $confirmingArchive, titleVisibility: .visible) {
+        .confirmationDialog("Lưu trữ ví \(archiveCandidate?.name ?? "")?", isPresented: $confirmingArchive, titleVisibility: .visible) {
             Button("Lưu trữ") {
                 guard let wallet = archiveCandidate else { return }
                 do { try store.archiveWallet(wallet.id); message = nil }
@@ -81,25 +85,13 @@ struct WalletListView: View {
             Button("Hủy", role: .cancel) { archiveCandidate = nil }
         } message: {
             if let wallet = archiveCandidate {
-                Text("Không hiện khi nhập mới. Lịch sử và số dư giữ nguyên. Số dư còn lại: \(store.balances[wallet.id] ?? "Không xác định").")
+                Text("Số dư còn lại: \(store.balances[wallet.id] ?? "Không xác định")")
             }
         }
     }
 
     private func walletRow(_ wallet: Wallet) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(wallet.name, systemImage: (WalletKind(rawValue: wallet.kindRaw) ?? .other).icon)
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text((WalletKind(rawValue: wallet.kindRaw) ?? .other).title).font(.caption).foregroundStyle(.secondary)
-            Text(store.balances[wallet.id] ?? "Chưa tính được")
-                .font(.headline).monospacedDigit()
-                .foregroundStyle((store.balanceValues[wallet.id] ?? 0) < 0 ? Color.red : Color.primary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(minHeight: 44)
-        .accessibilityElement(children: .combine)
+        WalletCard(wallet: wallet, balance: store.balanceValues[wallet.id])
     }
 
     private func requestArchive(_ wallet: Wallet) { archiveCandidate = wallet; confirmingArchive = true }

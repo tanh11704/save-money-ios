@@ -6,6 +6,12 @@ import XCTest
 @testable import SaveMoney
 #endif
 final class AppRouterTests: XCTestCase {
+    func testTransferRouteDoesNotReadWallets() {
+        let id = UUID()
+        XCTAssertEqual(AppRoute.parse(URL(string: "savemoney://transfer?from=\(id.uuidString)")!), .transfer(from: id))
+        XCTAssertEqual(AppRoute.parse(URL(string: "savemoney://transfer?from=invalid")!), .transfer(from: nil))
+        XCTAssertNil(AppRoute.parse(URL(string: "savemoney://transfer?from=a&from=b")!))
+    }
     func testValidAndInvalidURLsNeverAcceptOutOfRangeOrMalformedAmounts() {
         XCTAssertEqual(AppRoute.parse(URL(string: "savemoney://add?kind=expense&amount=50000")!), .add(kind: .expense, amount: 50_000))
         XCTAssertEqual(AppRoute.parse(URL(string: "savemoney://history")!), .history)

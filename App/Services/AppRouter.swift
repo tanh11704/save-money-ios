@@ -4,12 +4,17 @@ import Foundation
 enum AppRoute: Equatable {
     case add(kind: TransactionKind?, amount: Int64?)
     case history, stats
+    case transfer(from: UUID?)
     static func parse(_ url: URL) -> AppRoute? {
         guard url.scheme?.lowercased() == "savemoney", url.path.isEmpty || url.path == "/",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         switch url.host?.lowercased() {
         case "history": return .history
         case "stats": return .stats
+        case "transfer":
+            let items = components.queryItems ?? []
+            guard items.filter({ $0.name == "from" }).count <= 1 else { return nil }
+            return .transfer(from: items.first { $0.name == "from" }?.value.flatMap(UUID.init(uuidString:)))
         case "add":
             let items = components.queryItems ?? []
             guard items.filter({ $0.name == "kind" }).count <= 1, items.filter({ $0.name == "amount" }).count <= 1 else { return nil }
