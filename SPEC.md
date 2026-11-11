@@ -60,21 +60,42 @@ enum TransactionKind: String, Codable { case income, expense, transfer }
     var kindRaw: String
     var date: Date
     var note: String = ""
+    var recurrenceKey: String? = nil // <ruleID>.<yyyyMMdd>, giữ khi sửa giao dịch
     var wallet: Wallet?        // ví nguồn
     var toWallet: Wallet?      // chỉ khi chuyển tiền
     var category: Category?    // nil khi chuyển tiền
 }
 ```
 
-`Budget` đã thêm ở schema V2 qua lightweight migration từ V1; `RecurringRule` để giai đoạn sau.
+`Budget` thêm ở schema V2; schema V3 thêm `RecurringRule` và khóa định kỳ trên Transaction. V1 và V2 có model đóng băng riêng; migration nhẹ V1 → V2 → V3. Mọi thuộc tính mới có mặc định hoặc optional.
+
+```swift
+@Model final class RecurringRule {
+    var id: UUID = UUID()
+    var name: String = ""
+    var kindRaw: String = TransactionKind.expense.rawValue
+    var amount: Int64 = 1
+    var note: String = ""
+    var wallet: Wallet? = nil
+    var toWallet: Wallet? = nil
+    var category: Category? = nil
+    var frequencyRaw: String = RecurrenceFrequency.monthly.rawValue
+    var interval: Int = 1
+    var startDate: Date = Date()
+    var endDate: Date? = nil
+    var generatedThrough: Date? = nil
+    var isPaused: Bool = false
+    var createdAt: Date = Date()
+}
+```
 
 ## 4. Cấu trúc thư mục
 
 ```
 App/
-  Models/      Wallet, Category, Transaction
+  Models/      Wallet, Category, Transaction, Budget, RecurringRule
   Services/    BalanceCalculator, StatsService, BackupService
-  Views/       Transactions/, Wallets/, Categories/, Stats/, Settings/
+  Views/       Transactions/, Wallets/, Categories/, Stats/, Budgets/, Recurring/, Settings/
   Tests/       BalanceCalculatorTests, StatsTests, BackupTests
 ```
 
@@ -124,10 +145,14 @@ App/
 - Khoản chi nhập lùi tháng trước không gửi thông báo; Thống kê và tiến độ ngân sách vẫn tính theo tháng của ngày giao dịch.
 - Xin quyền thông báo bằng cơ chế ReminderService khi đặt hạn mức. Khi lưu giao dịch, không có quyền hoặc gửi lỗi thì im lặng, không chặn lưu.
 - Tổng hạn mức danh mục lớn hơn hạn mức tổng: cảnh báo có chữ nhưng vẫn cho lưu. Trạng thái tiến độ luôn có chữ “Sắp hết”/“Đã vượt”, màu hệ thống chỉ hỗ trợ.
-- Biểu đồ chi tiêu (Swift Charts): theo danh mục, theo ngày trong tháng
-- So sánh tháng này với tháng trước
-- Giao dịch định kỳ: **sinh giao dịch khi mở app** (kiểm tra các lần đến hạn chưa được sinh), không dựa vào tác vụ nền. Mỗi lần sinh phải chống trùng.
-- `Budget` đã thêm ở schema V2; trước khi thêm `RecurringRule` vào schema: **xuất backup trước khi đổi schema**, viết migration, thử trên bản sao.
+- [x] Biểu đồ Swift Charts theo ngày và vòng theo danh mục (top 5 + Khác). Số tiền Int64 được đổi sang Double chỉ để vẽ. Ngày không chi có cột 0; tháng không chi ẩn biểu đồ. Danh sách chữ, chú thích tên và nhãn VoiceOver đi kèm. Hạn mức tổng có đường trung bình cho phép/ngày (chia nguyên).
+- [x] So sánh tháng hiện tại đến hết hôm nay với cùng số ngày tháng trước, kẹp cuối tháng ngắn. Tháng đã qua so cả tháng; có chữ Tăng/Giảm/Không đổi, số tiền có dấu, phần trăm có dấu được kẹp ±999,9%; gốc 0 hiện Mới.
+- [x] Định kỳ ngày/tuần/tháng/năm, mỗi N, có ngày bắt đầu và kết thúc tùy chọn; quản lý từ Ví → Giao dịch định kỳ. Form xem trước các ngày tới và báo số giao dịch sẽ tạo ngay nếu bắt đầu trong quá khứ.
+- [x] Sinh khi mở app hoặc quay lại foreground sau mở khóa; không chạy nền hay trong restore. Tối đa 400 lần/quy tắc/lượt; còn dư có ghi chú và tiếp tục lần mở sau. Lịch neo vào ngày bắt đầu, cuối tháng/năm nhuận được kẹp, giờ 00:00 Asia/Saigon.
+- [x] Con trỏ `generatedThrough` và khóa `<ruleID>.<yyyyMMdd>` được lưu cùng giao dịch trong một save, lỗi rollback. Xóa giao dịch không lùi con trỏ, không sinh lại. Sửa quy tắc giữ con trỏ và chỉ ảnh hưởng các lần sau; có tạm dừng/tiếp tục, không xóa thật.
+- Quy tắc có ví/danh mục đã lưu trữ hoặc không hợp lệ: không sinh, không đẩy con trỏ, có lý do trong danh sách. Sửa/khôi phục xong có thể sinh bù.
+- Sau một đợt: đếm từng giao dịch vào scheduler backup, tải lại các màn hình và so ngân sách trước/sau cả đợt để gửi cảnh báo một lần, chỉ tháng hiện tại. Lịch sử có dấu Định kỳ và VoiceOver tương ứng.
+- Đã xuất backup trước V3 theo xác nhận của chủ dự án; có test nâng store V1 chưa version và V2 lên V3 giữ dữ liệu/số dư/hạn mức. Nghiệm thu cài đè trên máy thật vẫn cần thực hiện.
 
 ## 7. Giai đoạn 3 — Bảo vệ và duy trì nâng cao
 
@@ -167,10 +192,12 @@ Chủ dự án bật Cài đặt → [tên] → iCloud → Sao lưu iCloud. App 
 - Chế độ khôi phục: thay thế toàn bộ. Thực hiện trong một transaction, lỗi thì hoàn tác
 - Sau khôi phục, hiển thị so sánh số dư từng ví với số dư ghi trong file (nếu file có lưu)
 
-### Hạn mức trong backup v2
-- Bản xuất mới dùng `schemaVersion: 2`, payload thêm `budgets` (id, scopeRaw, categoryID, limit, startYear, startMonth, isArchived, createdAt), được băm cùng payload; summary thêm số hạn mức.
-- Vẫn đọc/khôi phục v1, coi hạn mức là rỗng và giữ nguyên cách mã hóa checksum v1. Từ chối phiên bản lớn hơn 2.
+### Hạn mức và định kỳ trong backup v3
+- Backup v2 bổ sung `budgets` (id, scopeRaw, categoryID, limit, startYear, startMonth, isArchived, createdAt), được băm cùng payload; summary thêm số hạn mức.
+- Vẫn đọc/khôi phục v1, coi hạn mức là rỗng và giữ nguyên cách mã hóa checksum v1. Bản xuất mới là v3, vẫn đọc v1/v2 và từ chối phiên bản lớn hơn 3.
 - Kiểm tra hạn mức dương trong phạm vi nhập, tháng hợp lệ, scope tổng không có danh mục; scope danh mục phải trỏ tới danh mục chi tồn tại. Không trùng scope và tháng bắt đầu.
+- V3 thêm `recurringRules` và `TransactionRecord.recurrenceKey` trong checksum. Bản v1/v2 thiếu các trường này được coi là rỗng/nil, giữ nguyên checksum cũ. Kiểm tra chu kỳ ≥1, số tiền 1…max, tham chiếu đúng ví/danh mục/loại, ngày kết thúc ≥ bắt đầu và không trùng recurrenceKey.
+- Restore xóa/chèn quy tắc định kỳ trong cùng transaction; giữ con trỏ và khóa theo file. Lần mở sau chỉ sinh các lần còn đến hạn; lỗi restore giữ nguyên cả quy tắc, khóa và dữ liệu cũ. Tóm tắt có số giao dịch định kỳ. Giữ golden-v1/v2/v3.
 - Khôi phục thay thế xóa cả hạn mức trong cùng transaction, rollback toàn bộ nếu lỗi. Tóm tắt xác nhận có số hạn mức. Giữ cả golden-v1 và golden-v2 trong test.
 
 ### Test bắt buộc
@@ -304,7 +331,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ## 14. Quy tắc thống kê tháng (Bước 4)
 
 ### Phạm vi
-- Thêm tab "Thống kê" (tab thứ 4). Chỉ thống kê **một tháng lịch** mỗi lần xem. Chưa có biểu đồ, so sánh tháng. Đã thêm section Ngân sách ngay dưới tóm tắt.
+- Thêm tab "Thống kê" (tab thứ 4). Chỉ thống kê **một tháng lịch** mỗi lần xem. Có biểu đồ ngày, vòng danh mục và so sánh cùng kỳ. Section Ngân sách nằm dưới biểu đồ ngày.
 - Mọi phép tính nằm trong `StatsService`, dùng `LocalCalendar` (Asia/Saigon). View chỉ hiển thị.
 
 ### Định nghĩa số liệu
@@ -333,7 +360,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ### Phong cách chung
 - Giữ quy tắc mục 12 và 13: thành phần hệ thống, Dynamic Type, chế độ tối, vùng chạm 44pt, tiếng Việt, VoiceOver (đọc "Tổng chi, một triệu hai trăm nghìn đồng").
 - Dùng `MoneyFormatter` đã có. Cỡ chữ lớn nhất: bố cục xếp dọc, không cắt số tiền.
-- Không thêm: biểu đồ, so sánh tháng, xuất CSV, lọc theo ví.
+- Chưa thêm: xuất CSV, lọc theo ví.
 
 ## 15. Đặc tả kỹ thuật backup (Bước 5, chi tiết hóa mục 8)
 
@@ -344,18 +371,20 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ```json
 {
   "format": "savemoney-backup",
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "createdAt": 1789000000000,
   "appVersion": "1.0 (1)",
   "checksum": "<sha256 hex của payload>",
   "summary": {
-    "wallets": 2, "categories": 10, "transactions": 120,
+    "wallets": 2, "categories": 10, "transactions": 120, "budgets": 3, "recurringRules": 2,
     "expectedBalances": { "<walletId>": 1080000 }
   },
   "payload": {
     "wallets":      [{ "id", "name", "kind", "openingBalance", "isArchived", "createdAt" }],
     "categories":   [{ "id", "name", "kind", "icon", "isArchived" }],
-    "transactions": [{ "id", "amount", "kind", "date", "note", "walletId", "toWalletId", "categoryId" }]
+    "transactions": [{ "id", "amount", "kind", "date", "note", "walletId", "toWalletId", "categoryId", "recurrenceKey" }],
+    "budgets": [{ "id", "scopeRaw", "categoryID", "limit", "startYear", "startMonth", "isArchived", "createdAt" }],
+    "recurringRules": [{ "id", "name", "kindRaw", "amount", "note", "walletId", "toWalletId", "categoryId", "frequencyRaw", "interval", "startDate", "endDate", "generatedThrough", "isPaused", "createdAt" }]
   }
 }
 ```

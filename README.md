@@ -4,21 +4,32 @@
 
 ## Trạng thái
 
-Đã triển khai giao dịch, ví/danh mục, thống kê, backup/restore, tự sao lưu,
-Cài đặt, khóa ứng dụng, bàn phím cộng/trừ và hạn mức chi tiêu hàng tháng.
-Ngân sách vào từ tab Ví, có hạn mức tổng/danh mục, tiến độ và thông báo 80%/100%.
+Đã triển khai giai đoạn 1 và phần code giai đoạn 2: giao dịch, ví/danh mục,
+backup/restore, tự sao lưu, khóa app, bàn phím cộng/trừ, ngân sách,
+biểu đồ ngày/danh mục, so sánh cùng kỳ và giao dịch định kỳ.
+Ngân sách và định kỳ vào từ tab Ví; không thêm tab mới.
 
-**Kiểm tra ngày 11/11/2026:** 139/139 unit test trên macOS đạt; 142/142 test
-trong lần chạy toàn bộ trên iPhone 18 Pro Simulator (iOS 27.2) đạt, gồm test
-lưu/sửa giao dịch qua TransactionScreenStore và cảnh báo ngân sách. Sau đó
-7/7 test migration/tích hợp cuối đạt, gồm trường hợp mở lại store V2.
-Build app Release cho iPhone đạt (không ký mã).
+**Kiểm tra ngày 11/11/2026:** 163/163 unit test macOS đạt. Lần chạy toàn bộ trên
+iPhone 18 Pro Simulator (iOS 27.2) đạt 167/167 test, gồm migration, backup,
+so sánh tháng, lịch neo ngày và runtime sinh sau mở khóa. Nhóm 19/19 test hồi quy cuối
+cho chu kỳ rất lớn, danh mục lưu trữ, runtime và rollback restore cũng đạt. Build Release iPhone
+đạt (không ký mã).
 
-Schema SwiftData V2 thêm Budget, migration nhẹ từ V1. Các model V1 được đóng
-băng riêng để tránh lỗi checksum trùng khi mở app trên iOS. Test giữ nguyên ví,
-danh mục, giao dịch, quan hệ và số dư của store V1/unversioned. Backup xuất v2,
-vẫn khôi phục v1; cả golden-v1 và golden-v2 đều có test checksum.
-Chủ dự án đã xác nhận xuất backup trước khi triển khai migration.
+Schema V3 thêm RecurringRule và Transaction.recurrenceKey. Model V1/V2 được
+đóng băng; migration nhẹ từ store V1 chưa version hoặc V2 giữ nguyên ví,
+danh mục, giao dịch, số dư và hạn mức. Chủ dự án đã xác nhận backup trước V3.
+Backup xuất v3, vẫn đọc v1/v2; giữ nguyên golden-v1/v2 và thêm golden-v3.
+
+Định kỳ chỉ sinh khi app mở/foreground sau mở khóa hoặc người dùng lưu/tiếp tục
+quy tắc; không chạy nền và không chạy trong restore. Mỗi quy tắc tối đa 400 lần
+mỗi lượt, phần dư để lần mở sau. Con trỏ và khóa được save cùng giao dịch:
+xóa giao dịch không làm sinh lại, sửa quy tắc giữ con trỏ, restore giữ cả hai.
+Form báo trước các giao dịch quá khứ sẽ sinh ngay. Đợt sinh mới đếm từng giao
+dịch vào mốc 20 thay đổi để backup, cảnh báo ngân sách tính trước/sau cả đợt.
+
+Biểu đồ không thay thế danh sách chữ. So sánh tháng hiện tại dùng cùng số ngày
+của tháng trước (kẹp cuối tháng ngắn); tháng đã qua so cả tháng. Tiền tính bằng
+Int64, Double chỉ phục vụ vẽ biểu đồ và các tỷ lệ hiển thị.
 
 Chưa nghiệm thu thao tác giao diện với Dynamic Type/VoiceOver và cài đè trên
 iPhone thật/SideStore. Các checklist thiết bị bên dưới vẫn cần chủ dự án thực hiện.
