@@ -205,7 +205,10 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ### Ô nhập số tiền
 - Dùng bàn phím số tự vẽ (không dùng TextField), gồm các phím 0-9, "000", xóa lùi. Không có con trỏ, không dán chữ, không có chỗ để gõ ký tự lạ.
 - State gốc là `Int64`. Chuỗi hiển thị luôn được sinh ra từ `Int64`, không bao giờ ngược lại.
-- Giới hạn tối đa 999.999.999.999 đ. Vượt thì bỏ qua lần bấm đó, không báo lỗi.
+- Mỗi toán hạng tối đa 999.999.999.999 đ. Vượt thì bỏ qua lần bấm đó.
+- Chỉ form giao dịch có bàn phím 4 cột với `+`, `−`, `=`, `C`; form ví và hạn mức giữ bàn phím số 3 cột. Cộng/trừ từ trái sang phải bằng Int64, kiểm tra tràn số và bỏ qua lần bấm gây tràn.
+- Kết quả tạm thời được âm hoặc bằng 0. Chỉ lưu khi kết quả trong 1…999.999.999.999; ngoài khoảng này nút Lưu vô hiệu và có giải thích. Không bắt bấm `=` trước khi lưu, kể cả đang chờ toán tử. `=` gộp biểu thức nếu kết quả không âm; `C` xóa hết.
+- Biểu thức sinh từ các toán hạng Int64, không parse ngược chuỗi hiển thị. Đổi Chi/Thu/Chuyển giữ biểu thức, lưu giao dịch mới thì xóa biểu thức.
 - Định dạng: dấu chấm phân cách hàng nghìn, hậu tố "₫", ví dụ `1.250.000 ₫`. Dùng `monospacedDigit`.
 - Mọi định dạng tiền đi qua một `MoneyFormatter` duy nhất trong Services.
 
