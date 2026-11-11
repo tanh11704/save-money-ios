@@ -131,7 +131,7 @@ private struct StatsReportSections: View {
             }
             budgetSection
             if report.isEmpty { Section { Text("Tháng này chưa có giao dịch.").foregroundStyle(.secondary) } }
-            categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.")
+            categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.", report: report)
             categorySection("Thu theo danh mục", rows: report.incomes, empty: "Không có khoản thu.")
         case .failure(let error):
             Section { Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red) }
@@ -179,6 +179,7 @@ private struct StatsReportSections: View {
 
     private func categorySection(_ title: String, rows: [StatsService.CategoryTotal], empty: String, report: StatsService.Report? = nil) -> some View {
         Section(title) {
+            if let report, report.expense > 0 { StatsCategoryChart(slices: StatsService.expenseSlices(report), total: report.expense) }
             if rows.isEmpty { Text(empty).foregroundStyle(.secondary) }
             ForEach(rows) { row in
                 Button { select(row.key) } label: {
