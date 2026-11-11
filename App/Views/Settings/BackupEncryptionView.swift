@@ -11,6 +11,8 @@ struct BackupEncryptionView: View {
     @State private var disabling = false
     @State private var message: String?
     private var enabled: Bool { store.scheduler.exporter.protection.enabled }
+    private enum Field: Hashable { case old, password, confirmation }
+    @FocusState private var focus: Field?
     var body: some View {
         Form {
             Section("Mã hóa bản sao lưu") {
@@ -21,13 +23,13 @@ struct BackupEncryptionView: View {
             }
             if enabled {
                 Section("Mật khẩu hiện tại") {
-                    SecureField("Mật khẩu cũ / cần kiểm tra", text: $oldPassword).frame(minHeight: 44)
+                    SecureField("Mật khẩu cũ / cần kiểm tra", text: $oldPassword).focused($focus, equals: .old).submitLabel(.next).onSubmit { focus = .password }.frame(minHeight: 44)
                     Button("Kiểm tra mật khẩu") { verifyPassword() }.frame(minHeight: 44).disabled(busy || oldPassword.isEmpty)
                 }
             }
             Section(enabled ? "Đổi mật khẩu" : "Bật mã hóa") {
-                SecureField("Mật khẩu mới (ít nhất 10 ký tự)", text: $password).frame(minHeight: 44)
-                SecureField("Nhập lại mật khẩu mới", text: $confirmation).frame(minHeight: 44)
+                SecureField("Mật khẩu mới (ít nhất 10 ký tự)", text: $password).focused($focus, equals: .password).submitLabel(.next).onSubmit { focus = .confirmation }.frame(minHeight: 44)
+                SecureField("Nhập lại mật khẩu mới", text: $confirmation).focused($focus, equals: .confirmation).submitLabel(.done).onSubmit { focus = nil }.frame(minHeight: 44)
                 Toggle("Tôi đã ghi mật khẩu ở nơi an toàn ngoài iPhone này", isOn: $recorded).frame(minHeight: 44)
                 if enabled { Toggle("Mã hóa lại các bản đang giữ bằng mật khẩu mới", isOn: $reencrypt).frame(minHeight: 44) }
                 if busy { ProgressView("Đang tạo khóa và kiểm tra backup…") }
@@ -38,6 +40,8 @@ struct BackupEncryptionView: View {
             if let message { Text(message).fixedSize(horizontal: false, vertical: true) }
         }
         .textInputAutocapitalization(.never).autocorrectionDisabled()
+        .scrollDismissesKeyboard(.interactively)
+        .keyboardDoneButton($focus)
         .navigationTitle("Mã hóa backup")
         .confirmationDialog("Tắt mã hóa backup mới?", isPresented: $disabling, titleVisibility: .visible) {
             Button("Tắt mã hóa", role: .destructive) {

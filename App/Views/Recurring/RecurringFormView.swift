@@ -6,6 +6,8 @@ struct RecurringFormView: View {
     let original: RecurringRule?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    private enum Field: Hashable { case name, note }
+    @FocusState private var focus: Field?
     @State private var draft: RecurringDraft
     @State private var expression: AmountExpression
     @State private var hasEnd: Bool
@@ -30,7 +32,9 @@ struct RecurringFormView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                TextField("Tên (không bắt buộc)", text: $draft.name, axis: .vertical).lineLimit(1...5).textFieldStyle(.roundedBorder).frame(minHeight: 44)
+                TextField("Tên (không bắt buộc)", text: $draft.name)
+                    .focused($focus, equals: .name).submitLabel(.next).onSubmit { focus = .note }
+                    .accessibilityIdentifier("recurring.name").textFieldStyle(.roundedBorder).frame(minHeight: 44)
                 Picker("Loại", selection: transaction.kind) {
                     Text("Chi").tag(TransactionKind.expense); Text("Thu").tag(TransactionKind.income); Text("Chuyển").tag(TransactionKind.transfer)
                 }.pickerStyle(.menu).frame(minHeight: 44)
@@ -51,7 +55,7 @@ struct RecurringFormView: View {
                 }
                 wallets(destination: false)
                 if draft.transaction.kind == .transfer { wallets(destination: true) }
-                TextField("Ghi chú", text: transaction.note, axis: .vertical).textFieldStyle(.roundedBorder).frame(minHeight: 44)
+                TextField("Ghi chú", text: transaction.note, axis: .vertical).focused($focus, equals: .note).textFieldStyle(.roundedBorder).frame(minHeight: 44)
                 VStack(alignment: .leading) {
                     Text("Chu kỳ").font(.headline)
                     Picker("Chu kỳ", selection: $draft.frequency) {
@@ -82,9 +86,11 @@ struct RecurringFormView: View {
                 if original != nil { Text("Thay đổi chỉ áp dụng cho các lần sau; giao dịch đã sinh giữ nguyên.").font(.footnote).foregroundStyle(.secondary) }
             }.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).padding()
         }
+        .keyboardDoneButton($focus)
+        .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
-                if keypadVisible {
+                if keypadVisible && focus == nil {
                     Button(typeSize.isAccessibilitySize ? "Ẩn phím" : "Ẩn bàn phím") { keypadVisible = false }.frame(minHeight: 44).accessibilityLabel("Ẩn bàn phím")
                     MoneyKeypad(showsOperators: true) { key in expression.apply(key); draft.transaction.amount = expression.result ?? 0 }
                 }

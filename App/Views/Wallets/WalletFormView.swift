@@ -12,7 +12,8 @@ struct WalletFormView: View {
     @State private var magnitude: Int64
     @State private var isDebt: Bool
     @State private var saveError: String?
-    @FocusState private var nameFocused: Bool
+    private enum Field: Hashable { case name }
+    @FocusState private var focus: Field?
 
     init(store: TransactionScreenStore, original: Wallet? = nil) {
         self.store = store
@@ -48,8 +49,8 @@ struct WalletFormView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Tên ví").font(.headline)
-                TextField("Tên ví, tối đa 30 ký tự", text: $name, axis: .vertical).lineLimit(1...3)
-                    .textFieldStyle(.roundedBorder).focused($nameFocused).frame(minHeight: 44)
+                TextField("Tên ví, tối đa 30 ký tự", text: $name)
+                    .textFieldStyle(.roundedBorder).focused($focus, equals: .name).submitLabel(.done).onSubmit { focus = nil }.frame(minHeight: 44)
                     .accessibilityIdentifier("wallet.name")
                 if let nameMessage { Text(nameMessage).font(.footnote).foregroundStyle(.red) }
                 Text("Loại ví").font(.headline)
@@ -75,9 +76,7 @@ struct WalletFormView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 8) {
-                if nameFocused {
-                    Button("Xong tên ví") { nameFocused = false }.frame(minHeight: 44)
-                } else {
+                if focus == nil {
                     if keypadVisible { MoneyKeypad { magnitude = MoneyFormatter.applying($0, to: magnitude); saveError = nil } }
                     Button(action: save) { Text("Lưu ví").frame(maxWidth: .infinity, minHeight: 44) }
                         .buttonStyle(.borderedProminent)
@@ -85,6 +84,8 @@ struct WalletFormView: View {
                 }
             }.padding(8).background(.bar)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .keyboardDoneButton($focus)
         .task { if typeSize.isAccessibilitySize { keypadVisible = false } }
         .onChange(of: name) { _, _ in saveError = nil }
         .onChange(of: kind) { _, _ in saveError = nil }

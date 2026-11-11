@@ -6,6 +6,8 @@ struct CategoryFormView: View {
     let original: Category?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    private enum Field: Hashable { case name }
+    @FocusState private var focus: Field?
     @State private var draft: CategoryDraft
     @State private var saveError: String?
 
@@ -28,9 +30,10 @@ struct CategoryFormView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Tên danh mục").font(.headline)
-                TextField("Tên danh mục, tối đa 30 ký tự", text: $draft.name, axis: .vertical).lineLimit(1...3)
+                TextField("Tên danh mục, tối đa 30 ký tự", text: $draft.name)
                     .textFieldStyle(.roundedBorder).frame(minHeight: 44)
                     .accessibilityIdentifier("category.name")
+                    .focused($focus, equals: .name).submitLabel(.done).onSubmit { focus = nil }
                 if let message = saveError ?? validationMessage {
                     Text(message).font(.footnote).foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
@@ -63,6 +66,7 @@ struct CategoryFormView: View {
                     .buttonStyle(.borderedProminent).disabled(validationMessage != nil)
             }.padding()
         }
+        .keyboardDoneButton($focus)
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(original == nil ? "Thêm danh mục" : "Sửa danh mục")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }

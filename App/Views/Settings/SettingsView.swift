@@ -158,18 +158,22 @@ private struct BackupShareSheet: UIViewControllerRepresentable {
 private struct BackupPasswordView: View {
     @ObservedObject var store: BackupScreenStore
     let request: BackupScreenStore.PasswordRequest
+    private enum Field: Hashable { case password }
+    @FocusState private var focus: Field?
     @State private var password = ""
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             Form {
                 Text(request.name).font(.caption).fixedSize(horizontal: false, vertical: true)
-                SecureField("Mật khẩu backup", text: $password).textInputAutocapitalization(.never).autocorrectionDisabled().frame(minHeight: 44)
+                SecureField("Mật khẩu backup", text: $password).focused($focus, equals: .password).submitLabel(.done).onSubmit { focus = nil }.textInputAutocapitalization(.never).autocorrectionDisabled().frame(minHeight: 44)
                 if let error = store.error { Text(error).foregroundStyle(.red) }
                 if store.unlockingBackup { ProgressView("Đang giải mã…") }
                 Button("Mở bản sao lưu") { store.unlockBackup(password: password); password = "" }.frame(minHeight: 44).disabled(password.isEmpty || store.unlockingBackup)
                 Text("Sai mật khẩu hoặc file bị sửa đều không mở được. Dữ liệu hiện tại được giữ nguyên.").font(.footnote).foregroundStyle(.secondary)
-            }.navigationTitle("Mở backup mã hóa")
+            }.scrollDismissesKeyboard(.interactively)
+                .keyboardDoneButton($focus)
+                .navigationTitle("Mở backup mã hóa")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
         }
     }

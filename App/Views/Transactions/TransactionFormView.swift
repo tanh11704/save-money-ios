@@ -18,7 +18,8 @@ struct TransactionFormView: View {
     @State private var saved = false
     @State private var saving = false
     @State private var keypadVisible = true
-    @FocusState private var noteFocused: Bool
+    private enum Field: Hashable { case note }
+    @FocusState private var focus: Field?
 
     init(store: TransactionScreenStore, original: Transaction? = nil) {
         self.store = store
@@ -68,7 +69,7 @@ struct TransactionFormView: View {
                 DisclosureGroup("Ghi chú", isExpanded: $noteExpanded) {
                     TextField("Ghi chú không bắt buộc", text: $draft.note, axis: .vertical)
                         .lineLimit(2...5)
-                        .focused($noteFocused)
+                        .focused($focus, equals: .note)
                         .frame(minHeight: 44)
                         .textFieldStyle(.roundedBorder)
                         .padding(.top, 8)
@@ -86,14 +87,9 @@ struct TransactionFormView: View {
             .padding()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if noteFocused {
-                Button("Xong ghi chú") { noteFocused = false }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .buttonStyle(.borderedProminent)
-                    .padding(8)
-                    .background(.bar)
-            } else { inputControls }
+            if focus == nil { inputControls }
         }
+        .keyboardDoneButton($focus)
         .scrollDismissesKeyboard(.interactively)
         .task {
             guard !initialized else { return }
