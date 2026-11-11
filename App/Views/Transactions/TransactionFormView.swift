@@ -5,6 +5,9 @@ import UIKit
 struct TransactionFormView: View {
     @ObservedObject var store: TransactionScreenStore
     let original: Transaction?
+    private let prefillWallet: Wallet?
+    var onNeedsWallet: (() -> Void)? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var expression: AmountExpression
@@ -16,21 +19,25 @@ struct TransactionFormView: View {
     @State private var noteExpanded = false
     @State private var saveError: String?
     @State private var saved = false
+    @State private var savedMessage = ""
+    @State private var saveTrigger = 0
     @State private var saving = false
     @State private var keypadVisible = true
     private enum Field: Hashable { case note }
     @FocusState private var focus: Field?
 
-    init(store: TransactionScreenStore, original: Transaction? = nil) {
+    init(store: TransactionScreenStore, original: Transaction? = nil, onNeedsWallet: (() -> Void)? = nil, prefillKind: TransactionKind? = nil, prefillWallet: Wallet? = nil) {
         self.store = store
         self.original = original
+        self.prefillWallet = prefillWallet
+        self.onNeedsWallet = onNeedsWallet
         _expression = State(initialValue: AmountExpression(amount: original?.amount ?? 0))
         if let original {
             _draft = State(initialValue: TransactionDraft(amount: original.amount,
                 kind: TransactionKind(rawValue: original.kindRaw) ?? .expense,
                 date: original.date, note: original.note, wallet: original.wallet,
                 toWallet: original.toWallet, category: original.category))
-        } else { _draft = State(initialValue: TransactionDraft()) }
+        } else { _draft = State(initialValue: TransactionDraft(kind: prefillKind ?? .expense, wallet: prefillWallet)) }
     }
 
     private var columns: [GridItem] {
@@ -52,8 +59,7 @@ struct TransactionFormView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if original == nil && !store.wallets.contains(where: { !$0.isArchived }) {
-                    Text("Chưa có ví đang dùng. Sang tab Ví để thêm hoặc khôi phục ví trước khi nhập giao dịch.")
-                        .foregroundStyle(.secondary)
+                    EmptyState(image: "illus-empty-wallet", title: "Chưa có ví", message: "Thêm ví để ghi giao dịch", symbol: "wallet.bifold", actionTitle: "Thêm ví", action: onNeedsWallet)
                         .accessibilityIdentifier("transaction.noActiveWallet")
                 }
                 kindPicker
@@ -81,14 +87,16 @@ struct TransactionFormView: View {
                     Button("Tải lại dữ liệu") { reload() }
                         .frame(minHeight: 44)
                 }
-                Text("Chưa nhập dữ liệu thật trước khi hoàn tất sao lưu và khôi phục.")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
             .padding()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if focus == nil { inputControls }
         }
+        .tint(Color(draft.kind == .income ? "Income" : draft.kind == .expense ? "Expense" : "Transfer"))
+        .sensoryFeedback(.success, trigger: saveTrigger) { _, _ in !reduceMotion }
+        .sensoryFeedback(.selection, trigger: draft.category?.id) { _, _ in !reduceMotion }
+        .overlay(alignment: .top) { if saved { Toast(message: savedMessage).accessibilityIdentifier("transaction.saved") } }
         .keyboardDoneButton($focus)
         .scrollDismissesKeyboard(.interactively)
         .task {
@@ -99,6 +107,7 @@ struct TransactionFormView: View {
                 draft = TransactionFormSelection.restoring(draft, wallets: store.wallets,
                     categories: store.categories, recent: store.recent)
             }
+            if let prefillWallet { draft.wallet = prefillWallet }
             if routedPrefillNeedsSelection { draft.category = nil; draft.toWallet = nil }
             noteExpanded = !draft.note.isEmpty
         }
@@ -132,7 +141,7 @@ struct TransactionFormView: View {
         }
         .navigationTitle(original == nil ? "Thêm giao dịch" : "Sửa giao dịch")
         .toolbar {
-            if original != nil {
+            if original != nil || prefillWallet != nil {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Hủy") { dismiss() }.frame(minHeight: 44)
                 }
@@ -156,13 +165,13 @@ struct TransactionFormView: View {
     }
 
     @ViewBuilder private var kindOptions: some View {
-        Text("Chi").tag(TransactionKind.expense)
-        Text("Thu").tag(TransactionKind.income)
-        Text("Chuyển").tag(TransactionKind.transfer)
+        Label("Chi", systemImage: "arrow.down.circle").tag(TransactionKind.expense)
+        Label("Thu", systemImage: "arrow.up.circle").tag(TransactionKind.income)
+        Label("Chuyển", systemImage: "arrow.left.arrow.right.circle").tag(TransactionKind.transfer)
     }
 
     private var amountDisplay: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Card { VStack(alignment: .leading, spacing: 8) {
             Text("Số tiền").font(.headline)
             if expression.hasOperator {
                 Text(expression.displayText).font(.title3).monospacedDigit()
@@ -173,7 +182,7 @@ struct TransactionFormView: View {
             Button { setKeypad(visible: true) } label: {
                 HStack {
                     Text((expression.hasOperator && draft.amount >= 0 ? "= " : "") + MoneyFormatter.string(from: draft.amount))
-                        .font(.largeTitle.weight(.semibold))
+                        .font(.system(.largeTitle, design: .rounded).bold())
                         .monospacedDigit()
                         .minimumScaleFactor(0.25)
                         .lineLimit(1)
@@ -190,9 +199,7 @@ struct TransactionFormView: View {
             .accessibilityLabel("\(TransactionPresentation.kindTitle(draft.kind)), \(expression.hasOperator ? expression.displayText.replacingOccurrences(of: "+", with: "cộng").replacingOccurrences(of: "−", with: "trừ") + ", bằng " : "số tiền ")\(MoneyFormatter.string(from: draft.amount).replacingOccurrences(of: "₫", with: "đồng"))")
             .accessibilityHint(keypadVisible ? "" : "Mở bàn phím số")
             .accessibilityIdentifier("transaction.amount")
-            Text(keypadVisible ? "Tối đa 999.999.999.999 ₫" : "Chạm vào số tiền để mở bàn phím")
-                .font(.caption).foregroundStyle(.secondary)
-        }
+        } }
     }
 
     private var categoryPicker: some View {
@@ -202,15 +209,24 @@ struct TransactionFormView: View {
             if visibleCategories.isEmpty {
                 Text("Không có danh mục phù hợp để chọn.").foregroundStyle(.secondary)
             }
-            LazyVGrid(columns: columns, alignment: .leading) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: typeSize.isAccessibilitySize ? 2 : 4), alignment: .leading) {
                 ForEach(visibleCategories, id: \.id) { category in
-                    SelectionChip(title: category.name + (category.isArchived ? " (đã lưu trữ)" : ""),
-                                  subtitle: subtitles[category.id],
-                                  icon: category.icon, selected: draft.category?.id == category.id) {
+                    let selected = draft.category?.id == category.id
+                    Button {
                         draft.category = category
                         saveError = nil
                         setKeypad(visible: false)
-                    }
+                    } label: {
+                        VStack(spacing: 6) {
+                            CategoryIcon(icon: category.icon, size: 48)
+                                .overlay(alignment: .topTrailing) { if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, Color.accentColor).accessibilityHidden(true) } }
+                            Text(category.name).font(.caption).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                            if let subtitle = subtitles[category.id] { Text(subtitle).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                        }.frame(maxWidth: .infinity, minHeight: 92, alignment: .top).padding(6)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
+                    }.buttonStyle(.plain)
+                    .accessibilityLabel([category.name, subtitles[category.id]].compactMap { $0 }.joined(separator: ", "))
+                    .accessibilityAddTraits(selected ? [.isSelected] : [])
                 }
             }
         }
@@ -223,18 +239,30 @@ struct TransactionFormView: View {
         return VStack(alignment: .leading, spacing: 8) {
             Text(destination ? "Đến ví" : draft.kind == .transfer ? "Từ ví" : "Ví").font(.headline)
             if wallets.isEmpty { Text("Không có ví phù hợp để chọn.").foregroundStyle(.secondary) }
-            LazyVGrid(columns: columns, alignment: .leading) {
-                ForEach(wallets, id: \.id) { wallet in
-                    SelectionChip(title: wallet.name + (wallet.isArchived ? " (đã lưu trữ)" : ""),
-                        subtitle: store.balances[wallet.id],
-                        selected: (destination ? draft.toWallet?.id : draft.wallet?.id) == wallet.id) {
-                        if destination { draft.toWallet = wallet }
-                        else { draft = TransactionFormSelection.selectingWallet(wallet, in: draft, available: store.wallets) }
-                        saveError = nil
-                        setKeypad(visible: false)
-                    }
-                }
+            Group {
+                if typeSize.isAccessibilitySize { VStack { walletChoices(wallets, destination: destination) } }
+                else { ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 12) { walletChoices(wallets, destination: destination) } } }
             }
+        }
+    }
+
+    @ViewBuilder private func walletChoices(_ wallets: [Wallet], destination: Bool) -> some View {
+        ForEach(wallets, id: \.id) { wallet in
+            let selected = (destination ? draft.toWallet?.id : draft.wallet?.id) == wallet.id
+            Button {
+                if destination { draft.toWallet = wallet }
+                else { draft = TransactionFormSelection.selectingWallet(wallet, in: draft, available: store.wallets) }
+                saveError = nil
+                setKeypad(visible: false)
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(wallet.name, systemImage: (WalletKind(rawValue: wallet.kindRaw) ?? .other).icon)
+                    Text(store.balances[wallet.id] ?? "Chưa tính được").font(.caption).monospacedDigit()
+                    if selected { Label("Đã chọn", systemImage: "checkmark.circle.fill").font(.caption) }
+                }.padding(12).frame(minWidth: 140, minHeight: 80, alignment: .leading)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
+            }.buttonStyle(.plain).accessibilityAddTraits(selected ? [.isSelected] : [])
         }
     }
 
@@ -263,10 +291,6 @@ struct TransactionFormView: View {
 
     private var inputControls: some View {
         VStack(spacing: 8) {
-            if saved {
-                Text("Đã lưu").foregroundStyle(.secondary)
-                    .accessibilityIdentifier("transaction.saved")
-            }
             if keypadVisible {
                 HStack {
                     Spacer()
@@ -312,8 +336,8 @@ struct TransactionFormView: View {
         do {
             try TransactionValidator.validate(draft, editing: original)
             try store.save(draft, editing: original?.id)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            UIAccessibility.post(notification: .announcement, argument: "Đã lưu")
+            savedMessage = "Đã lưu \((draft.kind == .expense ? "−" : draft.kind == .income ? "+" : "") + MoneyFormatter.string(from: draft.amount)) · \(draft.category?.name ?? "Chuyển tiền")"
+            saveTrigger += 1
             if original != nil { dismiss() }
             else {
                 expression = AmountExpression()
@@ -328,7 +352,8 @@ struct TransactionFormView: View {
     /// The custom keypad is tall; collapsing it frees the scroll area so lower chips stay reachable.
     private func setKeypad(visible: Bool) {
         guard keypadVisible != visible else { return }
-        withAnimation(.easeOut(duration: 0.2)) { keypadVisible = visible }
+        if reduceMotion { keypadVisible = visible }
+        else { withAnimation(.easeOut(duration: 0.2)) { keypadVisible = visible } }
     }
 
     private func reload() {

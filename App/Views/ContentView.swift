@@ -11,6 +11,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = TransactionScreenStore()
     @State private var showingRecurring = false
+    @State private var dismissedBanner: String?
     @State private var selectedTab = 0
 
     var body: some View {
@@ -18,13 +19,13 @@ struct ContentView: View {
             if store.ready {
                 TabView(selection: $selectedTab) {
                     NavigationStack {
-                        TransactionFormView(store: store)
+                        TransactionFormView(store: store, onNeedsWallet: { selectedTab = 2 })
                             .navigationTitle("Thêm giao dịch")
                     }
                     .tabItem { Label("Thêm", systemImage: "plus.circle") }
                     .tag(0)
                     NavigationStack {
-                        TransactionHistoryView(store: store)
+                        TransactionHistoryView(store: store, onAdd: { selectedTab = 0 })
                     }
                     .tabItem { Label("Lịch sử", systemImage: "list.bullet") }
                     .tag(1)
@@ -72,13 +73,16 @@ struct ContentView: View {
             do { try store.reload() } catch { store.errorMessage = "Đã khôi phục, nhưng chưa tải lại được dữ liệu. Hãy mở lại app." }
         }
         .overlay(alignment: .top) {
-            if let message = runtime.recurringMessage {
-                Button { showingRecurring = true } label: {
-                    Text(message).font(.footnote).padding().frame(maxWidth: .infinity, minHeight: 44).background(.regularMaterial)
-                }
-            } else if let error = settings.scheduler.lastError {
-                Text(error).font(.footnote).padding().frame(maxWidth: .infinity)
-                    .background(.regularMaterial).accessibilityAddTraits(.isStaticText)
+            if let message = runtime.recurringMessage, dismissedBanner != message {
+                VStack {
+                    Callout(level: .info, title: "Giao dịch định kỳ", message: message, actionTitle: "Xem") { showingRecurring = true }
+                    Button("Đóng", systemImage: "xmark") { dismissedBanner = message }.frame(minHeight: 44)
+                }.padding(8).background(.regularMaterial)
+            } else if let error = settings.scheduler.lastError, dismissedBanner != error {
+                VStack {
+                    Callout(level: .danger, title: "Sao lưu cần kiểm tra", message: error, actionTitle: "Xem") { selectedTab = 4 }
+                    Button("Đóng", systemImage: "xmark") { dismissedBanner = error }.frame(minHeight: 44)
+                }.padding(8).background(.regularMaterial)
             }
         }
         .sheet(isPresented: $showingRecurring) {

@@ -32,10 +32,9 @@ struct TransactionRow: View {
 
     private func description(_ transaction: Transaction) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: transaction.kindRaw == "transfer" ? "arrow.left.arrow.right" : transaction.category?.icon ?? "tag")
-                .foregroundStyle(.secondary).accessibilityHidden(true)
+            CategoryIcon(icon: transaction.kindRaw == "transfer" ? "arrow.left.arrow.right" : transaction.category?.icon ?? "tag")
             VStack(alignment: .leading, spacing: 4) {
-                Text(TransactionPresentation.title(transaction))
+                Text(TransactionPresentation.title(transaction)).fontWeight(.semibold)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 if transaction.recurrenceKey != nil {
@@ -52,9 +51,7 @@ struct TransactionRow: View {
     }
 
     private func amount(_ transaction: Transaction) -> some View {
-        Text(TransactionPresentation.amount(transaction))
-            .font(.headline).monospacedDigit()
-            .foregroundStyle(transaction.kindRaw == "income" ? Color.green : Color.primary)
+        AmountText(amount: transaction.amount, kind: TransactionKind(rawValue: transaction.kindRaw))
             .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
             .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
             .minimumScaleFactor(0.25)

@@ -3,6 +3,8 @@ import SwiftUI
 @MainActor
 struct TransactionHistoryView: View {
     @ObservedObject var store: TransactionScreenStore
+    @State private var filter = HistoryFilter()
+    var onAdd: (() -> Void)? = nil
     @State private var editing: Transaction?
     @State private var pendingDeletion: Transaction?
     @State private var confirmingDeletion = false
@@ -10,12 +12,15 @@ struct TransactionHistoryView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Tổng số dư").font(.headline)
-                    Text(store.totalBalance).font(.title2).monospacedDigit()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("history.totalBalance")
+                StatTile(title: "Tổng số dư", value: store.totalBalance, icon: "wallet.bifold")
+                    .accessibilityIdentifier("history.totalBalance")
+                if let report = try? StatsService.report(month: ReportingMonth(), transactions: store.transactions) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack { StatTile(title: "Thu tháng này", value: report.incomeText, icon: "arrow.up.circle"); StatTile(title: "Chi tháng này", value: report.expenseText, icon: "arrow.down.circle") }
+                        VStack { StatTile(title: "Thu tháng này", value: report.incomeText, icon: "arrow.up.circle"); StatTile(title: "Chi tháng này", value: report.expenseText, icon: "arrow.down.circle") }
+                    }
                 }
+                filters
                 .accessibilityElement(children: .combine)
             }
             if let message = store.errorMessage {
@@ -25,12 +30,13 @@ struct TransactionHistoryView: View {
                 }
             }
             if store.transactions.isEmpty {
-                Text("Chưa có giao dịch. Sang tab Thêm để ghi khoản đầu tiên.")
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical)
+                EmptyState(image: "illus-empty-history", title: "Chưa có giao dịch", message: "Bắt đầu ghi chi tiêu", actionTitle: "Ghi khoản đầu tiên", action: onAdd)
             }
-            ForEach(TransactionGrouping.group(store.transactions)) { day in
-                Section(TransactionGrouping.title(for: day.date)) {
+            if !store.transactions.isEmpty && filter.apply(to: store.transactions).isEmpty {
+                EmptyState(image: "illus-empty-search", title: "Không có kết quả", message: "Thử đổi tìm kiếm hoặc bộ lọc", symbol: "magnifyingglass", actionTitle: "Xóa bộ lọc") { filter = HistoryFilter() }
+            }
+            ForEach(TransactionGrouping.group(filter.apply(to: store.transactions))) { day in
+                Section {
                     ForEach(day.transactions, id: \.id) { transaction in
                         Button { editing = transaction } label: { TransactionRow(transaction: transaction) }
                             .buttonStyle(.plain)
@@ -39,14 +45,19 @@ struct TransactionHistoryView: View {
                             .accessibilityHint("Chạm hai lần để sửa giao dịch")
                             .accessibilityAction(named: Text("Xóa giao dịch")) { requestDeletion(transaction) }
                             .swipeActions(allowsFullSwipe: false) {
+                                Button { editing = transaction } label: { Label("Sửa", systemImage: "pencil") }.tint(.accentColor)
                                 Button(role: .destructive) { requestDeletion(transaction) } label: {
                                     Label("Xóa", systemImage: "trash")
                                 }
                             }
                     }
+                } header: {
+                    HStack { Text(TransactionGrouping.title(for: day.date)); Spacer(); if let expense = HistoryFilter.expenseText(for: day.transactions) { Text(expense).monospacedDigit() } }
                 }
             }
         }
+        .searchable(text: $filter.query, prompt: "Ghi chú hoặc danh mục")
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Lịch sử")
         .refreshable { reload() }
         .sheet(item: $editing) { transaction in
@@ -64,6 +75,30 @@ struct TransactionHistoryView: View {
             if let transaction = pendingDeletion {
                 Text("\(TransactionPresentation.title(transaction)) · \(TransactionPresentation.amount(transaction)). Thao tác này không thể hoàn tác.")
             }
+        }
+    }
+
+    private var filters: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack {
+                Menu {
+                    Button("Tất cả ví") { filter.walletID = nil }
+                    ForEach(store.wallets, id: \.id) { wallet in Button(wallet.name) { filter.walletID = wallet.id } }
+                } label: { Label(store.wallets.first { $0.id == filter.walletID }?.name ?? "Ví", systemImage: "wallet.bifold").frame(minHeight: 44) }
+                if filter.walletID != nil { Button { filter.walletID = nil } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Bỏ lọc ví") }
+                Menu {
+                    Button("Tất cả danh mục") { filter.categoryID = nil }
+                    ForEach(store.categories, id: \.id) { category in Button(category.name) { filter.categoryID = category.id } }
+                } label: { Label(store.categories.first { $0.id == filter.categoryID }?.name ?? "Danh mục", systemImage: "tag").frame(minHeight: 44) }
+                if filter.categoryID != nil { Button { filter.categoryID = nil } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Bỏ lọc danh mục") }
+                Menu {
+                    Button("Mọi tháng") { filter.month = nil }
+                    ForEach(Array(Set(store.transactions.map { ReportingMonth(containing: $0.date) })).sorted { $0.interval.start > $1.interval.start }, id: \.self) { month in
+                        Button(month.title) { filter.month = month }
+                    }
+                } label: { Label(filter.month?.title ?? "Tháng", systemImage: "calendar").frame(minHeight: 44) }
+                if filter.month != nil { Button { filter.month = nil } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Bỏ lọc tháng") }
+            }.buttonStyle(.bordered)
         }
     }
 
