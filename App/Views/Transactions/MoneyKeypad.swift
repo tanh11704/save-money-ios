@@ -1,8 +1,21 @@
 import SwiftUI
 
 struct MoneyKeypad: View {
+    var showsOperators: Bool = false
     let press: (MoneyFormatter.Key) -> Void
-    private let rows = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["000", "0", "delete"]]
+    private var rows: [[String]] { showsOperators ? [["1", "2", "3", "delete"], ["4", "5", "6", "minus"], ["7", "8", "9", "plus"], ["000", "0", "clear", "equals"]] : [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["000", "0", "delete"]] }
+
+    private let labels = ["plus": "+", "minus": "−", "equals": "=", "clear": "C"]
+    private let voiceLabels = ["plus": "Cộng", "minus": "Trừ", "equals": "Bằng", "clear": "Xóa hết"]
+    private func operatorKey(_ key: String) -> MoneyFormatter.Key? {
+        switch key {
+        case "plus": return .plus
+        case "minus": return .minus
+        case "equals": return .equals
+        case "clear": return .clear
+        default: return nil
+        }
+    }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -10,13 +23,14 @@ struct MoneyKeypad: View {
                 HStack(spacing: 8) {
                     ForEach(row, id: \.self) { key in
                         Button {
-                            if key == "delete" { press(.backspace) }
+                            if let operation = operatorKey(key) { press(operation) }
+                            else if key == "delete" { press(.backspace) }
                             else if key == "000" { press(.tripleZero) }
                             else if let digit = Int(key) { press(.digit(digit)) }
                         } label: {
                             Group {
                                 if key == "delete" { Image(systemName: "delete.left") }
-                                else { Text(key).monospacedDigit() }
+                                else { Text(labels[key] ?? key).monospacedDigit() }
                             }
                             .font(.title2)
                             .frame(maxWidth: .infinity, minHeight: 44)
@@ -24,7 +38,8 @@ struct MoneyKeypad: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.bordered)
-                        .accessibilityLabel(key == "delete" ? "Xóa một chữ số" : key == "000" ? "Ba số không" : key)
+                        .tint(operatorKey(key) != nil ? Color.accentColor : Color.secondary)
+                        .accessibilityLabel(voiceLabels[key] ?? (key == "delete" ? "Xóa một chữ số" : key == "000" ? "Ba số không" : key))
                         .accessibilityIdentifier("keypad.\(key)")
                     }
                 }
