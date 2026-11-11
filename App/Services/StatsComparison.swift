@@ -20,6 +20,12 @@ extension StatsService {
         let expense: Delta
         let expenseByCategory: [UUID?: Delta]
         let label: String
+        var balance: Delta? {
+            let current = income.current.subtractingReportingOverflow(expense.current)
+            let previous = income.previous.subtractingReportingOverflow(expense.previous)
+            guard !current.overflow, !previous.overflow else { return nil }
+            return try? StatsService.delta(current: current.partialValue, previous: previous.partialValue)
+        }
     }
 
     static func comparison(month: ReportingMonth, now: Date, transactions: [Transaction]) throws -> Comparison {

@@ -9,6 +9,15 @@ private typealias Category = SaveMoney.Category
 #endif
 
 final class StatsComparisonTests: XCTestCase {
+    func testBalanceTrendIncludesExpensesAndHandlesCrossingZero() throws {
+        let wallet = Wallet(name: "Cash"), expense = Category(name: "Food", kind: .expense), income = Category(name: "Salary", kind: .income)
+        let records = [Transaction(amount: 100, kind: .expense, date: date(2026, 10, 1), wallet: wallet, category: expense), Transaction(amount: 200, kind: .income, date: date(2026, 11, 1), wallet: wallet, category: income)]
+        let result = try StatsService.comparison(month: ReportingMonth(year: 2026, month: 11), now: date(2026, 11, 10), transactions: records)
+        XCTAssertEqual(result.balance?.previous, -100)
+        XCTAssertEqual(result.balance?.current, 200)
+        XCTAssertEqual(result.balance?.difference, 300)
+        XCTAssertTrue(result.balance?.text.hasPrefix("Tăng") == true)
+    }
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date { LocalCalendar.calendar.date(from: DateComponents(year: y, month: m, day: d))! }
     func testCurrentMonthUsesSameDaysAndExcludesLaterTransactions() throws {
         let wallet = Wallet(name: "A"), category = Category(name: "Chi", kind: .expense)

@@ -13,12 +13,12 @@ struct DebtPresentation {
     }
     static func labels(transactions: [Transaction]) throws -> [UUID: Label] {
         let ordered = transactions.sorted { $0.date == $1.date ? $0.id.uuidString < $1.id.uuidString : $0.date < $1.date }
-        var previous: [Transaction] = [], result: [UUID: Label] = [:]
+        var balances: [UUID: Int64] = [:], result: [UUID: Label] = [:]
         for transaction in ordered {
-            defer { previous.append(transaction) }
             guard let person = transaction.wallet?.isPerson == true ? transaction.wallet : transaction.toWallet?.isPerson == true ? transaction.toWallet : nil else { continue }
-            let before = try BalanceCalculator.balance(for: person, transactions: previous, allowMissingCategory: true)
-            let after = try BalanceCalculator.balance(for: person, transactions: previous + [transaction], allowMissingCategory: true)
+            let before = balances[person.id] ?? person.openingBalance
+            let after = try BalanceCalculator.balance(for: person, transactions: [transaction], openingBalance: before, allowMissingCategory: true)
+            balances[person.id] = after
             let title: String
             if transaction.kindRaw == "expense" { title = "\(person.name) trả hộ · \(transaction.category?.name ?? "Chi tiêu")" }
             else if transaction.toWallet?.id == person.id { title = before < 0 ? "Trả nợ \(person.name)" : "Cho \(person.name) vay" }
@@ -31,6 +31,9 @@ struct DebtPresentation {
         }
         return result
     }
+    static func directionText(_ balance: Int64, person: Wallet) -> String {
+        balance == 0 ? "Đã xong" : balance > 0 ? "\(person.name) đang nợ bạn" : "Bạn đang nợ \(person.name)"
+    }
     static func balanceText(_ balance: Int64, person: Wallet) -> String {
         if balance == 0 { return "Đã xong" }
         let amount = MoneyFormatter.string(from: balance).replacingOccurrences(of: "−", with: "")
@@ -39,7 +42,7 @@ struct DebtPresentation {
     static func summary(person: Wallet, transactions: [Transaction]) throws -> String {
         let balance = try BalanceCalculator.balance(for: person, transactions: transactions, allowMissingCategory: true)
         let labels = try labels(transactions: transactions)
-        let lines = WalletLedger.transactions(for: person, in: transactions).sorted { $0.date < $1.date }.map {
+        let lines = WalletLedger.transactions(for: person, in: transactions).sorted { $0.date == $1.date ? $0.id.uuidString < $1.id.uuidString : $0.date < $1.date }.map {
             "\(TransactionPresentation.shortDate($0.date)): \(labels[$0.id]?.title ?? "Giao dịch") · \(MoneyFormatter.string(from: $0.amount))"
         }
         return ([balanceText(balance, person: person)] + lines).joined(separator: "\n")

@@ -30,10 +30,13 @@ struct RecurringPresentation {
         return Preview(upcoming: upcoming, catchUp: catchUp)
     }
     static func next(_ rule: RecurringRule, now: Date = Date()) -> String {
-        guard let draft = rule.draft else { return "Cần sửa quy tắc." }
+        guard rule.draft != nil else { return "Cần sửa quy tắc." }
+        return nextDate(rule).map { "Lần tới: " + TransactionPresentation.shortDate($0) } ?? "Đã kết thúc"
+    }
+    static func nextDate(_ rule: RecurringRule) -> Date? {
+        guard let draft = rule.draft else { return nil }
         let ceiling = LocalCalendar.calendar.date(from: DateComponents(year: 9999, month: 12, day: 31))!
-        let dates = RecurrenceCalculator.occurrences(start: draft.startDate, frequency: draft.frequency, interval: draft.interval,
-            end: draft.endDate, after: rule.generatedThrough, through: ceiling, limit: 1)
-        return dates.first.map { "Lần tới: " + TransactionPresentation.shortDate($0) } ?? "Đã kết thúc"
+        return RecurrenceCalculator.occurrences(start: draft.startDate, frequency: draft.frequency, interval: draft.interval,
+            end: draft.endDate, after: rule.generatedThrough, through: ceiling, limit: 1).first
     }
 }

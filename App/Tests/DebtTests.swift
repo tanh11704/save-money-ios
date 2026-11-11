@@ -8,6 +8,29 @@ import SwiftData
 
 @MainActor
 final class DebtTests: XCTestCase {
+    func testGoldenV4AndAllOlderGoldenVersionsRemainReadable() throws {
+        #if SWIFT_PACKAGE
+        let bundle = Bundle.module
+        #else
+        let bundle = Bundle(for: Self.self)
+        #endif
+        for version in 1...4 {
+            let url = try XCTUnwrap(bundle.url(forResource: "golden-v\(version)", withExtension: "json", subdirectory: "Fixtures"))
+            let file = try BackupValidator.read(Data(contentsOf: url)).file
+            XCTAssertEqual(file.schemaVersion, version)
+            XCTAssertEqual(file.payload.wallets.filter { $0.kind == "person" }.count, version == 4 ? 1 : 0)
+        }
+    }
+    func testEqualDatesUseIDOrderForDebtLabels() throws {
+        let cash = Wallet(name: "Cash"), person = Wallet(name: "Lan", kind: .person)
+        let date = Date()
+        let lend = Transaction(amount: 100, kind: .transfer, date: date, wallet: cash, toWallet: person)
+        let collect = Transaction(amount: 150, kind: .transfer, date: date, wallet: person, toWallet: cash)
+        lend.id = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        collect.id = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        XCTAssertEqual(try DebtPresentation.labels(transactions: [collect, lend]), try DebtPresentation.labels(transactions: [lend, collect]))
+        XCTAssertEqual(try DebtPresentation.labels(transactions: [collect, lend])[collect.id]?.title, "Lan trả nợ")
+    }
     private func scenario() -> ([Wallet], [Transaction]) {
         let cash = Wallet(name: "Cash", openingBalance: 2_000_000), bank = Wallet(name: "Bank", openingBalance: 1_000_000)
         let lan = Wallet(name: "Lan", kind: .person), nam = Wallet(name: "Nam", kind: .person)
