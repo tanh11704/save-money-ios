@@ -7,6 +7,7 @@ struct TransactionFormView: View {
     let original: Transaction?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var expression: AmountExpression
     @State private var draft: TransactionDraft
     @State private var initialized = false
     @State private var showingDatePicker = false
@@ -20,6 +21,7 @@ struct TransactionFormView: View {
     init(store: TransactionScreenStore, original: Transaction? = nil) {
         self.store = store
         self.original = original
+        _expression = State(initialValue: AmountExpression(amount: original?.amount ?? 0))
         if let original {
             _draft = State(initialValue: TransactionDraft(amount: original.amount,
                 kind: TransactionKind(rawValue: original.kindRaw) ?? .expense,
@@ -150,9 +152,15 @@ struct TransactionFormView: View {
     private var amountDisplay: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Số tiền").font(.headline)
+            if expression.hasOperator {
+                Text(expression.displayText).font(.title3).monospacedDigit()
+                    .foregroundStyle(.secondary).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityHidden(true)
+            }
             Button { setKeypad(visible: true) } label: {
                 HStack {
-                    Text(MoneyFormatter.string(from: draft.amount))
+                    Text((expression.hasOperator && draft.amount >= 0 ? "= " : "") + MoneyFormatter.string(from: draft.amount))
                         .font(.largeTitle.weight(.semibold))
                         .monospacedDigit()
                         .minimumScaleFactor(0.25)
@@ -167,7 +175,7 @@ struct TransactionFormView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(TransactionPresentation.kindTitle(draft.kind)), số tiền \(MoneyFormatter.string(from: draft.amount))")
+            .accessibilityLabel("\(TransactionPresentation.kindTitle(draft.kind)), \(expression.hasOperator ? expression.displayText.replacingOccurrences(of: "+", with: "cộng").replacingOccurrences(of: "−", with: "trừ") + ", bằng " : "số tiền ")\(MoneyFormatter.string(from: draft.amount).replacingOccurrences(of: "₫", with: "đồng"))")
             .accessibilityHint(keypadVisible ? "" : "Mở bàn phím số")
             .accessibilityIdentifier("transaction.amount")
             Text(keypadVisible ? "Tối đa 999.999.999.999 ₫" : "Chạm vào số tiền để mở bàn phím")
@@ -255,8 +263,9 @@ struct TransactionFormView: View {
                     }
                     .accessibilityIdentifier("keypad.hide")
                 }
-                MoneyKeypad { key in
-                    draft.amount = MoneyFormatter.applying(key, to: draft.amount)
+                MoneyKeypad(showsOperators: true) { key in
+                    expression.apply(key)
+                    draft.amount = expression.result ?? 0
                     saveError = nil
                     saved = false
                 }
@@ -291,6 +300,7 @@ struct TransactionFormView: View {
             UIAccessibility.post(notification: .announcement, argument: "Đã lưu")
             if original != nil { dismiss() }
             else {
+                expression = AmountExpression()
                 draft.amount = 0
                 saveError = nil
                 saved = true
