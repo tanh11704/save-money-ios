@@ -23,7 +23,6 @@ struct ContentView: View {
                 TabView(selection: $selectedTab) {
                     NavigationStack {
                         TransactionFormView(store: store, onNeedsWallet: { selectedTab = 2 })
-                            .navigationTitle("Thêm giao dịch")
                     }
                     .tabItem { Label("Thêm", systemImage: "plus.circle") }
                     .tag(0)

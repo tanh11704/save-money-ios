@@ -14,7 +14,7 @@ private struct DesignSystemGallery: View {
                 EmptyState(image: "illus-empty-history", title: "Chưa có giao dịch", message: "Ghi khoản đầu tiên", actionTitle: "Thêm") {}
                 Toast(message: "Đã lưu")
             }.padding()
-        }.background(Color(uiColor: .systemGroupedBackground))
+        }.appScreenBackground()
     }
 }
 #Preview("Sáng") { DesignSystemGallery() }

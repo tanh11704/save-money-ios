@@ -2,9 +2,10 @@ import SwiftUI
 
 @MainActor
 struct WalletListView: View {
-    @Environment(\.dynamicTypeSize) private var typeSize
     @ObservedObject var store: TransactionScreenStore
     @State private var showingAdd = false
+    @State private var selectedWallet: UUID?
+    @State private var selectedArchivedWallet: UUID?
     @State private var showingTransfer = false
     @State private var transferSource: Wallet?
     @State private var archiveCandidate: Wallet?
@@ -36,6 +37,9 @@ struct WalletListView: View {
             }
         }
         .navigationTitle("Ví")
+        .navigationDestination(item: $selectedWallet) { id in
+            if let wallet = store.wallets.first(where: { $0.id == id }) { WalletDetailView(store: store, wallet: wallet) }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus").frame(minWidth: 44, minHeight: 44) }
@@ -61,34 +65,44 @@ struct WalletListView: View {
     }
 
     private func activeWalletRow(_ wallet: Wallet) -> some View {
-                    NavigationLink { WalletDetailView(store: store, wallet: wallet) } label: { walletRow(wallet) }
-                        .accessibilityHint("Xem lịch sử và thao tác với ví")
-                        .contextMenu { Button("Chuyển tiền", systemImage: "arrow.left.arrow.right") { transferSource = wallet; showingTransfer = true } }
-                        .accessibilityAction(named: Text("Lưu trữ ví")) { requestArchive(wallet) }
-                        .swipeActions(allowsFullSwipe: false) {
-                            Button { requestArchive(wallet) } label: { Label("Lưu trữ", systemImage: "archivebox") }
-                                .tint(.orange)
-                        }
+        Button { selectedWallet = wallet.id } label: { walletRow(wallet) }
+            .buttonStyle(.plain)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Xem lịch sử và thao tác với ví")
+            .contextMenu { Button("Chuyển tiền", systemImage: "arrow.left.arrow.right") { transferSource = wallet; showingTransfer = true } }
+            .accessibilityAction(named: Text("Lưu trữ ví")) { requestArchive(wallet) }
+            .swipeActions(allowsFullSwipe: false) {
+                Button { requestArchive(wallet) } label: { Label("Lưu trữ", systemImage: "archivebox") }.tint(.orange)
+            }
     }
-    private var tools: some View {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
-                    NavigationLink { DebtListView(store: store) } label: { Card { IconRow(icon: "person.2", tint: .teal, title: "Sổ nợ") } }
-                    NavigationLink { RecurringListView(store: store) } label: { Card { IconRow(icon: "arrow.triangle.2.circlepath", title: "Định kỳ", value: String(store.recurringRules.count)) } }
-                    NavigationLink { BudgetListView(store: store) } label: { Card { IconRow(icon: "target", tint: .orange, title: "Ngân sách") } }
-                    NavigationLink { CategoryListView(store: store) } label: { Card { IconRow(icon: "tag", tint: .purple, title: "Danh mục") } }
-                    NavigationLink { archivedWallets } label: { Card { IconRow(icon: "archivebox", tint: .secondary, title: "Đã lưu trữ", value: String(store.wallets.filter { $0.isArchived && !$0.isPerson }.count)) } }
-                }.buttonStyle(.plain)
+    @ViewBuilder private var tools: some View {
+        NavigationLink { DebtListView(store: store) } label: { IconRow(icon: "person.2", tint: .teal, title: "Sổ nợ") }
+        NavigationLink { BudgetListView(store: store) } label: { IconRow(icon: "target", tint: .orange, title: "Ngân sách") }
+        NavigationLink { RecurringListView(store: store) } label: { IconRow(icon: "arrow.triangle.2.circlepath", title: "Định kỳ", value: String(store.recurringRules.count)) }
+        NavigationLink { CategoryListView(store: store) } label: { IconRow(icon: "tag", tint: .purple, title: "Danh mục") }
+        NavigationLink { archivedWallets } label: { IconRow(icon: "archivebox", tint: .secondary, title: "Đã lưu trữ", value: String(store.wallets.filter { $0.isArchived && !$0.isPerson }.count)) }
     }
 
     private var archivedWallets: some View {
         List {
             ForEach(store.wallets.filter { $0.isArchived && !$0.isPerson }, id: \.id) { wallet in
                 VStack(alignment: .leading, spacing: 8) {
-                    NavigationLink { WalletDetailView(store: store, wallet: wallet) } label: { walletRow(wallet) }
+                    Button { selectedArchivedWallet = wallet.id } label: { walletRow(wallet) }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Xem lịch sử và thao tác với ví")
                     Button("Khôi phục \(wallet.name)") { restore(wallet) }.frame(minHeight: 44)
                 }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
         }.navigationTitle("Ví đã lưu trữ")
+            .navigationDestination(item: $selectedArchivedWallet) { id in
+                if let wallet = store.wallets.first(where: { $0.id == id }) { WalletDetailView(store: store, wallet: wallet) }
+            }
     }
 
     private func walletRow(_ wallet: Wallet) -> some View {

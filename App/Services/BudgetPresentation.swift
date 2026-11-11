@@ -13,6 +13,10 @@ struct BudgetPresentation {
     static func remaining(_ progress: BudgetService.Progress) -> String {
         (progress.remaining < 0 ? "Vượt " : "Còn ") + MoneyFormatter.string(from: progress.remaining < 0 ? -progress.remaining : progress.remaining)
     }
+    static func remainingCompact(_ progress: BudgetService.Progress) -> String {
+        let amount = progress.remaining < 0 ? -progress.remaining : progress.remaining
+        return (progress.remaining < 0 ? "Vượt " : "Còn ") + MoneyFormatter.compact(amount) + (amount < 1_000 ? " ₫" : "")
+    }
     static func categoryLimitsExceedTotal(month: ReportingMonth, rules: [BudgetRule], replacing scope: BudgetRule.Scope, limit: Int64) -> Bool {
         guard (1...MoneyFormatter.maximumInput).contains(limit) else { return false }
         var rules = rules.filter { $0.scope != scope || $0.startMonth != month }

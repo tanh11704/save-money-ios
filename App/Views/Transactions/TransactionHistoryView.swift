@@ -16,12 +16,11 @@ struct TransactionHistoryView: View {
                     .accessibilityIdentifier("history.totalBalance")
                 if let report = try? StatsService.report(month: ReportingMonth(), transactions: store.transactions) {
                     ViewThatFits(in: .horizontal) {
-                        HStack { StatTile(title: "Thu tháng này", value: report.incomeText, icon: "arrow.up.circle"); StatTile(title: "Chi tháng này", value: report.expenseText, icon: "arrow.down.circle") }
-                        VStack { StatTile(title: "Thu tháng này", value: report.incomeText, icon: "arrow.up.circle"); StatTile(title: "Chi tháng này", value: report.expenseText, icon: "arrow.down.circle") }
+                        HStack { monthlyTile(income: true, value: report.incomeText); monthlyTile(income: false, value: report.expenseText) }
+                        VStack { monthlyTile(income: true, value: report.incomeText); monthlyTile(income: false, value: report.expenseText) }
                     }
                 }
                 filters
-                .accessibilityElement(children: .combine)
             }
             if let message = store.errorMessage {
                 Section {
@@ -67,6 +66,15 @@ struct TransactionHistoryView: View {
         }
     }
 
+    private func monthlyTile(income: Bool, value: String) -> some View {
+        let title = income ? "Thu" : "Chi"
+        let month = ReportingMonth().month
+        return StatTile(title: "\(title) T\(month)", value: value,
+                        icon: income ? "arrow.up.circle" : "arrow.down.circle")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(title) tháng \(month), \(value)")
+    }
+
     private func transactionRow(_ transaction: Transaction) -> some View {
         let debt = store.debtLabels[transaction.id]
         let label: String
@@ -104,8 +112,10 @@ struct TransactionHistoryView: View {
                     }
                 } label: { Label(filter.month?.title ?? "Tháng", systemImage: "calendar").frame(minHeight: 44) }
                 if filter.month != nil { Button { filter.month = nil } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Bỏ lọc tháng") }
-            }.buttonStyle(.bordered)
+            }.font(.subheadline).controlSize(.small).buttonStyle(.bordered)
+                .padding(.vertical, 8)
         }
+        .contentMargins(.horizontal, 16, for: .scrollContent)
     }
 
     private func requestDeletion(_ transaction: Transaction) {

@@ -65,6 +65,7 @@ struct CategoryFormView: View {
                     .appProminentButton().disabled(validationMessage != nil)
             }.padding()
         }
+        .appScreenBackground()
         .keyboardDoneButton($focus)
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(original == nil ? "Thêm danh mục" : "Sửa danh mục")

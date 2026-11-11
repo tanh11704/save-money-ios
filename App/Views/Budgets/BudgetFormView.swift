@@ -36,6 +36,7 @@ struct BudgetFormView: View {
                 if let error { InlineError(message: error) }
             }.frame(maxWidth: .infinity, alignment: .leading).padding()
         }
+        .appScreenBackground()
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 if keypadVisible { MoneyKeypad { amount = MoneyFormatter.applying($0, to: amount); error = nil } }

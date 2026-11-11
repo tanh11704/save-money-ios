@@ -49,11 +49,13 @@ struct TrendBadge: View {
     var body: some View { Text(visible).font(.caption).fixedSize(horizontal: false, vertical: true).padding(.horizontal, Spacing.s).padding(.vertical, Spacing.xs).background(.quaternary, in: Capsule()).accessibilityLabel(delta.replacingOccurrences(of: "▲", with: "Tăng").replacingOccurrences(of: "▼", with: "Giảm")) }
 }
 struct StatTile: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let title: String, value: String, icon: String
     var trend: String? = nil
     var body: some View {
         Card { VStack(alignment: .leading, spacing: 8) {
             Label(title, systemImage: icon).font(.subheadline).foregroundStyle(.secondary)
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.85)
             Text(value).font(.title2.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.35)
             if let trend { TrendBadge(delta: trend) }
         } }.accessibilityElement(children: .combine)
@@ -124,6 +126,7 @@ struct ProgressRing: View {
     }
 }
 struct IconRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let icon: String
     var tint: Color = .accentColor
     let title: String
@@ -131,7 +134,8 @@ struct IconRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon).foregroundStyle(.white).frame(width: 30, height: 30).background(tint, in: RoundedRectangle(cornerRadius: 7)).accessibilityHidden(true)
-            Text(title).fixedSize(horizontal: false, vertical: true)
+            Text(title).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                .minimumScaleFactor(0.85).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 4)
             if let value { Text(value).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         }.frame(minHeight: 44)
@@ -155,9 +159,15 @@ struct Toast: View {
 
 
 extension View {
-    /// Light text on dark tints by day; dark text on bright tints at night.
     func appProminentButton() -> some View {
-        buttonStyle(.borderedProminent).foregroundStyle(Color("OnAccent"))
+        buttonStyle(AppProminentButtonStyle())
+    }
+
+    /// Full-screen scroll content shares the grouped background used by lists.
+    func appScreenBackground() -> some View {
+        background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+            .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
     }
 }
 
@@ -194,5 +204,29 @@ struct RestoreSuccessView: View {
             Text("\(transactionCount) giao dịch. Số dư đã được kiểm tra.").font(.subheadline).multilineTextAlignment(.center)
             Button("Xong", action: done).appProminentButton().frame(minHeight: 44)
         }.frame(maxWidth: .infinity) }
+    }
+}
+
+
+struct AppProminentButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, Spacing.l)
+            .padding(.vertical, Spacing.s)
+            .frame(minHeight: 44)
+            .foregroundStyle(isEnabled ? Color("OnAccent") : Color.primary)
+            .background {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isEnabled ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(uiColor: .tertiarySystemFill)))
+            }
+            .overlay {
+                if !isEnabled || contrast == .increased {
+                    RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(isEnabled ? 0.5 : 0.25), lineWidth: 1)
+                }
+            }
+            .opacity(isEnabled && configuration.isPressed ? 0.85 : 1)
     }
 }

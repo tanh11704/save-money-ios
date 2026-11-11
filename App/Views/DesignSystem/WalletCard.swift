@@ -19,6 +19,7 @@ struct WalletCard: View {
                 Image(systemName: (WalletKind(rawValue: wallet.kindRaw) ?? .other).icon).accessibilityHidden(true)
                 Text(wallet.name).fixedSize(horizontal: false, vertical: true)
             }.font(.headline)
+            Text((WalletKind(rawValue: wallet.kindRaw) ?? .other).title).font(.caption).foregroundStyle(.secondary)
             if let balance {
                 AmountText(amount: balance, style: .system(.title, design: .rounded).bold())
                 if balance < 0 { Label("Đang nợ", systemImage: "exclamationmark.circle").font(.caption) }

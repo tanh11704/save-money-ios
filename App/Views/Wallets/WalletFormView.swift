@@ -57,6 +57,7 @@ struct WalletFormView: View {
                 Picker("Loại ví", selection: $kind) {
                     ForEach(WalletKind.allCases.filter { $0 != .person }, id: \.self) { kind in Text(kind.title).tag(kind) }
                 }.pickerStyle(.menu).labelsHidden().frame(minHeight: 44)
+                    .accessibilityLabel("Loại ví").accessibilityIdentifier("wallet.kind")
                 Text("Số dư ban đầu").font(.headline)
                 Button { keypadVisible.toggle() } label: {
                     Text(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))
@@ -74,6 +75,7 @@ struct WalletFormView: View {
                 }
             }.padding()
         }
+        .appScreenBackground()
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 8) {
                 if focus == nil {

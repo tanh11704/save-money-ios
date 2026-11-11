@@ -88,6 +88,7 @@ struct RecurringFormView: View {
         }
         .keyboardDoneButton($focus)
         .scrollDismissesKeyboard(.interactively)
+        .appScreenBackground()
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 if keypadVisible && focus == nil {

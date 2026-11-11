@@ -17,13 +17,20 @@ struct KeyboardSmokeHost: View {
         self.container = container
         let wallet = Wallet(name: "Tien mat")
         container.mainContext.insert(wallet)
+        container.mainContext.insert(Category(name: "Ăn uống", kind: .expense, icon: "fork.knife"))
+        // The screen store reads through a separate ModelContext, so inserted
+        // fixtures must be committed before configuring it.
+        try! container.mainContext.save()
         let store = TransactionScreenStore()
         store.configure(container: container)
+        precondition(store.ready && store.wallets.contains(where: { $0.id == wallet.id }) && !store.categories.isEmpty,
+                     "Keyboard smoke fixture failed to load committed wallet/category data")
         _store = StateObject(wrappedValue: store)
     }
     var body: some View {
         NavigationStack {
             switch screen {
+            case "transaction": TransactionFormView(store: store)
             case "category": CategoryFormView(store: store)
             case "recurring": RecurringFormView(store: store)
             default: WalletFormView(store: store)

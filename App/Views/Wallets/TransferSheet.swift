@@ -90,6 +90,7 @@ struct TransferSheet: View {
             }.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).padding()
         }
         .scrollDismissesKeyboard(.interactively).keyboardDoneButton($focus)
+        .appScreenBackground()
         .safeAreaInset(edge: .bottom) {
             if focus == nil {
                 VStack(spacing: 8) {

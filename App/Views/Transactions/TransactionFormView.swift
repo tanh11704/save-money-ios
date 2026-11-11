@@ -27,27 +27,42 @@ struct TransactionFormView: View {
     private enum Field: Hashable { case note }
     @FocusState private var focus: Field?
 
-    init(store: TransactionScreenStore, original: Transaction? = nil, onNeedsWallet: (() -> Void)? = nil, prefillKind: TransactionKind? = nil, prefillWallet: Wallet? = nil) {
+    init(store: TransactionScreenStore, original: Transaction? = nil, onNeedsWallet: (() -> Void)? = nil, prefillKind: TransactionKind? = nil, prefillWallet: Wallet? = nil, prefillAmount: Int64 = 0) {
         self.store = store
         self.original = original
         self.prefillWallet = prefillWallet
         self.onNeedsWallet = onNeedsWallet
-        _expression = State(initialValue: AmountExpression(amount: original?.amount ?? 0))
+        _expression = State(initialValue: AmountExpression(amount: original?.amount ?? prefillAmount))
         if let original {
             _draft = State(initialValue: TransactionDraft(amount: original.amount,
                 kind: TransactionKind(rawValue: original.kindRaw) ?? .expense,
                 date: original.date, note: original.note, wallet: original.wallet,
                 toWallet: original.toWallet, category: original.category))
-        } else { _draft = State(initialValue: TransactionDraft(kind: prefillKind ?? .expense, wallet: prefillWallet)) }
+        } else { _draft = State(initialValue: TransactionDraft(amount: prefillAmount, kind: prefillKind ?? .expense, wallet: prefillWallet)) }
     }
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 240 : 140), alignment: .leading)]
     }
 
+    private var validationError: TransactionValidator.ValidationError? {
+        TransactionValidator.validationErrors(draft, editing: original).first
+    }
+
     private var validationMessage: String? {
-        do { try TransactionValidator.validate(draft, editing: original); return nil }
-        catch { return TransactionPresentation.errorMessage(error) }
+        validationError.map { TransactionPresentation.errorMessage($0) }
+    }
+
+    private var inlineMessage: String? {
+        if let saveError { return saveError }
+        return TransactionValidator.validationErrors(draft, editing: original)
+            .first { TransactionPresentation.showsInlineError($0, amount: draft.amount) }
+            .map { TransactionPresentation.errorMessage($0) }
+    }
+
+    private var saveTitle: String {
+        if validationError == nil && original != nil { return "Lưu thay đổi" }
+        return TransactionPresentation.saveButtonTitle(for: validationError)
     }
 
     private var visibleCategories: [Category] {
@@ -63,8 +78,9 @@ struct TransactionFormView: View {
                     EmptyState(image: "illus-empty-wallet", title: "Chưa có ví", message: "Thêm ví để ghi giao dịch", symbol: "wallet.bifold", actionTitle: "Thêm ví", action: onNeedsWallet)
                         .accessibilityIdentifier("transaction.noActiveWallet")
                 }
-                kindPicker
-
+                if !keypadVisible, let message = inlineMessage {
+                    InlineError(message: message).accessibilityIdentifier("transaction.validation")
+                }
                 amountDisplay
 
                 if draft.kind != .transfer {
@@ -91,6 +107,7 @@ struct TransactionFormView: View {
             }
             .padding()
         }
+        .appScreenBackground()
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if focus == nil { inputControls }
         }
@@ -141,7 +158,9 @@ struct TransactionFormView: View {
             if !Task.isCancelled { saved = false }
         }
         .navigationTitle(original == nil ? "Thêm giao dịch" : "Sửa giao dịch")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) { kindPicker.frame(maxWidth: 320) }
             if original != nil || prefillWallet != nil {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Hủy") { dismiss() }.frame(minHeight: 44)
@@ -200,6 +219,7 @@ struct TransactionFormView: View {
 
     private var categoryPicker: some View {
         let subtitles = draft.kind == .expense ? store.budgetSubtitles(on: draft.date) : [:]
+        let compactSubtitles = draft.kind == .expense ? store.budgetSubtitles(on: draft.date, compact: true) : [:]
         let overBudget = draft.kind == .expense ? store.overBudgetCategories(on: draft.date) : []
         return VStack(alignment: .leading, spacing: 8) {
             Text("Danh mục").font(.headline)
@@ -219,14 +239,20 @@ struct TransactionFormView: View {
                             CategoryIcon(icon: category.icon, size: 48)
                                 .overlay(alignment: .topTrailing) { if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color("OnAccent"), Color.accentColor).accessibilityHidden(true) } }
                             Text(category.name).font(.caption).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
-                            if let subtitle = subtitles[category.id] {
-                                Label(subtitle, systemImage: overBudget.contains(category.id) ? "exclamationmark.triangle" : "target").font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            if let subtitle = (typeSize.isAccessibilitySize ? subtitles : compactSubtitles)[category.id] {
+                                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                    if overBudget.contains(category.id) { Image(systemName: "exclamationmark.triangle.fill").accessibilityHidden(true) }
+                                    Text(subtitle).monospacedDigit()
+                                }.font(.caption2)
+                                    .foregroundStyle(overBudget.contains(category.id) ? Color("Expense") : Color.secondary)
+                                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.8)
                             }
                         }.frame(maxWidth: .infinity, minHeight: 92, alignment: .top).padding(6)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
                     }.buttonStyle(.plain)
                     .accessibilityLabel([category.name, subtitles[category.id]].compactMap { $0 }.joined(separator: ", ").replacingOccurrences(of: "₫", with: "đồng"))
                     .accessibilityAddTraits(selected ? [.isSelected] : [])
+                    .accessibilityIdentifier("transaction.category.\(category.id)")
                 }
             }
         }
@@ -241,7 +267,7 @@ struct TransactionFormView: View {
             if wallets.isEmpty { Text("Không có ví phù hợp để chọn.").foregroundStyle(.secondary) }
             Group {
                 if typeSize.isAccessibilitySize { VStack { walletChoices(wallets, destination: destination) } }
-                else { ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 12) { walletChoices(wallets, destination: destination) } } }
+                else { ScrollView(.horizontal, showsIndicators: false) { HStack(alignment: .top, spacing: 12) { walletChoices(wallets, destination: destination) } } }
             }
             if !destination && draft.kind == .expense {
                 if let person = draft.wallet, person.isPerson { Label("\(person.name) trả hộ", systemImage: "person.crop.circle").font(.headline) }
@@ -263,14 +289,23 @@ struct TransactionFormView: View {
                 saveError = nil
                 setKeypad(visible: false)
             } label: {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.s) {
                     Label(wallet.name, systemImage: (WalletKind(rawValue: wallet.kindRaw) ?? .other).icon)
-                    Text(store.balances[wallet.id] ?? "Chưa tính được").font(.caption).monospacedDigit()
-                    if selected { Label("Đã chọn", systemImage: "checkmark.circle.fill").font(.caption) }
-                }.padding(12).frame(minWidth: 140, minHeight: 80, alignment: .leading)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.85)
+                        .padding(.trailing, 22)
+                    Text(store.balances[wallet.id] ?? "Chưa tính được")
+                        .font(.caption).monospacedDigit().lineLimit(1).minimumScaleFactor(0.35)
+                }.padding(Spacing.m)
+                    .frame(width: typeSize.isAccessibilitySize ? nil : 168, height: typeSize.isAccessibilitySize ? nil : 84, alignment: .topLeading)
+                    .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : nil, alignment: .leading)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
-            }.buttonStyle(.plain).accessibilityAddTraits(selected ? [.isSelected] : [])
+                    .overlay(alignment: .topTrailing) {
+                        if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor).padding(8).accessibilityHidden(true) }
+                    }
+            }.buttonStyle(.plain)
+                .accessibilityLabel("\(wallet.name), \(store.balances[wallet.id] ?? "Chưa tính được số dư")".replacingOccurrences(of: "₫", with: "đồng"))
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
         }
     }
 
@@ -319,14 +354,23 @@ struct TransactionFormView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             Button(action: save) {
-                Label(original == nil || typeSize.isAccessibilitySize ? "Lưu" : "Lưu thay đổi", systemImage: "checkmark")
+                Label(saveTitle, systemImage: draft.amount == 0 ? "keyboard" : "checkmark")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .appProminentButton()
             .disabled(validationMessage != nil || saving)
-            .accessibilityLabel(original == nil ? "Lưu" : "Lưu thay đổi")
+            .accessibilityLabel(saveTitle)
+            .accessibilityHint(draft.amount == 0 ? "Mở bàn phím số" : "")
+            .accessibilityAction(named: Text("Mở bàn phím số")) { focus = nil; setKeypad(visible: true) }
             .accessibilityIdentifier("transaction.save")
-            if let message = saveError ?? validationMessage {
+            .overlay {
+                if draft.amount == 0 && !saving {
+                    // The save action stays disabled; this separate hit area opens input.
+                    Button { focus = nil; setKeypad(visible: true) } label: { Color.clear.contentShape(Rectangle()) }
+                        .buttonStyle(.plain).accessibilityHidden(true)
+                }
+            }
+            if keypadVisible, let message = inlineMessage {
                 InlineError(message: message)
                     .accessibilityIdentifier("transaction.validation")
             }

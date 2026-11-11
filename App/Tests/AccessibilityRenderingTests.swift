@@ -7,9 +7,21 @@ import UIKit
 
 @MainActor
 final class AccessibilityRenderingTests: XCTestCase {
-    func testReadmeIsBundledForOfflineHelp() throws {
-        let url = try XCTUnwrap(Bundle.main.url(forResource: "README", withExtension: "md"))
-        XCTAssertTrue(try String(contentsOf: url, encoding: .utf8).contains("SaveMoney"))
+    func testDeveloperReadmeIsNotBundled() {
+        XCTAssertNil(Bundle.main.url(forResource: "README", withExtension: "md"))
+    }
+    func testU8AuditAcrossThreeConfigurations() async throws {
+        let configurations: [(DynamicTypeSize, CGSize, String)] = [
+            (.large, CGSize(width: 375, height: 667), "SE"),
+            (.large, CGSize(width: 402, height: 874), "reference-phone"),
+            (.accessibility5, CGSize(width: 375, height: 667), "AX5-SE")
+        ]
+        for (type, size, name) in configurations {
+            for scheme in [ColorScheme.light, .dark] {
+                try await render(type: type, scheme: scheme, size: size,
+                                 suffix: "U8-" + name + (scheme == .light ? "-light" : "-dark"))
+            }
+        }
     }
     func testButtonTextAndCategorySymbolsMeetContrastInBothAppearances() throws {
         func luminance(_ color: UIColor) -> Double {
@@ -66,7 +78,7 @@ final class AccessibilityRenderingTests: XCTestCase {
         let context = container.mainContext, wallet = Wallet(name: "Tiền mặt và sinh hoạt", openingBalance: 5_000_000)
         let category = SaveMoney.Category(name: "Ăn uống và sinh hoạt gia đình", kind: .expense, icon: "fork.knife")
         context.insert(wallet); context.insert(category)
-        let bank = Wallet(name: "Ngân hàng", openingBalance: 3_000_000)
+        let bank = Wallet(name: "Tài khoản", openingBalance: 3_000_000, kind: .bank)
         let person = Wallet(name: "Lan", kind: .person)
         context.insert(bank); context.insert(person)
         context.insert(Transaction(amount: 500_000, kind: .transfer, date: Date().addingTimeInterval(-172800), wallet: wallet, toWallet: person))
@@ -74,7 +86,7 @@ final class AccessibilityRenderingTests: XCTestCase {
         context.insert(transaction)
         let recurring = RecurringRule(); recurring.name = "Tiền nhà và sinh hoạt hằng tháng"; recurring.amount = 500_000; recurring.wallet = wallet; recurring.category = category
         context.insert(recurring)
-        try BudgetPersistence.setLimit(2_000_000, scope: .category(category.id), from: ReportingMonth(), context: context)
+        try BudgetPersistence.setLimit(3_620_000, scope: .category(category.id), from: ReportingMonth(), context: context)
         try context.save()
         let suite = "Render.\(UUID().uuidString)", defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -90,7 +102,10 @@ final class AccessibilityRenderingTests: XCTestCase {
         let report = try StatsService.report(month: ReportingMonth(), transactions: [transaction])
         let daily = try StatsService.dailyExpenses(month: ReportingMonth(), transactions: [transaction])
         let screens: [(String, AnyView)] = [
-            ("add", AnyView(TransactionFormView(store: store))), ("history", AnyView(TransactionHistoryView(store: store))),
+            ("add", AnyView(TransactionFormView(store: store))),
+            ("add-empty", AnyView(TransactionFormView(store: TransactionScreenStore()))),
+            ("add-selected", AnyView(TransactionFormView(store: store, prefillWallet: wallet, prefillAmount: 50_000))),
+            ("guide", AnyView(GuideView())), ("history", AnyView(TransactionHistoryView(store: store))),
             ("edit", AnyView(TransactionFormView(store: store, original: transaction))), ("wallets", AnyView(WalletListView(store: store))),
             ("wallet-form", AnyView(WalletFormView(store: store, original: wallet))), ("categories", AnyView(CategoryListView(store: store))),
             ("budgets", AnyView(BudgetListView(store: store))), ("budget-form", AnyView(BudgetFormView(store: store, scope: .category(category.id), month: ReportingMonth()))),

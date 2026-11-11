@@ -160,12 +160,12 @@ final class TransactionScreenStore: ObservableObject {
         })
     }
 
-    func budgetSubtitles(on date: Date) -> [UUID: String] {
+    func budgetSubtitles(on date: Date, compact: Bool = false) -> [UUID: String] {
         do {
             let progress = try BudgetService.progress(month: ReportingMonth(containing: date), rules: budgetRules, transactions: transactions)
             return Dictionary(uniqueKeysWithValues: progress.compactMap { progress in
                 guard case .category(let id) = progress.scope else { return nil }
-                return (id, BudgetPresentation.remaining(progress))
+                return (id, compact ? BudgetPresentation.remainingCompact(progress) : BudgetPresentation.remaining(progress))
             })
         } catch { return [:] }
     }

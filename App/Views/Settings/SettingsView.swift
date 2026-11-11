@@ -47,7 +47,7 @@ struct SettingsView: View {
                 InfoButton(text: "Trong ứng dụng Phím tắt, tìm SaveMoney để mở Thêm chi, Thêm thu, Lịch sử hoặc Thống kê. Phím tắt luôn mở app và yêu cầu mở khóa trước khi nhập dữ liệu.")
             }
             Section("Thông tin") {
-                NavigationLink { ReadmeView() } label: { IconRow(icon: "book.closed", tint: .secondary, title: "README") }
+                NavigationLink { GuideView() } label: { IconRow(icon: "questionmark.circle", tint: .secondary, title: "Hướng dẫn nhanh") }
                 IconRow(icon: "info.circle", tint: .secondary, title: "Phiên bản", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
             }
         }

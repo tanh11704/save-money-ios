@@ -10,6 +10,19 @@ private typealias Category = SaveMoney.Category
 
 @MainActor
 final class TransactionFormSelectionTests: XCTestCase {
+    func testSaveButtonTitlesAndInlineErrorPolicy() {
+        typealias Error = TransactionValidator.ValidationError
+        XCTAssertEqual(TransactionPresentation.saveButtonTitle(for: Error.invalidAmount), "Nhập số tiền")
+        XCTAssertEqual(TransactionPresentation.saveButtonTitle(for: Error.missingCategory), "Chọn danh mục")
+        XCTAssertEqual(TransactionPresentation.saveButtonTitle(for: nil), "Lưu")
+        XCTAssertFalse(TransactionPresentation.showsInlineError(.invalidAmount, amount: 0))
+        XCTAssertFalse(TransactionPresentation.showsInlineError(.missingCategory, amount: 50_000))
+        XCTAssertTrue(TransactionPresentation.showsInlineError(.invalidAmount, amount: -1))
+        XCTAssertTrue(TransactionPresentation.showsInlineError(.amountTooLarge, amount: MoneyFormatter.maximumInput + 1))
+        XCTAssertTrue(TransactionPresentation.showsInlineError(.sameWallet, amount: 50_000))
+        XCTAssertTrue(TransactionPresentation.showsInlineError(.archivedWallet, amount: 50_000))
+    }
+
     func testNewFormUsesRecentPerKindAndNeverArchivedReferences() async throws {
         let suite = "FormSelectionTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

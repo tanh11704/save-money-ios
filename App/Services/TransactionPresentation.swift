@@ -1,6 +1,20 @@
 import Foundation
 
 struct TransactionPresentation {
+    static func saveButtonTitle(for error: Error?) -> String {
+        switch error as? TransactionValidator.ValidationError {
+        case .invalidAmount: return "Nhập số tiền"
+        case .missingCategory: return "Chọn danh mục"
+        case .missingWallet: return "Chọn ví"
+        case .missingDestination: return "Chọn ví nhận"
+        default: return "Lưu"
+        }
+    }
+
+    static func showsInlineError(_ error: TransactionValidator.ValidationError, amount: Int64) -> Bool {
+        error != .missingCategory && !(error == .invalidAmount && amount == 0)
+    }
+
     static func kindTitle(_ kind: TransactionKind) -> String {
         switch kind {
         case .expense: return "Chi"

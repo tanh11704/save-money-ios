@@ -268,7 +268,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Mọi định dạng tiền đi qua một `MoneyFormatter` duy nhất trong Services.
 
 ### Bố cục màn hình Thêm (từ trên xuống)
-1. Chọn loại: Chi / Thu / Chuyển (segmented, mặc định Chi)
+1. Chọn loại trên thanh điều hướng thay tiêu đề: Chi / Thu / Chuyển (segmented, mặc định Chi; cỡ Accessibility dùng menu)
 2. Số tiền cỡ lớn
 3. Danh mục (lưới ô icon: icon trong vòng tròn màu danh mục, tên bên dưới; mục dùng gần nhất lên đầu). Ô đang chọn có viền và dấu tích, không chỉ đổi màu. Khi chọn Chuyển: thay bằng "Từ ví" và "Đến ví"
 4. Ví (thẻ cuộn ngang, hiện kèm số dư hiện tại của ví; cỡ chữ Accessibility thì xếp dọc)
@@ -278,7 +278,11 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 
 ### Hành vi
 - Lưu xong: rung nhẹ, hiện thông báo ngắn "Đã lưu", xóa số tiền, giữ nguyên loại/ví/danh mục để nhập tiếp. Không chuyển tab, không hiện alert.
-- Nút Lưu bị vô hiệu khi dữ liệu chưa hợp lệ, kèm dòng giải thích ngắn bằng tiếng Việt ngay dưới (không dùng alert).
+- Nút Lưu bị vô hiệu khi chưa hợp lệ. Nhãn nút cho biết việc còn thiếu (Nhập số tiền, Chọn danh mục). Khi số tiền bằng 0, chạm vùng nút mở bàn phím số. Dòng lỗi đỏ chỉ hiện cho lỗi khác hoặc khi lưu thất bại; khi ẩn bàn phím, lỗi nằm trong nội dung cuộn và vùng đáy chỉ có nút. Kiểu nút đọc trạng thái bật/tắt: khi tắt dùng chữ primary trên nền hệ thống, luôn nhìn rõ.
+- Các form cuộn toàn màn hình dùng nền systemGroupedBackground để thẻ secondarySystemGroupedBackground nổi rõ.
+- Ô danh mục dùng số hạn mức compact ở cỡ chữ thường, chỉ thêm biểu tượng cảnh báo khi vượt; VoiceOver luôn đọc số đầy đủ. Thẻ chọn ví 168×84, dấu tích ở góc; cỡ Accessibility xếp dọc và không cố định chiều cao.
+- Công cụ ở tab Ví là các hàng danh sách riêng. Thẻ ví mở chi tiết không có mũi tên ngoài thẻ.
+- Cài đặt có Hướng dẫn nhanh bằng SwiftUI với các mục mở rộng; không đóng gói README dành cho người phát triển.
 - Đổi loại sang Chuyển: xóa danh mục. Đổi từ Chuyển sang loại khác: xóa ví đích.
 - Ví đích không được trùng ví nguồn: ví đã chọn ở "Từ ví" bị ẩn khỏi "Đến ví".
 - Ví/danh mục đã archive không hiện khi chọn mới, nhưng vẫn hiện đúng khi xem hoặc sửa giao dịch cũ.
