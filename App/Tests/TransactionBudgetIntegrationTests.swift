@@ -62,5 +62,29 @@ final class TransactionBudgetIntegrationTests: XCTestCase {
         await fulfillment(of: [sent], timeout: 0.2)
         XCTAssertTrue(scheduler.alerts.isEmpty); XCTAssertTrue(store.transactions.isEmpty)
     }
+    func testBackdatedExpenseUpdatesPreviousMonthStatisticsWithoutNotifications() async throws {
+        let (container, store, scheduler, defaults, suite) = try fixture()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let current = ReportingMonth(), previous = try XCTUnwrap(current.previous)
+        let context = ModelContext(container); context.autosaveEnabled = false
+        let categoryID = store.categories[0].id
+        try BudgetPersistence.setLimit(100_000, scope: .total, from: previous, context: context)
+        try BudgetPersistence.setLimit(100_000, scope: .category(categoryID), from: previous, context: context)
+        try context.save(); try store.reload()
+        let sent = expectation(description: "Backdated expense stays silent"); sent.isInverted = true
+        scheduler.scheduled = { sent.fulfill() }
+        let date = previous.interval.start.addingTimeInterval(86_400)
+        try store.save(TransactionDraft(amount: 120_000, date: date,
+            wallet: store.wallets[0], category: store.categories[0]), editing: nil)
+        await fulfillment(of: [sent], timeout: 0.2)
+        XCTAssertTrue(scheduler.alerts.isEmpty)
+        XCTAssertEqual(try StatsService.report(month: previous, transactions: store.transactions).expense, 120_000)
+        XCTAssertEqual(try StatsService.report(month: current, transactions: store.transactions).expense, 0)
+        let progress = try BudgetService.progress(month: previous, rules: store.budgetRules, transactions: store.transactions)
+        XCTAssertEqual(progress.first { $0.scope == .total }?.spent, 120_000)
+        XCTAssertEqual(store.budgetSubtitles(on: date)[categoryID], "Vượt 20.000 ₫")
+        XCTAssertEqual(store.budgetSubtitles(on: Date())[categoryID], "Còn 100.000 ₫")
+    }
+
 }
 #endif

@@ -101,4 +101,32 @@ final class BudgetAlertTests: XCTestCase {
         _ = await (first, second)
         XCTAssertEqual(scheduler.alerts.count, 2)
     }
+    func testLoweredLimitDoesNotCatchUpThresholdsAlreadyExceededBeforeNextSave() async throws {
+        let (service, scheduler, defaults, suite) = setup(); defer { defaults.removePersistentDomain(forName: suite) }
+        let month = ReportingMonth()
+        // Spending is already above the lowered limit before the next save.
+        let before = [try BudgetService.progress(scope: .total, limit: 50, spent: 70)]
+        let after = [try BudgetService.progress(scope: .total, limit: 50, spent: 75)]
+        await service.notify(month: month, before: before, after: after, categories: [])
+        XCTAssertTrue(scheduler.alerts.isEmpty)
+        XCTAssertFalse(defaults.bool(forKey: BudgetAlertService.key(scope: .total, month: month, threshold: .warning)))
+        XCTAssertFalse(defaults.bool(forKey: BudgetAlertService.key(scope: .total, month: month, threshold: .over)))
+    }
+
+    func testAfterLoweringLimitOnlyNewlyCrossedUnsentThresholdCanNotify() async throws {
+        let (service, scheduler, defaults, suite) = setup(); defer { defaults.removePersistentDomain(forName: suite) }
+        let month = ReportingMonth()
+        // Lowering to 80 with 70 spent already passes 80%, but not 100%.
+        let before = [try BudgetService.progress(scope: .total, limit: 80, spent: 70)]
+        let below = [try BudgetService.progress(scope: .total, limit: 80, spent: 75)]
+        let crossed = [try BudgetService.progress(scope: .total, limit: 80, spent: 80)]
+        await service.notify(month: month, before: before, after: below, categories: [])
+        XCTAssertTrue(scheduler.alerts.isEmpty)
+        await service.notify(month: month, before: below, after: crossed, categories: [])
+        XCTAssertEqual(scheduler.alerts.map(\.id), [BudgetAlertService.key(scope: .total, month: month, threshold: .over)])
+        // A previously sent threshold stays suppressed after another crossing.
+        await service.notify(month: month, before: below, after: crossed, categories: [])
+        XCTAssertEqual(scheduler.alerts.count, 1)
+    }
+
 }

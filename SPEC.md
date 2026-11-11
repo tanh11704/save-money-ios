@@ -120,6 +120,8 @@ App/
 - [x] Hạn mức tổng và theo danh mục chi, lặp hàng tháng; bản sửa có tháng bắt đầu để giữ lịch sử. Đặt/tắt từ Ví → Ngân sách, không thêm tab.
 - [x] Tiến độ trong Thống kê theo tháng đang xem và số tiền còn/vượt trên chip danh mục chi. Tính cả danh mục đã lưu trữ; không tính thu/chuyển.
 - [x] Cảnh báo 80% và 100% bằng thông báo cục bộ sau khi lưu thành công; mỗi scope/mốc/tháng chỉ gửi một lần, giữ key khi xóa/sửa giảm chi. Nhảy qua cả hai mốc gửi hai thông báo. Giao dịch tháng cũ không gửi.
+- Hạ hạn mức xuống dưới số đã chi không gửi thông báo ngay và không báo bù các mốc đã vượt. Chỉ một lần lưu giao dịch thành công vượt mốc so với số chi trước lần lưu đó mới có thể báo, nếu scope/mốc/tháng chưa gửi.
+- Khoản chi nhập lùi tháng trước không gửi thông báo; Thống kê và tiến độ ngân sách vẫn tính theo tháng của ngày giao dịch.
 - Xin quyền thông báo bằng cơ chế ReminderService khi đặt hạn mức. Khi lưu giao dịch, không có quyền hoặc gửi lỗi thì im lặng, không chặn lưu.
 - Tổng hạn mức danh mục lớn hơn hạn mức tổng: cảnh báo có chữ nhưng vẫn cho lưu. Trạng thái tiến độ luôn có chữ “Sắp hết”/“Đã vượt”, màu hệ thống chỉ hỗ trợ.
 - Biểu đồ chi tiêu (Swift Charts): theo danh mục, theo ngày trong tháng
