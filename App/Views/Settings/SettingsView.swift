@@ -28,6 +28,7 @@ struct SettingsView: View {
                 Text("File JSON chưa mã hóa và có thể đọc từ ứng dụng Tệp dù app đang khóa.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+            Section { NavigationLink { CSVExportView() } label: { Text("Xuất CSV").frame(minHeight: 44) } }
             Section("Kiểm tra dữ liệu") {
                 if store.scheduler.defaults.object(forKey: "SaveMoney.lastIntegrityCheck") != nil && !store.scheduler.defaults.bool(forKey: "SaveMoney.lastIntegrityHealthy") {
                     Label("Kiểm tra gần nhất có lỗi. Hãy xem kết quả và sao lưu trước khi sửa.", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
