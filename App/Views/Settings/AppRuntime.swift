@@ -4,6 +4,7 @@ import UIKit
 
 @MainActor
 final class AppRuntime: ObservableObject {
+    let router = AppRouter.shared
     let container: ModelContainer
     let scheduler: BackupScheduler
     let lock: AppLockService

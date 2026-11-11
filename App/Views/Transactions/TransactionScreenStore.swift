@@ -5,6 +5,8 @@ import SwiftUI
 /// All arithmetic and validation are delegated to Services.
 @MainActor
 final class TransactionScreenStore: ObservableObject {
+    struct AddPrefill: Identifiable { let id = UUID(); let kind: TransactionKind?; let amount: Int64? }
+    @Published var addPrefill: AddPrefill?
     @Published private(set) var wallets: [Wallet] = []
     @Published private(set) var categories: [Category] = []
     @Published private(set) var transactions: [Transaction] = []

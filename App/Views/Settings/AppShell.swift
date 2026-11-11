@@ -9,6 +9,7 @@ struct AppShell: View {
     init(container: ModelContainer) { _runtime = StateObject(wrappedValue: AppRuntime(container: container)) }
     var body: some View {
         ProtectedAppView(runtime: runtime, lock: runtime.lock)
+            .onOpenURL { if let route = AppRoute.parse($0) { runtime.router.enqueue(route) } }
             .overlay {
                 if scenePhase != .active {
                     PrivacyScreen().accessibilityAddTraits(.isModal)
@@ -40,6 +41,7 @@ private struct ProtectedAppView: View {
             }
         }
         .environmentObject(runtime)
+        .environmentObject(runtime.router)
         .onChange(of: lock.state, initial: true) { _, state in
             if state == .unlocked && phase == .active { runtime.generateRecurring() }
         }

@@ -3,6 +3,7 @@ import SwiftUI
 
 @MainActor
 struct ContentView: View {
+    @EnvironmentObject private var router: AppRouter
     @EnvironmentObject private var runtime: AppRuntime
     @ObservedObject var settings: BackupScreenStore
     @ObservedObject var lock: AppLockService
@@ -52,6 +53,14 @@ struct ContentView: View {
                     }
                 }
                 .padding()
+            }
+        }
+        .onChange(of: router.pending?.id, initial: true) { _, _ in
+            guard let route = router.take(unlocked: lock.state == .unlocked) else { return }
+            switch route {
+            case .history: selectedTab = 1
+            case .stats: selectedTab = 3
+            case .add(let kind, let amount): selectedTab = 0; store.addPrefill = .init(kind: kind, amount: amount)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .ledgerDidChange)) { _ in

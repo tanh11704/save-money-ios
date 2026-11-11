@@ -9,6 +9,8 @@ struct TransactionFormView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var expression: AmountExpression
     @State private var draft: TransactionDraft
+    @State private var routedPrefillNeedsSelection = false
+    @State private var skipKindRestoration = false
     @State private var initialized = false
     @State private var showingDatePicker = false
     @State private var noteExpanded = false
@@ -100,9 +102,22 @@ struct TransactionFormView: View {
                 draft = TransactionFormSelection.restoring(draft, wallets: store.wallets,
                     categories: store.categories, recent: store.recent)
             }
+            if routedPrefillNeedsSelection { draft.category = nil; draft.toWallet = nil }
             noteExpanded = !draft.note.isEmpty
         }
+        .onChange(of: store.addPrefill?.id, initial: true) { _, _ in
+            guard original == nil, let prefill = store.addPrefill else { return }
+            if let kind = prefill.kind {
+                skipKindRestoration = kind != draft.kind
+                draft = TransactionFormSelection.restoring(draft.changingKind(to: kind), wallets: store.wallets, categories: store.categories, recent: store.recent)
+            }
+            if let amount = prefill.amount { expression = AmountExpression(amount: amount); draft.amount = amount }
+            routedPrefillNeedsSelection = true
+            draft.category = nil; draft.toWallet = nil
+            saveError = nil; saved = false; store.addPrefill = nil
+        }
         .onChange(of: draft.kind) { _, kind in
+            if skipKindRestoration { skipKindRestoration = false; return }
             draft = TransactionFormSelection.restoring(draft.changingKind(to: kind),
                 wallets: store.wallets, categories: store.categories, recent: store.recent,
                 preserveWallet: original != nil)
