@@ -3,6 +3,7 @@ import SwiftUI
 
 @MainActor
 struct ContentView: View {
+    @EnvironmentObject private var runtime: AppRuntime
     @ObservedObject var settings: BackupScreenStore
     @ObservedObject var lock: AppLockService
     @Environment(\.modelContext) private var modelContext
@@ -51,12 +52,18 @@ struct ContentView: View {
                 .padding()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .ledgerDidChange)) { _ in
+            guard store.ready else { return }
+            do { try store.reload() } catch { store.errorMessage = "Chưa tải lại được dữ liệu. Hãy tải lại." }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .ledgerDidRestore)) { _ in
             selectedTab = 0
             do { try store.reload() } catch { store.errorMessage = "Đã khôi phục, nhưng chưa tải lại được dữ liệu. Hãy mở lại app." }
         }
         .overlay(alignment: .top) {
-            if let error = settings.scheduler.lastError {
+            if let message = runtime.recurringMessage {
+                Text(message).font(.footnote).padding().frame(maxWidth: .infinity).background(.regularMaterial)
+            } else if let error = settings.scheduler.lastError {
                 Text(error).font(.footnote).padding().frame(maxWidth: .infinity)
                     .background(.regularMaterial).accessibilityAddTraits(.isStaticText)
             }

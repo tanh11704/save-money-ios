@@ -17,7 +17,7 @@ struct AppShell: View {
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
                 case .background: runtime.enteredBackground()
-                case .active: runtime.lock.becameActive(); runtime.settings.refresh()
+                case .active: runtime.becameActive()
                 case .inactive: runtime.lock.inactive()
                 @unknown default: break
                 }
@@ -38,6 +38,10 @@ private struct ProtectedAppView: View {
             } else {
                 LockScreen(lock: lock)
             }
+        }
+        .environmentObject(runtime)
+        .onChange(of: lock.state, initial: true) { _, state in
+            if state == .unlocked && phase == .active { runtime.generateRecurring() }
         }
         .environment(\.locale, Locale(identifier: "vi_VN"))
         .environment(\.calendar, LocalCalendar.calendar)

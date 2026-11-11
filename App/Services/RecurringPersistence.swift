@@ -62,11 +62,13 @@ struct RecurringPersistence {
             rule.startDate = LocalCalendar.calendar.startOfDay(for: draft.startDate)
             rule.endDate = draft.endDate.map { LocalCalendar.calendar.startOfDay(for: $0) }
         }
+        NotificationCenter.default.post(name: .recurringRulesDidChange, object: container)
     }
     func setPaused(_ paused: Bool, id: UUID) throws {
         try ManagementPersistence(container: container).write { context in
             guard let rule = try context.fetch(FetchDescriptor<RecurringRule>()).first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             rule.isPaused = paused
         }
+        NotificationCenter.default.post(name: .recurringRulesDidChange, object: container)
     }
 }

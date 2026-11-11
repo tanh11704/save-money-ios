@@ -8,6 +8,10 @@ final class AppRuntime: ObservableObject {
     let scheduler: BackupScheduler
     let lock: AppLockService
     let settings: BackupScreenStore
+    @Published private(set) var recurringMessage: String?
+    private let budgetAlerts = BudgetAlertService()
+    private var generatedThisActivation = false
+    private var generating = false
     private var observers: [NSObjectProtocol] = []
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
@@ -26,6 +30,10 @@ final class AppRuntime: ObservableObject {
                 if isTransaction { self?.scheduler.transactionChanged() }
             }
         })
+        observers.append(NotificationCenter.default.addObserver(forName: .recurringRulesDidChange, object: nil, queue: .main) { [weak self] notification in
+            guard let source = notification.object as? ModelContainer, source === container else { return }
+            MainActor.assumeIsolated { self?.generateRecurring(force: true) }
+        })
         observers.append(NotificationCenter.default.addObserver(forName: .ledgerDidRestore, object: nil, queue: .main) { [weak self] notification in
             guard let source = notification.object as? ModelContainer, source === container else { return }
             MainActor.assumeIsolated { self?.scheduler.restored(); self?.settings.refresh() }
@@ -33,7 +41,38 @@ final class AppRuntime: ObservableObject {
     }
     deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
 
+    func becameActive() {
+        lock.becameActive()
+        generateRecurring()
+        settings.refresh()
+    }
+
+    func generateRecurring(force: Bool = false) {
+        guard lock.state == .unlocked, !settings.isRestoring, !generating,
+              force || !generatedThisActivation else { return }
+        generating = true; generatedThisActivation = true
+        defer { generating = false }
+        do {
+            let context = ModelContext(container), month = ReportingMonth()
+            let rules = try context.fetch(FetchDescriptor<Budget>()).compactMap(\.rule)
+            let before = try? BudgetService.progress(month: month, rules: rules, transactions: context.fetch(FetchDescriptor<Transaction>()))
+            let result = try RecurringService.generateDue(now: Date(), container: container)
+            recurringMessage = result.skipped.isEmpty ? nil : "\(result.skipped.count) giao dịch định kỳ không sinh được. Xem lại."
+            if result.hasMore { recurringMessage = [recurringMessage, "Còn giao dịch đến hạn; sẽ tiếp tục vào lần mở app sau."].compactMap { $0 }.joined(separator: " ") }
+            if result.created > 0 {
+                for _ in 0..<result.created { scheduler.transactionChanged() }
+                NotificationCenter.default.post(name: .ledgerDidChange, object: container)
+                let fresh = ModelContext(container)
+                if let before, let after = try? BudgetService.progress(month: month, rules: rules, transactions: fresh.fetch(FetchDescriptor<Transaction>())) {
+                    let categories = try fresh.fetch(FetchDescriptor<Category>())
+                    Task { await budgetAlerts.notify(month: month, before: before, after: after, categories: categories) }
+                }
+            }
+        } catch { recurringMessage = "Không tạo được giao dịch định kỳ. Dữ liệu được giữ nguyên; hãy thử lại lần mở app sau." }
+    }
+
     func enteredBackground() {
+        generatedThisActivation = false
         lock.enteredBackground()
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "SaveMoney backup") { [weak self] in
             Task { @MainActor in self?.endBackgroundTask() }
@@ -61,6 +100,7 @@ final class BackupScreenStore: ObservableObject {
     }
     @Published private(set) var entries: [BackupCatalog.Entry] = []
     @Published private(set) var preRestore: [BackupCatalog.Entry] = []
+    @Published private(set) var isRestoring = false
     @Published var pending: PendingRestore?
     @Published var message: String?
     @Published var error: String?
@@ -92,6 +132,9 @@ final class BackupScreenStore: ObservableObject {
         } catch { self.error = (error as? BackupError)?.localizedDescription ?? "Không đọc được file sao lưu." }
     }
     func restoreConfirmed(_ candidate: PendingRestore) {
+        guard !isRestoring else { return }
+        isRestoring = true
+        defer { isRestoring = false }
         do {
             let restored = try BackupRestorer(container: scheduler.exporter.container, exporter: scheduler.exporter).restore(candidate.data)
             pending = nil; error = nil

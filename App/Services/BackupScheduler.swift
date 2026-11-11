@@ -87,6 +87,7 @@ final class BackupScheduler {
 }
 
 extension Notification.Name {
+    static let recurringRulesDidChange = Notification.Name("SaveMoney.recurringRulesDidChange")
     static let ledgerDidChange = Notification.Name("SaveMoney.ledgerDidChange")
     static let ledgerDidRestore = Notification.Name("SaveMoney.ledgerDidRestore")
 }
