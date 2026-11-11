@@ -59,9 +59,12 @@ final class ManagementServicesTests: XCTestCase {
     func testWalletDefaultKindAndAllKindsPersist() async throws {
         let f = try Fixture()
         XCTAssertEqual(Wallet(name: "Mặc định").kindRaw, "cash")
-        for kind in WalletKind.allCases { try f.wallets.create(WalletDraft(name: kind.title, kind: kind)) }
+        // The adjustment wallet is created only by BalanceAdjustmentService, never by the user.
+        let userKinds = WalletKind.allCases.filter { $0 != .adjustment }
+        for kind in userKinds { try f.wallets.create(WalletDraft(name: kind.title, kind: kind)) }
+        assertError(.invalidKind) { _ = try f.wallets.create(WalletDraft(name: "Hệ thống", kind: .adjustment)) }
         let s = try f.snapshot()
-        XCTAssertEqual(Set(s.wallets.map(\.kindRaw)), Set(WalletKind.allCases.map(\.rawValue)))
+        XCTAssertEqual(Set(s.wallets.map(\.kindRaw)), Set(userKinds.map(\.rawValue)))
     }
 
     func testWalletNamesTrimAndRejectCaseInsensitiveArchivedDuplicates() async throws {

@@ -54,6 +54,8 @@ final class TransactionValidatorTests: XCTestCase {
         check(.archivedDestination, kind: .transfer) { $0.toWallet?.isArchived = true }
         check(.incomeToPerson, kind: .income) { $0.wallet = Wallet(name: "Lan", kind: .person) }
         check(.personToPerson, kind: .transfer) { $0.wallet = Wallet(name: "Lan", kind: .person); $0.toWallet = Wallet(name: "Nam", kind: .person) }
+        check(.adjustmentMisuse, kind: .expense) { $0.wallet = Wallet(name: "Điều chỉnh số dư", kind: .adjustment) }
+        check(.adjustmentMisuse, kind: .transfer) { $0.wallet = Wallet(name: "Điều chỉnh số dư", kind: .adjustment); $0.toWallet = Wallet(name: "Lan", kind: .person) }
         XCTAssertEqual(Set(cases.map(\.1)), Set(E.allCases))
         for (input, expected) in cases {
             XCTAssertThrowsError(try TransactionValidator.validate(input)) { XCTAssertEqual($0 as? E, expected) }
