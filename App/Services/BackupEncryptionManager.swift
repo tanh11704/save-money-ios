@@ -44,7 +44,6 @@ struct BackupEncryptionManager {
         var newBackup: URL?, written: [Rewrite] = []
         do {
             try protection.keyStore.save(key)
-            protection.defaults.set(true, forKey: "SaveMoney.backupEncryptionEnabled")
             for rewrite in rewrites {
                 written.append(rewrite)
                 try rewrite.encrypted.write(to: rewrite.target, options: .atomic)
@@ -53,9 +52,13 @@ struct BackupEncryptionManager {
             }
             // Reserve converted names before exporting the current snapshot, so a
             // same-second plaintext backup cannot collide with the new encrypted one.
-            newBackup = try exporter.export(kind: .manual)
+            newBackup = try exporter.export(kind: .manual, encryptionKey: key)
             for rewrite in rewrites where rewrite.source != rewrite.target { try FileManager.default.removeItem(at: rewrite.source) }
             try BackupCatalog.rotate(directory: exporter.directory)
+            // Commit the enabled setting only after every original plaintext
+            // file has a verified encrypted replacement. An interrupted first
+            // activation must never claim that all old files are protected.
+            protection.defaults.set(true, forKey: "SaveMoney.backupEncryptionEnabled")
             protection.defaults.set(Date(), forKey: "SaveMoney.lastBackupPasswordCheck")
         } catch {
             // Keep the original files and original key if activation/rekey fails.

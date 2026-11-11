@@ -48,8 +48,8 @@ struct BackupExporter {
         return file
     }
 
-    func export(kind: Kind, now: Date = Date(), captured: BackupFile? = nil) throws -> URL {
-        let key = try protection.exportKey()
+    func export(kind: Kind, now: Date = Date(), captured: BackupFile? = nil, encryptionKey: BackupCrypto.DerivedKey? = nil) throws -> URL {
+        let key = try encryptionKey ?? protection.exportKey()
         let file = try captured ?? capture(now: now)
         _ = try BackupValidator.validate(file)
         let folder = kind == .preRestore ? directory.appendingPathComponent("PreRestore", isDirectory: true) : directory

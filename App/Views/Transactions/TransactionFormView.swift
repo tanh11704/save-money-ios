@@ -98,6 +98,7 @@ struct TransactionFormView: View {
         .task {
             guard !initialized else { return }
             initialized = true
+            if typeSize.isAccessibilitySize { keypadVisible = false }
             if original == nil {
                 draft = TransactionFormSelection.restoring(draft, wallets: store.wallets,
                     categories: store.categories, recent: store.recent)
@@ -169,7 +170,7 @@ struct TransactionFormView: View {
             Text("Số tiền").font(.headline)
             if expression.hasOperator {
                 Text(expression.displayText).font(.title3).monospacedDigit()
-                    .foregroundStyle(.secondary).lineLimit(2)
+                    .foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityHidden(true)
             }
@@ -274,10 +275,11 @@ struct TransactionFormView: View {
                 HStack {
                     Spacer()
                     Button { setKeypad(visible: false) } label: {
-                        Label("Ẩn bàn phím", systemImage: "keyboard.chevron.compact.down")
+                        Label(typeSize.isAccessibilitySize ? "Ẩn phím" : "Ẩn bàn phím", systemImage: "keyboard.chevron.compact.down")
                             .font(.subheadline)
                             .frame(minHeight: 44)
                     }
+                    .accessibilityLabel("Ẩn bàn phím")
                     .accessibilityIdentifier("keypad.hide")
                 }
                 MoneyKeypad(showsOperators: true) { key in
@@ -289,11 +291,12 @@ struct TransactionFormView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             Button(action: save) {
-                Label(original == nil ? "Lưu" : "Lưu thay đổi", systemImage: "checkmark")
+                Label(original == nil || typeSize.isAccessibilitySize ? "Lưu" : "Lưu thay đổi", systemImage: "checkmark")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
             .disabled(validationMessage != nil || saving)
+            .accessibilityLabel(original == nil ? "Lưu" : "Lưu thay đổi")
             .accessibilityIdentifier("transaction.save")
             if let message = saveError ?? validationMessage {
                 Text(message).font(.footnote).foregroundStyle(.secondary)

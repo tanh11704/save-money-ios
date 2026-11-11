@@ -5,6 +5,8 @@ struct WalletFormView: View {
     @ObservedObject var store: TransactionScreenStore
     let original: Wallet?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var keypadVisible = true
     @State private var name: String
     @State private var kind: WalletKind
     @State private var magnitude: Int64
@@ -46,18 +48,22 @@ struct WalletFormView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Tên ví").font(.headline)
-                TextField("Tên ví, tối đa 30 ký tự", text: $name)
+                TextField("Tên ví, tối đa 30 ký tự", text: $name, axis: .vertical).lineLimit(1...3)
                     .textFieldStyle(.roundedBorder).focused($nameFocused).frame(minHeight: 44)
                     .accessibilityIdentifier("wallet.name")
                 if let nameMessage { Text(nameMessage).font(.footnote).foregroundStyle(.red) }
+                Text("Loại ví").font(.headline)
                 Picker("Loại ví", selection: $kind) {
-                    ForEach(WalletKind.allCases, id: \.self) { kind in Label(kind.title, systemImage: kind.icon).tag(kind) }
-                }.pickerStyle(.menu).frame(minHeight: 44)
+                    ForEach(WalletKind.allCases, id: \.self) { kind in Text(kind.title).tag(kind) }
+                }.pickerStyle(.menu).labelsHidden().frame(minHeight: 44)
                 Text("Số dư ban đầu").font(.headline)
-                Text(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))
-                    .font(.largeTitle).monospacedDigit().lineLimit(1).minimumScaleFactor(0.25)
-                    .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+                Button { keypadVisible.toggle() } label: {
+                    Text(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))
+                        .font(.largeTitle).monospacedDigit().fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+                }.buttonStyle(.plain)
                     .accessibilityLabel("Số dư ban đầu \(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))")
+                    .accessibilityHint("Ẩn hoặc hiện bàn phím số tiền")
                 Toggle("Đang nợ", isOn: $isDebt).frame(minHeight: 44)
                 if let amountMessage { Text(amountMessage).font(.footnote).foregroundStyle(.red) }
                 openingBalanceWarning
@@ -72,13 +78,14 @@ struct WalletFormView: View {
                 if nameFocused {
                     Button("Xong tên ví") { nameFocused = false }.frame(minHeight: 44)
                 } else {
-                    MoneyKeypad { magnitude = MoneyFormatter.applying($0, to: magnitude); saveError = nil }
+                    if keypadVisible { MoneyKeypad { magnitude = MoneyFormatter.applying($0, to: magnitude); saveError = nil } }
                     Button(action: save) { Text("Lưu ví").frame(maxWidth: .infinity, minHeight: 44) }
                         .buttonStyle(.borderedProminent)
                         .disabled(validationMessage != nil)
                 }
             }.padding(8).background(.bar)
         }
+        .task { if typeSize.isAccessibilitySize { keypadVisible = false } }
         .onChange(of: name) { _, _ in saveError = nil }
         .onChange(of: kind) { _, _ in saveError = nil }
         .onChange(of: isDebt) { _, _ in saveError = nil }

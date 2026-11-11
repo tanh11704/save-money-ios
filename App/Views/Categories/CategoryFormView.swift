@@ -28,7 +28,7 @@ struct CategoryFormView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Tên danh mục").font(.headline)
-                TextField("Tên danh mục, tối đa 30 ký tự", text: $draft.name)
+                TextField("Tên danh mục, tối đa 30 ký tự", text: $draft.name, axis: .vertical).lineLimit(1...3)
                     .textFieldStyle(.roundedBorder).frame(minHeight: 44)
                     .accessibilityIdentifier("category.name")
                 if let message = saveError ?? validationMessage {

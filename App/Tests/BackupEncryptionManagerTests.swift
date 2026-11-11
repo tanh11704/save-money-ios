@@ -37,7 +37,10 @@ final class BackupEncryptionManagerTests: XCTestCase {
         let keys = MemoryBackupKeys(); var exporter = BackupExporter(container: container, directory: folder)
         exporter.protection = BackupProtection(defaults: defaults, keyStore: keys)
         let url = try exporter.export(kind: .manual), original = try Data(contentsOf: url)
-        exporter.afterWrite = { _ in throw BackupError.unreadable }
+        exporter.afterWrite = { _ in
+            XCTAssertFalse(defaults.bool(forKey: "SaveMoney.backupEncryptionEnabled"), "Activation is not committed before backup verification")
+            throw BackupError.unreadable
+        }
         XCTAssertThrowsError(try BackupEncryptionManager(exporter: exporter).enable(key: BackupCrypto.deriveKey(password: "remember password", iterations: 100_000)))
         XCTAssertFalse(exporter.protection.enabled); XCTAssertNil(try keys.read()); XCTAssertEqual(try Data(contentsOf: url), original)
     }

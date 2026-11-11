@@ -55,7 +55,8 @@ struct TransactionRow: View {
         Text(TransactionPresentation.amount(transaction))
             .font(.headline).monospacedDigit()
             .foregroundStyle(transaction.kindRaw == "income" ? Color.green : Color.primary)
-            .lineLimit(1)
+            .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+            .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
             .minimumScaleFactor(0.25)
             .frame(maxWidth: .infinity, alignment: .trailing)
     }

@@ -4,32 +4,16 @@
 
 ## Trạng thái
 
-Đã triển khai giai đoạn 1 và phần code giai đoạn 2: giao dịch, ví/danh mục,
-backup/restore, tự sao lưu, khóa app, bàn phím cộng/trừ, ngân sách,
-biểu đồ ngày/danh mục, so sánh cùng kỳ và giao dịch định kỳ.
-Ngân sách và định kỳ vào từ tab Ví; không thêm tab mới.
+Đã triển khai phần code giai đoạn 1–2 và phần bảo vệ giai đoạn 3 (F–J),
+cùng bản thử widget K0. K1 chờ người dùng thử SideStore trên máy thật.
+Có kiểm tra toàn vẹn, CSV, tình trạng/nhắc backup, mã hóa và 4 App Shortcuts.
+Không đổi schema SwiftData; backup v3 giữ nguyên bên trong phong bì mã hóa.
 
-**Kiểm tra ngày 11/11/2026:** 163/163 unit test macOS đạt. Lần chạy toàn bộ trên
-iPhone 18 Pro Simulator (iOS 27.2) đạt 167/167 test, gồm migration, backup,
-so sánh tháng, lịch neo ngày và runtime sinh sau mở khóa. Nhóm 19/19 test hồi quy cuối
-cho chu kỳ rất lớn, danh mục lưu trữ, runtime và rollback restore cũng đạt. Build Release iPhone
-đạt (không ký mã).
+**Kiểm tra ngày 11/11/2026:** 181/181 test macOS và 190/190 test iOS Simulator
+đạt. Có kiểm tra bổ sung sau rà soát mã hóa và ảnh giao diện; xem checklist QA.
+IPA thử K0 build Release arm64, có appex và kiểm tra zip đạt. Không coi đây
+là bằng chứng cài/làm mới SideStore hay khôi phục mã hóa trên iPhone thật.
 
-Schema V3 thêm RecurringRule và Transaction.recurrenceKey. Model V1/V2 được
-đóng băng; migration nhẹ từ store V1 chưa version hoặc V2 giữ nguyên ví,
-danh mục, giao dịch, số dư và hạn mức. Chủ dự án đã xác nhận backup trước V3.
-Backup xuất v3, vẫn đọc v1/v2; giữ nguyên golden-v1/v2 và thêm golden-v3.
-
-Định kỳ chỉ sinh khi app mở/foreground sau mở khóa hoặc người dùng lưu/tiếp tục
-quy tắc; không chạy nền và không chạy trong restore. Mỗi quy tắc tối đa 400 lần
-mỗi lượt, phần dư để lần mở sau. Con trỏ và khóa được save cùng giao dịch:
-xóa giao dịch không làm sinh lại, sửa quy tắc giữ con trỏ, restore giữ cả hai.
-Form báo trước các giao dịch quá khứ sẽ sinh ngay. Đợt sinh mới đếm từng giao
-dịch vào mốc 20 thay đổi để backup, cảnh báo ngân sách tính trước/sau cả đợt.
-
-Biểu đồ không thay thế danh sách chữ. So sánh tháng hiện tại dùng cùng số ngày
-của tháng trước (kẹp cuối tháng ngắn); tháng đã qua so cả tháng. Tiền tính bằng
-Int64, Double chỉ phục vụ vẽ biểu đồ và các tỷ lệ hiển thị.
 
 Chưa nghiệm thu thao tác giao diện với Dynamic Type/VoiceOver và cài đè trên
 iPhone thật/SideStore. Các checklist thiết bị bên dưới vẫn cần chủ dự án thực hiện.
@@ -877,3 +861,61 @@ xcodebuild -project SaveMoney.xcodeproj -scheme SaveMoney -destination 'platform
 
 Tài liệu vận hành là phần chuẩn bị bước 7, không phải xác nhận đã thực hiện
 các thao tác trên thiết bị. Chỉ gắn tag verified khi có kết quả nghiệm thu thật.
+
+## Bảo vệ dữ liệu giai đoạn 3
+
+### Mã hóa mọi bản sao lưu
+
+Vào Cài đặt → Bảo mật → Mã hóa bản sao lưu. Ghi mật khẩu ở nơi an toàn ngoài
+iPhone, nhập hai lần (ít nhất 10 ký tự), xác nhận đã ghi rồi bật. App mã hóa
+các bản rõ đang có trong Backups/ và PreRestore/, tạo một bản thủ công mới,
+mở/kiểm tra checksum rồi mới báo thành công. Mọi backup mới Auto/Manual/PreRestore
+đều mã hóa. Nếu mất/lỗi khóa Keychain, auto-backup bỏ qua và báo lỗi; không ghi
+bản rõ để thay thế.
+
+Khóa dẫn xuất (không mật khẩu) lưu Keychain AfterFirstUnlockThisDeviceOnly,
+không đồng bộ. CommonCrypto PBKDF2-HMAC-SHA256 600.000 vòng + CryptoKit AES-GCM-256,
+header được xác thực bằng AAD, nonce mới mỗi file. [Vector RFC 7914 §11](https://www.rfc-editor.org/rfc/rfc7914#section-11)
+được dùng để kiểm tra PBKDF2.
+
+**Mất khóa Keychain và quên mật khẩu thì không khôi phục được file.** Đổi Apple ID
+ký SideStore hoặc xóa/cài lại có thể làm mất khóa. Phải diễn tập trên dữ liệu mẫu:
+chép file ra iCloud Drive, cài lại, nhập mật khẩu, đối chiếu số dư. Cài đặt có
+Kiểm tra mật khẩu; nhắc kiểm tra lại mỗi 90 ngày. Tắt mã hóa xóa khóa hiện tại,
+file cũ vẫn cần mật khẩu cũ. Đổi mật khẩu không đổi các file cũ trừ khi chọn
+mã hóa lại các bản đang giữ (gồm PreRestore).
+
+### Kiểm tra, tình trạng và CSV
+
+Cài đặt → Kiểm tra dữ liệu chỉ đọc, không sửa hay restore. Tự kiểm tra mỗi 7 ngày
+sau mở khóa; file mã hóa thiếu khóa được ghi warning chưa kiểm tra. Thẻ Sao lưu
+có lý do mức Tốt/Cần chú ý/Nguy hiểm, số bản, dung lượng và mốc gần nhất.
+Hai lỗi auto liên tiếp nhắc tối đa một lần/ngày; chia sẻ thành công đặt lại
+nhắc +14, +21, +24, +27 ngày rồi dừng.
+
+Cài đặt → Xuất CSV: chọn preset hoặc hai ngày, xem số giao dịch rồi Xuất/Chia sẻ.
+CSV UTF-8 BOM, giữ số nguyên, có quote và chống công thức ở ô chữ. CSV là file
+tạm dạng rõ, **không phải backup**, không dùng để restore và không nằm trong Backups/.
+
+### Phím tắt và widget K0
+
+Trong app Phím tắt/Spotlight tìm SaveMoney: Thêm khoản chi, Thêm khoản thu,
+Mở lịch sử, Mở thống kê. Mỗi hành động mở app và đi qua Face ID; thêm chỉ điền
+loại/số tiền, vẫn cần chọn danh mục và Lưu. Siri tiếng Việt cần thử trên máy thật.
+URL dùng chung: savemoney://add?kind=expense&amount=50000 (cũng có history, stats).
+
+Bản thường không nhúng widget. Tạo IPA thử riêng:
+
+```sh
+INCLUDE_WIDGET_TRIAL=1 scripts/build-sidestore-ipa.sh
+```
+
+Kết quả `build/SideStore/SaveMoney-WidgetTrial.ipa` có một widget nhỏ chỉ mở app,
+không đọc dữ liệu, không App Group, không chuyển store. SideStore phải ký IPA
+trước khi cài. Extension có bundle ID riêng; kiểm tra số App ID và khả năng
+làm mới trên chính máy bạn. Người dùng đã chọn thử K0: cài, thêm widget,
+làm mới chữ ký và xác nhận widget còn mở app được. Chỉ sau kết quả đó mới làm K1.
+
+Kết quả rà ảnh và các bước thiết bị còn mở: [checklist QA](docs/qa/phase3-accessibility.md).
+Ảnh render nằm trong xcresult và `build/AccessibilityReview/`; ảnh tĩnh không
+xác nhận cuộn/chạm hay VoiceOver. Có preview AX5 tối và chữ nhỏ nhất sáng.

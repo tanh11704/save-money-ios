@@ -17,37 +17,37 @@ struct MoneyKeypad: View {
         }
     }
 
+    @ScaledMetric(relativeTo: .title2) private var keyFontSize: CGFloat = 22
     var body: some View {
-        VStack(spacing: 4) {
-            ForEach(rows, id: \.self) { row in
-                HStack(spacing: 8) {
-                    ForEach(row, id: \.self) { key in
-                        Button {
-                            if let operation = operatorKey(key) { press(operation) }
-                            else if key == "delete" { press(.backspace) }
-                            else if key == "000" { press(.tripleZero) }
-                            else if let digit = Int(key) { press(.digit(digit)) }
-                        } label: {
-                            Group {
-                                if key == "delete" { Image(systemName: "delete.left") }
-                                else { Text(labels[key] ?? key).monospacedDigit() }
-                            }
-                            .font(.title2)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.vertical, 2)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(showsOperators ? (operatorKey(key) != nil || key == "delete" ? Color.accentColor : Color.secondary) : nil)
-                        .accessibilityLabel(voiceLabels[key] ?? (key == "delete" ? "Xóa một chữ số" : key == "000" ? "Ba số không" : key))
-                        .accessibilityIdentifier("keypad.\(key)")
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 8), count: showsOperators ? 4 : 3), spacing: 4) {
+            ForEach(rows.flatMap { $0 }, id: \.self) { key in
+                Button {
+                    if let operation = operatorKey(key) { press(operation) }
+                    else if key == "delete" { press(.backspace) }
+                    else if key == "000" { press(.tripleZero) }
+                    else if let digit = Int(key) { press(.digit(digit)) }
+                } label: {
+                    Group {
+                        if key == "delete" { Image(systemName: "delete.left") }
+                        else { Text(labels[key] ?? key).monospacedDigit() }
                     }
+                    // A calculator key stays legible without taking the entire
+                    // AX5 viewport; VoiceOver retains its full spoken label.
+                    .font(.system(size: min(keyFontSize, 32)))
+                    .lineLimit(1).minimumScaleFactor(0.4)
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 44)
+                    .padding(.vertical, 2).contentShape(Rectangle())
                 }
+                .buttonStyle(.bordered).frame(minWidth: 0, maxWidth: .infinity)
+                .tint(showsOperators ? (operatorKey(key) != nil || key == "delete" ? Color.accentColor : Color.secondary) : nil)
+                .accessibilityLabel(voiceLabels[key] ?? (key == "delete" ? "Xóa một chữ số" : key == "000" ? "Ba số không" : key))
+                .accessibilityIdentifier("keypad.\(key)")
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Bàn phím số tiền")
     }
+
 }
 
 struct SelectionChip: View {

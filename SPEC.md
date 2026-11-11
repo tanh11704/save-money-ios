@@ -156,12 +156,18 @@ App/
 
 ## 7. Giai đoạn 3 — Bảo vệ và duy trì nâng cao
 
-- Mã hóa file backup bằng mật khẩu (CryptoKit, AES-GCM, khóa dẫn xuất từ mật khẩu). Phải có cách khôi phục rõ ràng, và cảnh báo người dùng rằng quên mật khẩu là mất file.
-- Kiểm tra toàn vẹn: tổng số dư khớp với tính từ giao dịch, không có giao dịch trỏ vào ví/danh mục không tồn tại, không có chuyển tiền thiếu ví đích, checksum file backup khớp
-- Xuất CSV (giao dịch theo khoảng thời gian)
-- Nhắc sao lưu nâng cao, báo cáo tình trạng backup
-- Tối ưu iPhone: widget thêm giao dịch nhanh, App Shortcuts, tinh chỉnh Dynamic Type và chế độ tối
-- Nếu sau này chuyển sang tài khoản Developer: cân nhắc CloudKit để đồng bộ tự động
+- [x] Kiểm tra toàn vẹn chỉ đọc: dùng chung TransactionValidator, Budget.rule, RecurringValidator và BalanceCalculator; kiểm tra ID/khóa định kỳ, tham chiếu, số dư và backup. Giao dịch cũ thiếu danh mục là warning. Không tự sửa. File mã hóa thiếu khóa được đánh dấu chưa kiểm tra (warning).
+- [x] Cài đặt có kiểm tra ngay và kết quả theo mức độ. Tự kiểm tra mỗi 7 ngày sau mở khóa; đọc file ở tác vụ riêng. Lưu ngày/healthy; có lỗi hiện trong Cài đặt, không gửi push.
+- [x] CSV UTF-8 BOM, RFC 4180, CRLF, số nguyên và số có dấu; chống chèn công thức ở ô chữ. Chọn khoảng ngày Asia/Saigon, có preset, đếm giao dịch và chia sẻ file tạm. CSV không phải backup, không được mã hóa theo cài đặt backup và không dùng để restore.
+- [x] BackupHealth: có chữ/lý do, số bản/dung lượng/loại, mốc 7/14 ngày, kiểm tra 30 ngày, chưa chép ra ngoài trên 50 giao dịch, lỗi backup và thay đổi chưa backup. Có badge Cài đặt khi critical.
+- [x] Hai lỗi auto liên tiếp gửi nhắc tối đa một lần/ngày; thành công reset chuỗi lỗi. Chia sẻ thành công reset nhắc +14, +21, +24, +27 ngày rồi dừng, hủy lịch +28 cũ. Mật khẩu cần kiểm tra lại sau 90 ngày.
+- [x] Mã hóa AES-GCM-256 bằng CryptoKit; khóa dẫn xuất bằng **CommonCrypto CCKeyDerivationPBKDF, PBKDF2-HMAC-SHA256, 600.000 vòng**, salt 16 byte. NFC, tối thiểu 10 ký tự. Nonce ngẫu nhiên mỗi file, xác thực header bằng AAD, có known-answer test RFC 7914.
+- Quyết định đã chốt: bật mã hóa áp dụng cho mọi backup Auto/Manual/PreRestore. Khi bật, chuyển cả bản rõ đang có sang mã hóa; chỉ báo thành công sau khi tạo và mở kiểm tra một bản mới. Thiếu/lỗi khóa Keychain thì bỏ qua backup và báo lỗi, **không ghi bản rõ**.
+- Chỉ khóa đã dẫn xuất (không mật khẩu) được lưu Keychain AfterFirstUnlockThisDeviceOnly, không đồng bộ. Bật có xác nhận đã ghi mật khẩu ngoài iPhone; tắt xóa khóa. File cũ vẫn cần mật khẩu cũ. Đổi mật khẩu phải kiểm tra cũ, có tùy chọn mã hóa lại các bản đang giữ. Hoạt động lỗi được rollback, không xóa bản gốc trước khi kiểm tra bản thay thế.
+- [x] 4 App Shortcuts mở app: Thêm chi/thu, Lịch sử, Thống kê. Không đọc số dư hay tự lưu; route giữ khi khóa và chỉ xử lý sau mở khóa. URL savemoney://add?kind=expense&amount=50000 có kiểm tra loại/số tiền.
+- [x] K0: có target WidgetTrial chỉ để thử SideStore, không đọc dữ liệu, không App Group, không di chuyển store. IPA thử được đóng gói riêng theo INCLUDE_WIDGET_TRIAL=1. Người dùng chọn thử K0; **K1 chờ kết quả cài và làm mới chữ ký trên iPhone thật**, chưa triển khai widget hoàn chỉnh.
+- [x] Có preview và ảnh render AX5 tối / chữ nhỏ nhất sáng; tăng chiều cao biểu đồ, cho tiền/biểu thức xuống dòng, giữ phím 000 đọc được và lưới bàn phím trong chiều rộng màn hình. Checklist QA ghi rõ giới hạn ảnh tĩnh, các bước VoiceOver/tương phản/cuộn/chạm vẫn cần nghiệm thu thiết bị.
+- [ ] CloudKit ngoài phạm vi, chỉ xem xét khi chuyển tài khoản Developer trả phí.
 
 ## 8. Đặc tả backup và restore (bắt buộc trong MVP)
 
@@ -200,6 +206,13 @@ Chủ dự án bật Cài đặt → [tên] → iCloud → Sao lưu iCloud. App 
 - Restore xóa/chèn quy tắc định kỳ trong cùng transaction; giữ con trỏ và khóa theo file. Lần mở sau chỉ sinh các lần còn đến hạn; lỗi restore giữ nguyên cả quy tắc, khóa và dữ liệu cũ. Tóm tắt có số giao dịch định kỳ. Giữ golden-v1/v2/v3.
 - Khôi phục thay thế xóa cả hạn mức trong cùng transaction, rollback toàn bộ nếu lỗi. Tóm tắt xác nhận có số hạn mức. Giữ cả golden-v1 và golden-v2 trong test.
 
+### Phong bì mã hóa (không đổi schema SwiftData hay backup v3 bên trong)
+- Đuôi .savemoney, tên hậu tố -encrypted. JSON có format = savemoney-backup-encrypted, envelopeVersion = 1, kdf { name = PBKDF2-HMAC-SHA256, iterations, salt base64 }, cipher = AES-GCM-256, keyID (8 byte SHA256 đầu dạng hex), createdAt (Int64 ms), sealed (combined nonce + ciphertext + tag base64).
+- AAD là JSON chuẩn tắc sortedKeys/withoutEscapingSlashes của toàn bộ header, trừ sealed. Từ chối version/cipher/KDF lạ, salt không đủ 16 byte hoặc iterations ngoài 100.000…10.000.000 **trước** dẫn xuất.
+- Ghi file tạm đã mã hóa, mở bằng khóa Keychain và kiểm tra BackupValidator/checksum trước đổi tên. Không có khóa thì dừng; không fallback plaintext. Catalog/rotation tính cả file mã hóa chưa có khóa, giữ 10 bản chính và 5 PreRestore.
+- Restore nhận file thường v1/v2/v3 không hỏi mật khẩu. File mã hóa có keyID khớp thì mở bằng Keychain; thiếu khóa thì sheet nhập mật khẩu. Sai mật khẩu/file bị sửa cùng thông báo, dữ liệu hiện tại giữ nguyên. Giải mã xong vẫn chạy đủ validator và xác nhận tóm tắt, tạo PreRestore theo cùng cài đặt mã hóa rồi mới thay dữ liệu.
+- Quên mật khẩu sau khi mất khóa Keychain (xóa/cài lại hoặc đổi Apple ID ký app) thì không khôi phục được file. Bắt buộc ghi mật khẩu ra ngoài máy và diễn tập khôi phục bằng mật khẩu trước dùng thật.
+
 ### Test bắt buộc
 - Vòng tròn: tạo dữ liệu mẫu, export, xóa hết, import, so sánh toàn bộ (số lượng, từng giao dịch, số dư mỗi ví) phải khớp tuyệt đối
 - File bị sửa một ký tự: checksum phải phát hiện
@@ -213,6 +226,8 @@ Chủ dự án bật Cài đặt → [tên] → iCloud → Sao lưu iCloud. App 
 Chủ dự án thực hiện, không phải LLM:
 
 - [ ] Toàn bộ unit test đạt
+- [ ] Đã ghi mật khẩu backup ra ngoài iPhone
+- [ ] Khôi phục được bản mã hóa sau khi xóa/cài lại app, bằng mật khẩu
 - [ ] Cài bản dùng thật qua SideStore (không cài từ Xcode, vì bundle ID khác nhau và dữ liệu không chuyển sang nhau)
 - [ ] Nhập vài giao dịch mẫu, bấm làm mới trong SideStore, dữ liệu còn nguyên
 - [ ] Xuất backup, xóa app, cài lại, khôi phục, số dư từng ví khớp trước đó
@@ -360,7 +375,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ### Phong cách chung
 - Giữ quy tắc mục 12 và 13: thành phần hệ thống, Dynamic Type, chế độ tối, vùng chạm 44pt, tiếng Việt, VoiceOver (đọc "Tổng chi, một triệu hai trăm nghìn đồng").
 - Dùng `MoneyFormatter` đã có. Cỡ chữ lớn nhất: bố cục xếp dọc, không cắt số tiền.
-- Chưa thêm: xuất CSV, lọc theo ví.
+- Xuất CSV ở Cài đặt; chưa lọc theo ví.
 
 ## 15. Đặc tả kỹ thuật backup (Bước 5, chi tiết hóa mục 8)
 
@@ -394,7 +409,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Thời gian lưu bằng `Int64` mili giây từ 1970 (không dùng chuỗi ngày).
 - ID là chuỗi UUID viết hoa. Quan hệ lưu bằng ID, giá trị rỗng là `null`.
 - Checksum = SHA-256 của `payload` được mã hóa theo dạng chuẩn: `sortedKeys`, không khoảng trắng thừa. Khi kiểm tra: giải mã payload, mã hóa lại đúng dạng chuẩn, băm, so sánh.
-- Checksum chỉ phát hiện hỏng file vô tình, **không chống sửa cố ý** (file chưa mã hóa, việc đó thuộc giai đoạn 3).
+- Checksum bản rõ chỉ phát hiện hỏng file vô tình. Phong bì mã hóa dùng AES-GCM/AAD để phát hiện sửa dữ liệu/header.
 - Có một "file mẫu vàng" cố định trong thư mục test. Test phải xác minh checksum của file này luôn đạt. Đổi dạng chuẩn thì phải tăng `schemaVersion`.
 
 ### Thuật toán export
@@ -419,7 +434,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 
 ### Nhắc nhở
 - Theo dõi hai mốc: "backup gần nhất" và "chép ra ngoài gần nhất" (cập nhật khi Share Sheet báo đã hoàn tất).
-- Thông báo cục bộ: mỗi lần chép ra ngoài thì hủy và đặt lại các thông báo ở +14, +21, +28 ngày. Nội dung chung chung, không có số tiền.
+- Thông báo cục bộ: mỗi lần chép ra ngoài thì hủy lịch cũ và đặt lại thông báo ở +14, +21, +24, +27 ngày rồi dừng. Nội dung chung chung, không có số tiền.
 - Banner: vàng khi quá 7 ngày, đỏ khi quá 14 ngày, tính trên mốc "chép ra ngoài".
 
 ## 16. Quy tắc Cài đặt và khóa ứng dụng (Bước 5c, 6)
@@ -427,7 +442,7 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 ### Tab Cài đặt (tab thứ 5)
 - Mục "Sao lưu": banner trạng thái, nút "Sao lưu ngay", "Chia sẻ bản mới nhất", "Danh sách bản sao lưu", "Khôi phục từ file", ghi chú nhắc bật iCloud Backup.
 - Mục "Bảo mật": công tắc "Khóa bằng Face ID".
-- Không thêm gì khác (chưa có giao diện tùy biến, xuất CSV).
+- Đã thêm Kiểm tra dữ liệu, Xuất CSV, tình trạng backup và Mã hóa bản sao lưu. Chưa có giao diện tùy biến.
 
 ### Khóa ứng dụng
 - Dùng `LocalAuthentication`, chính sách `.deviceOwnerAuthentication` (sinh trắc học, tự rơi về mật mã máy).

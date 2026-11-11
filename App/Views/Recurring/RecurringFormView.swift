@@ -30,7 +30,7 @@ struct RecurringFormView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                TextField("Tên (không bắt buộc)", text: $draft.name).textFieldStyle(.roundedBorder).frame(minHeight: 44)
+                TextField("Tên (không bắt buộc)", text: $draft.name, axis: .vertical).lineLimit(1...5).textFieldStyle(.roundedBorder).frame(minHeight: 44)
                 Picker("Loại", selection: transaction.kind) {
                     Text("Chi").tag(TransactionKind.expense); Text("Thu").tag(TransactionKind.income); Text("Chuyển").tag(TransactionKind.transfer)
                 }.pickerStyle(.menu).frame(minHeight: 44)
@@ -52,26 +52,40 @@ struct RecurringFormView: View {
                 wallets(destination: false)
                 if draft.transaction.kind == .transfer { wallets(destination: true) }
                 TextField("Ghi chú", text: transaction.note, axis: .vertical).textFieldStyle(.roundedBorder).frame(minHeight: 44)
-                Picker("Chu kỳ", selection: $draft.frequency) {
-                    ForEach(RecurrenceFrequency.allCases, id: \.self) { Text("Hằng " + $0.title).tag($0) }
-                }.frame(minHeight: 44)
-                Stepper("Mỗi \(draft.interval) \(draft.frequency.title)", value: $draft.interval, in: 1...Int.max).frame(minHeight: 44)
-                DatePicker("Ngày bắt đầu", selection: $draft.startDate, displayedComponents: .date).frame(minHeight: 44)
+                VStack(alignment: .leading) {
+                    Text("Chu kỳ").font(.headline)
+                    Picker("Chu kỳ", selection: $draft.frequency) {
+                        ForEach(RecurrenceFrequency.allCases, id: \.self) { Text("Hằng " + $0.title).tag($0) }
+                    }.labelsHidden().frame(minHeight: 44)
+                }
+                VStack(alignment: .leading) {
+                    Text("Mỗi \(draft.interval) \(draft.frequency.title)").fixedSize(horizontal: false, vertical: true)
+                    Stepper("Mỗi \(draft.interval) \(draft.frequency.title)", value: $draft.interval, in: 1...Int.max).labelsHidden().frame(minHeight: 44)
+                }
+                VStack(alignment: .leading) {
+                    Text("Ngày bắt đầu").font(.headline)
+                    DatePicker("Ngày bắt đầu", selection: $draft.startDate, displayedComponents: .date)
+                        .labelsHidden().dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44)
+                }
                 Toggle("Có ngày kết thúc", isOn: $hasEnd).frame(minHeight: 44)
                 if hasEnd {
-                    DatePicker("Ngày kết thúc", selection: Binding(get: { draft.endDate ?? draft.startDate }, set: { draft.endDate = $0 }), displayedComponents: .date).frame(minHeight: 44)
+                    VStack(alignment: .leading) {
+                        Text("Ngày kết thúc").font(.headline)
+                        DatePicker("Ngày kết thúc", selection: Binding(get: { draft.endDate ?? draft.startDate }, set: { draft.endDate = $0 }), displayedComponents: .date)
+                            .labelsHidden().dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44)
+                    }
                 }
                 let preview = RecurringPresentation.preview(draft, generatedThrough: original?.generatedThrough)
                 Text(preview.upcoming).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if original?.isPaused == true { Text("Quy tắc đang tạm dừng. Chỉ sinh khi bạn bấm Tiếp tục.").font(.footnote) }
                 else if let catchUp = preview.catchUp { Text(catchUp).font(.footnote).fixedSize(horizontal: false, vertical: true) }
                 if original != nil { Text("Thay đổi chỉ áp dụng cho các lần sau; giao dịch đã sinh giữ nguyên.").font(.footnote).foregroundStyle(.secondary) }
-            }.padding()
+            }.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).padding()
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 if keypadVisible {
-                    Button("Ẩn bàn phím") { keypadVisible = false }.frame(minHeight: 44)
+                    Button(typeSize.isAccessibilitySize ? "Ẩn phím" : "Ẩn bàn phím") { keypadVisible = false }.frame(minHeight: 44).accessibilityLabel("Ẩn bàn phím")
                     MoneyKeypad(showsOperators: true) { key in expression.apply(key); draft.transaction.amount = expression.result ?? 0 }
                 }
                 Button {
@@ -84,6 +98,7 @@ struct RecurringFormView: View {
         }
         .navigationTitle(original == nil ? "Thêm định kỳ" : "Sửa định kỳ")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
+        .task { if typeSize.isAccessibilitySize { keypadVisible = false } }
         .onChange(of: hasEnd) { _, enabled in draft.endDate = enabled ? draft.startDate : nil }
         .onChange(of: draft.transaction.kind) { _, kind in
             draft.transaction = TransactionFormSelection.restoring(draft.transaction.changingKind(to: kind), wallets: store.wallets,

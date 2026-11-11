@@ -61,13 +61,16 @@ private struct PrivacyScreen: View {
 }
 
 @MainActor
-private struct LockScreen: View {
+struct LockScreen: View {
     @ObservedObject var lock: AppLockService
     @Environment(\.scenePhase) private var phase
     @State private var automaticallyRequested = false
     var body: some View {
         VStack(spacing: 20) {
-            Label("SaveMoney đã khóa", systemImage: "lock.fill").font(.title)
+            VStack(spacing: 8) {
+                Image(systemName: "lock.fill").accessibilityHidden(true)
+                Text("SaveMoney đã khóa").multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            }.font(.title).accessibilityElement(children: .combine)
             if lock.state == .authenticating { ProgressView("Đang xác thực…") }
             else {
                 Button { Task { await lock.unlock() } } label: {

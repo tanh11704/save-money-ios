@@ -6,6 +6,8 @@ struct BudgetFormView: View {
     let scope: BudgetRule.Scope
     let month: ReportingMonth
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var keypadVisible = true
     @State private var amount: Int64
     @State private var error: String?
     @State private var confirmingOff = false
@@ -19,9 +21,11 @@ struct BudgetFormView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text(BudgetPresentation.name(for: scope, categories: store.categories)).font(.headline)
-                Text(MoneyFormatter.string(from: amount)).font(.largeTitle).monospacedDigit()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("budget.amount")
+                Button { keypadVisible.toggle() } label: {
+                    Text(MoneyFormatter.string(from: amount)).font(.largeTitle).monospacedDigit()
+                        .fixedSize(horizontal: false, vertical: true)
+                }.buttonStyle(.plain).frame(minHeight: 44)
+                    .accessibilityIdentifier("budget.amount").accessibilityHint("Ẩn hoặc hiện bàn phím số tiền")
                 Text("Áp dụng từ tháng \(month.month)/\(String(month.year)) và các tháng sau. Các tháng trước giữ hạn mức cũ.")
                     .font(.footnote).foregroundStyle(.secondary)
                 if BudgetPresentation.categoryLimitsExceedTotal(month: month, rules: store.budgetRules, replacing: scope, limit: amount) {
@@ -36,7 +40,7 @@ struct BudgetFormView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
-                MoneyKeypad { amount = MoneyFormatter.applying($0, to: amount); error = nil }
+                if keypadVisible { MoneyKeypad { amount = MoneyFormatter.applying($0, to: amount); error = nil } }
                 Button {
                     do { try store.saveBudget(amount, scope: scope, month: month); dismiss() }
                     catch { self.error = error.localizedDescription }
@@ -46,6 +50,7 @@ struct BudgetFormView: View {
                 if !valid { Text("Hạn mức phải lớn hơn 0 và không quá 999.999.999.999 ₫.").font(.footnote).foregroundStyle(.secondary) }
             }.padding().background(.bar)
         }
+        .task { if typeSize.isAccessibilitySize { keypadVisible = false } }
         .navigationTitle("Đặt hạn mức")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
         .confirmationDialog("Tắt hạn mức từ tháng này?", isPresented: $confirmingOff, titleVisibility: .visible) {

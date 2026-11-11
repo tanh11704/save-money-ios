@@ -104,7 +104,7 @@ struct SettingsView: View {
 }
 
 @MainActor
-private struct RestoreSummaryView: View {
+struct RestoreSummaryView: View {
     let candidate: BackupScreenStore.PendingRestore
     @ObservedObject var store: BackupScreenStore
     @Environment(\.dismiss) private var dismiss

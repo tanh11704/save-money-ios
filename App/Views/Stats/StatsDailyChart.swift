@@ -5,10 +5,12 @@ struct StatsDailyChart: View {
     let days: [StatsService.DailyTotal]
     let allowance: Int64?
     @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .caption) private var axisFontSize: CGFloat = 12
     private var ticks: [Int] {
         typeSize.isAccessibilitySize ? Array(Set([1, 10, 20, days.count])).sorted() : Array(stride(from: 1, through: days.count, by: 5))
     }
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
         Chart {
             ForEach(days) { day in
                 BarMark(x: .value("Ngày", day.day), y: .value("Chi", day.plotValue))
@@ -24,19 +26,28 @@ struct StatsDailyChart: View {
                     .accessibilityValue(MoneyFormatter.string(from: allowance).replacingOccurrences(of: "₫", with: "đồng"))
             }
         }
-        .chartXAxis { AxisMarks(values: ticks) }
+        .chartXScale(domain: 0...(days.count + 1))
+        .chartXAxis {
+            AxisMarks(values: ticks) { value in
+                AxisGridLine(); AxisTick()
+                AxisValueLabel(anchor: value.as(Int.self) == days.count ? .topTrailing : value.as(Int.self) == 1 ? .topLeading : .top, collisionResolution: .disabled) {
+                    if let day = value.as(Int.self) { Text(String(day)).font(.system(size: min(axisFontSize, 22))) }
+                }
+            }
+        }
         .chartYAxis {
             AxisMarks { value in
                 AxisGridLine()
                 AxisValueLabel {
-                    if let amount = value.as(Int64.self) { Text(MoneyFormatter.compact(amount)) }
+                    if let amount = value.as(Int64.self) { Text(MoneyFormatter.compact(amount)).font(.system(size: min(axisFontSize, 22))) }
                 }
             }
         }
-        .frame(height: 180)
+        .frame(height: typeSize.isAccessibilitySize ? 260 : 180)
         if let allowance {
             Text("Trung bình cho phép/ngày: \(MoneyFormatter.string(from: allowance))")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
         }
     }
 }
