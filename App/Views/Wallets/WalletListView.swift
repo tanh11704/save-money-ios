@@ -50,6 +50,9 @@ struct WalletListView: View {
                 .frame(minHeight: 44)
             }
             Section {
+                NavigationLink { BudgetListView(store: store) } label: {
+                    Label("Ngân sách", systemImage: "chart.bar").frame(minHeight: 44)
+                }
                 NavigationLink { CategoryListView(store: store) } label: {
                     Label("Quản lý danh mục", systemImage: "tag").frame(minHeight: 44)
                 }

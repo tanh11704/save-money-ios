@@ -8,6 +8,7 @@ final class TransactionScreenStore: ObservableObject {
     @Published private(set) var wallets: [Wallet] = []
     @Published private(set) var categories: [Category] = []
     @Published private(set) var transactions: [Transaction] = []
+    @Published private(set) var budgetRules: [BudgetRule] = []
     @Published private(set) var balances: [UUID: String] = [:]
     @Published private(set) var totalBalance = MoneyFormatter.string(from: 0)
     @Published private(set) var ready = false
@@ -50,6 +51,7 @@ final class TransactionScreenStore: ObservableObject {
             balances[wallet.id] = MoneyFormatter.string(from: value)
         }
         let total = try BalanceCalculator.totalBalance(wallets: wallets, transactions: transactions, allowMissingCategory: true)
+        budgetRules = try context.fetch(FetchDescriptor<Budget>()).compactMap(\.rule)
         readContext = context
         self.wallets = wallets
         self.categories = categories
@@ -120,6 +122,22 @@ final class TransactionScreenStore: ObservableObject {
 
     func categoryHasTransactions(_ id: UUID) -> Bool {
         transactions.contains { $0.category?.id == id }
+    }
+
+    func saveBudget(_ limit: Int64, scope: BudgetRule.Scope, month: ReportingMonth) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        try ManagementPersistence(container: container).write { context in
+            try BudgetPersistence.setLimit(limit, scope: scope, from: month, context: context)
+        }
+        refreshAfterManagementWrite()
+    }
+
+    func turnOffBudget(scope: BudgetRule.Scope, month: ReportingMonth) throws {
+        guard let container else { throw ManagementError.missingRecord }
+        try ManagementPersistence(container: container).write { context in
+            try BudgetPersistence.turnOff(scope: scope, from: month, context: context)
+        }
+        refreshAfterManagementWrite()
     }
 
     private func refreshAfterManagementWrite() {
