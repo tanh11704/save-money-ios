@@ -12,9 +12,10 @@ struct RecurringDraft {
 
 struct RecurringValidator {
     enum ValidationError: LocalizedError {
-        case interval, dates, name, frequency
+        case interval, dates, name, frequency, person
         var errorDescription: String? {
             switch self {
+            case .person: return "Bản này chưa hỗ trợ giao dịch định kỳ với người trong Sổ nợ."
             case .interval: return "Chu kỳ phải từ 1 trở lên."
             case .dates: return "Ngày kết thúc không được trước ngày bắt đầu."
             case .name: return "Tên giao dịch định kỳ tối đa 60 ký tự."
@@ -23,6 +24,7 @@ struct RecurringValidator {
         }
     }
     static func validate(_ draft: RecurringDraft) throws {
+        guard draft.transaction.wallet?.isPerson != true && draft.transaction.toWallet?.isPerson != true else { throw ValidationError.person }
         guard draft.interval >= 1 else { throw ValidationError.interval }
         guard draft.name.trimmingCharacters(in: .whitespacesAndNewlines).count <= 60 else { throw ValidationError.name }
         if let end = draft.endDate, LocalCalendar.calendar.startOfDay(for: end) < LocalCalendar.calendar.startOfDay(for: draft.startDate) { throw ValidationError.dates }

@@ -2,10 +2,12 @@ import Foundation
 
 enum ManagementError: LocalizedError, Equatable {
     case emptyName, nameTooLong, duplicateName, invalidKind, invalidIcon, invalidOpeningBalance
-    case lastActiveWallet, categoryInUse, missingRecord
+    case lastActiveWallet, categoryInUse, missingRecord, personOpeningBalance, personOutstanding
 
     var errorDescription: String? {
         switch self {
+        case .personOpeningBalance: return "Ghi nợ cũ bằng giao dịch; số dư ban đầu của người phải bằng 0."
+        case .personOutstanding: return "Chỉ lưu trữ người khi số nợ đã về 0."
         case .emptyName: return "Hãy nhập tên."
         case .nameTooLong: return "Tên tối đa 30 ký tự."
         case .duplicateName: return "Tên đã tồn tại, kể cả trong mục đã lưu trữ."

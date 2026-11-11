@@ -55,7 +55,7 @@ struct WalletFormView: View {
                 if let nameMessage { Text(nameMessage).font(.footnote).foregroundStyle(.red) }
                 Text("Loại ví").font(.headline)
                 Picker("Loại ví", selection: $kind) {
-                    ForEach(WalletKind.allCases, id: \.self) { kind in Text(kind.title).tag(kind) }
+                    ForEach(WalletKind.allCases.filter { $0 != .person }, id: \.self) { kind in Text(kind.title).tag(kind) }
                 }.pickerStyle(.menu).labelsHidden().frame(minHeight: 44)
                 Text("Số dư ban đầu").font(.headline)
                 Button { keypadVisible.toggle() } label: {

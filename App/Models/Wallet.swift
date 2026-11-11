@@ -2,13 +2,14 @@ import Foundation
 import SwiftData
 
 enum WalletKind: String, Codable, CaseIterable {
-    case cash, bank, card, other
+    case cash, bank, card, other, person
 
     var title: String {
         switch self {
         case .cash: return "Tiền mặt"
         case .bank: return "Ngân hàng"
         case .card: return "Thẻ"
+        case .person: return "Người"
         case .other: return "Khác"
         }
     }
@@ -18,6 +19,7 @@ enum WalletKind: String, Codable, CaseIterable {
         case .cash: return "banknote"
         case .bank: return "building.columns"
         case .card: return "creditcard"
+        case .person: return "person.crop.circle"
         case .other: return "wallet.bifold"
         }
     }
@@ -38,3 +40,5 @@ final class Wallet {
         self.openingBalance = openingBalance
     }
 }
+
+extension Wallet { var isPerson: Bool { WalletKind(rawValue: kindRaw) == .person } }

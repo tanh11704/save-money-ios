@@ -32,10 +32,12 @@ struct TransactionValidator {
     enum ValidationError: String, LocalizedError, CaseIterable {
         case invalidAmount, amountTooLarge, missingWallet, missingCategory
         case missingDestination, sameWallet, unexpectedCategory, unexpectedDestination
-        case categoryKindMismatch, archivedWallet, archivedDestination, archivedCategory
+        case categoryKindMismatch, archivedWallet, archivedDestination, archivedCategory, personToPerson, incomeToPerson
 
         var errorDescription: String? {
             switch self {
+            case .personToPerson: return "Không chuyển tiền giữa hai người. Chọn một ví của bạn."
+            case .incomeToPerson: return "Ghi thu nợ trong Sổ nợ, không ghi thu nhập vào ví người."
             case .invalidAmount: return "Số tiền phải lớn hơn 0 đồng."
             case .amountTooLarge: return "Số tiền tối đa là 999.999.999.999 đồng."
             case .missingWallet: return "Hãy chọn ví."
@@ -65,6 +67,8 @@ struct TransactionValidator {
         if let wallet = draft.wallet {
             if wallet.isArchived && wallet.id != original?.wallet?.id { errors.append(.archivedWallet) }
         } else { errors.append(.missingWallet) }
+        if draft.kind == .income && draft.wallet?.isPerson == true { errors.append(.incomeToPerson) }
+        if draft.kind == .transfer && draft.wallet?.isPerson == true && draft.toWallet?.isPerson == true { errors.append(.personToPerson) }
         switch draft.kind {
         case .transfer:
             if draft.category != nil { errors.append(.unexpectedCategory) }

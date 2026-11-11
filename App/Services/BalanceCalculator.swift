@@ -75,10 +75,11 @@ struct BalanceCalculator {
         switch kind {
         case .transfer:
             guard let destination = transaction.toWallet, destination.id != wallet.id,
-                  transaction.category == nil else {
+                  transaction.category == nil, !(wallet.isPerson && destination.isPerson) else {
                 throw CalculationError.invalidTransaction(transaction.id)
             }
         case .income, .expense:
+            guard kind != .income || !wallet.isPerson else { throw CalculationError.invalidTransaction(transaction.id) }
             guard transaction.toWallet == nil else { throw CalculationError.invalidTransaction(transaction.id) }
             if let category = transaction.category {
                 guard category.kindRaw == kind.rawValue else { throw CalculationError.invalidTransaction(transaction.id) }

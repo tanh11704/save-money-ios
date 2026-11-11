@@ -22,7 +22,8 @@ struct WalletService {
         guard (-MoneyFormatter.maximumInput...MoneyFormatter.maximumInput).contains(draft.openingBalance) else {
             throw ManagementError.invalidOpeningBalance
         }
-        guard !wallets.contains(where: { $0.id != id && ManagementValidation.matches($0.name, name) }) else {
+        guard draft.kind != .person || draft.openingBalance == 0 else { throw ManagementError.personOpeningBalance }
+        guard !wallets.contains(where: { $0.id != id && $0.isPerson == (draft.kind == .person) && ManagementValidation.matches($0.name, name) }) else {
             throw ManagementError.duplicateName
         }
     }
@@ -61,6 +62,7 @@ struct WalletService {
         try ManagementPersistence(container: container).write { context in
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
             guard let wallet = wallets.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
+            guard wallet.isPerson == (draft.kind == .person) else { throw ManagementError.invalidKind }
             try Self.validate(draft, wallets: wallets, editing: id)
             _ = try Self.preview(wallet: wallet, openingBalance: draft.openingBalance,
                                  transactions: context.fetch(FetchDescriptor<Transaction>()))
@@ -75,7 +77,11 @@ struct WalletService {
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
             guard let wallet = wallets.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             guard !wallet.isArchived else { return }
-            guard wallets.filter({ !$0.isArchived }).count > 1 else { throw ManagementError.lastActiveWallet }
+            if wallet.isPerson {
+                guard try BalanceCalculator.balance(for: wallet, transactions: context.fetch(FetchDescriptor<Transaction>()), allowMissingCategory: true) == 0 else { throw ManagementError.personOutstanding }
+            } else {
+                guard wallets.filter({ !$0.isArchived && !$0.isPerson }).count > 1 else { throw ManagementError.lastActiveWallet }
+            }
             wallet.isArchived = true
         }
     }

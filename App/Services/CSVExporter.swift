@@ -18,9 +18,10 @@ struct CSVExporter {
         }
         let date = formatter("dd/MM/yyyy"), time = formatter("HH:mm")
         var rows = [["Ngày", "Giờ", "Loại", "Số tiền", "Số tiền có dấu", "Danh mục", "Ví", "Ví đích", "Ghi chú", "Định kỳ", "ID"]]
+        let debtLabels = try DebtPresentation.labels(transactions: transactions)
         for t in records {
             guard let kind = TransactionKind(rawValue: t.kindRaw), t.amount > 0 else { throw BalanceCalculator.CalculationError.invalidTransaction(t.id) }
-            rows.append([date.string(from: t.date), time.string(from: t.date), TransactionPresentation.kindTitle(kind), String(t.amount),
+            rows.append([date.string(from: t.date), time.string(from: t.date), text(debtLabels[t.id]?.title ?? TransactionPresentation.kindTitle(kind)), String(t.amount),
                 kind == .transfer ? "0" : String(kind == .expense ? -t.amount : t.amount),
                 text(kind == .transfer ? "" : t.category?.name ?? ""), text(t.wallet?.name ?? ""), text(kind == .transfer ? t.toWallet?.name ?? "" : ""),
                 text(t.note), t.recurrenceKey == nil ? "" : "Có", t.id.uuidString])

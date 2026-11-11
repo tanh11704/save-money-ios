@@ -23,9 +23,9 @@ struct RecentSelectionStore {
         let walletID = get("wallet", kind: kind)
         let categoryID = get("category", kind: kind)
         let destinationID = get("destination", kind: kind)
-        let wallet = wallets.first { $0.id == walletID && !$0.isArchived }
+        let wallet = wallets.first { $0.id == walletID && !$0.isArchived && !$0.isPerson }
         let category = categories.first { $0.id == categoryID && !$0.isArchived && $0.kindRaw == kind.rawValue }
-        let destination = wallets.first { $0.id == destinationID && !$0.isArchived && $0.id != wallet?.id }
+        let destination = wallets.first { $0.id == destinationID && !$0.isArchived && !$0.isPerson && $0.id != wallet?.id }
         return Selection(walletID: wallet?.id,
                          categoryID: kind == .transfer ? nil : category?.id,
                          destinationID: kind == .transfer ? destination?.id : nil)

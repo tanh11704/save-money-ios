@@ -7,7 +7,7 @@ struct IntegrityIssue: Equatable, Identifiable {
         case transactionMissingWallet(UUID), transactionMissingCategory(UUID), transferMissingDestination(UUID)
         case transferSameWallet(UUID), transferHasCategory(UUID), categoryKindMismatch(UUID), nonPositiveAmount(UUID)
         case duplicateID(String), duplicateRecurrenceKey(String), invalidBudget(UUID), invalidRecurringRule(UUID)
-        case invalidTransaction(UUID), balanceOverflow, balanceMismatch
+        case invalidTransaction(UUID), invalidWallet(UUID), balanceOverflow, balanceMismatch
         case backupUnreadable(String), backupChecksumMismatch(String), encryptedBackupUnchecked(String)
     }
     let id = UUID()
@@ -27,6 +27,7 @@ struct IntegrityIssue: Equatable, Identifiable {
         case .duplicateRecurrenceKey(let key): detail = "Khóa định kỳ trùng: \(key)."
         case .invalidBudget(let id): detail = "Hạn mức \(id) không hợp lệ."
         case .invalidRecurringRule(let id): detail = "Quy tắc định kỳ \(id) cần xem lại ví, danh mục, chu kỳ hoặc ngày."
+        case .invalidWallet(let id): detail = "Ví \(id) có loại hoặc số dư ban đầu không hợp lệ."
         case .invalidTransaction(let id): detail = "Giao dịch \(id) không hợp lệ."
         case .balanceOverflow: detail = "Không tính được số dư trong phạm vi Int64."
         case .balanceMismatch: detail = "Tổng số dư các ví không khớp tổng số dư ban đầu cộng thu trừ chi."
@@ -66,6 +67,7 @@ struct IntegrityChecker {
             for id in ids where !seen.insert(id).inserted { add(.duplicateID(id.uuidString)) }
         }
         let walletIDs = Set(wallets.map(\.id)), categoryIDs = Set(categories.map(\.id))
+        for wallet in wallets where WalletKind(rawValue: wallet.kindRaw) == nil || (wallet.isPerson && wallet.openingBalance != 0) { add(.invalidWallet(wallet.id)) }
         var keys = Set<String>()
         for t in transactions {
             if let wallet = t.wallet, !walletIDs.contains(wallet.id) { add(.transactionMissingWallet(t.id)) }
@@ -83,7 +85,7 @@ struct IntegrityChecker {
                     case .sameWallet: add(.transferSameWallet(t.id))
                     case .unexpectedCategory: add(.transferHasCategory(t.id))
                     case .categoryKindMismatch: add(.categoryKindMismatch(t.id))
-                    case .unexpectedDestination: add(.invalidTransaction(t.id))
+                    case .unexpectedDestination, .personToPerson, .incomeToPerson: add(.invalidTransaction(t.id))
                     case .archivedWallet, .archivedDestination, .archivedCategory: break
                     }
                 }
