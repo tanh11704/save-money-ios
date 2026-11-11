@@ -25,7 +25,7 @@ struct SettingsView: View {
                 Button { importing = true } label: { Text("Khôi phục từ file").frame(minHeight: 44) }
                 Text("Bật Cài đặt → [tên bạn] → iCloud → Sao lưu iCloud trên iPhone. Nhớ chép file JSON sang iCloud Drive.")
                     .font(.footnote).foregroundStyle(.secondary)
-                Text("File JSON chưa mã hóa và có thể đọc từ ứng dụng Tệp dù app đang khóa.")
+                Text(store.scheduler.exporter.protection.enabled ? "Mọi bản sao lưu mới đều được mã hóa, kể cả trước khôi phục." : "Backup mới chưa mã hóa và có thể đọc từ ứng dụng Tệp dù app đang khóa.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section { NavigationLink { CSVExportView() } label: { Text("Xuất CSV").frame(minHeight: 44) } }
@@ -53,6 +53,9 @@ struct SettingsView: View {
         }
         .sheet(item: $sharing) { item in
             BackupShareSheet(url: item.url) { completed in if completed { store.sharedSuccessfully() } }
+        }
+        .sheet(item: $store.passwordRequest, onDismiss: { store.finishPreparedRestore() }) { request in
+            BackupPasswordView(store: store, request: request)
         }
         .sheet(item: $store.pending) { pending in
             NavigationStack {
@@ -88,7 +91,10 @@ struct SettingsView: View {
                 Button { store.prepare(url: entry.url) } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(entry.url.lastPathComponent).font(.caption).fixedSize(horizontal: false, vertical: true)
-                        Text("\(entry.file.summary.wallets) ví, \(entry.file.summary.categories) danh mục, \(entry.file.summary.transactions) giao dịch, \(entry.file.payload.budgets.count) hạn mức")
+                        if entry.encrypted { Label("Đã mã hóa", systemImage: "lock.fill") }
+                        if let file = entry.file {
+                            Text("\(file.summary.wallets) ví, \(file.summary.categories) danh mục, \(file.summary.transactions) giao dịch, \(file.payload.budgets.count) hạn mức")
+                        } else { Text("Cần mật khẩu để xem dữ liệu.").foregroundStyle(.secondary) }
                     }.frame(minHeight: 44)
                 }.accessibilityHint("Xem tóm tắt trước khi khôi phục")
             }
@@ -146,4 +152,24 @@ private struct BackupShareSheet: UIViewControllerRepresentable {
         return controller
     }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) { }
+}
+
+private struct BackupPasswordView: View {
+    @ObservedObject var store: BackupScreenStore
+    let request: BackupScreenStore.PasswordRequest
+    @State private var password = ""
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            Form {
+                Text(request.name).font(.caption).fixedSize(horizontal: false, vertical: true)
+                SecureField("Mật khẩu backup", text: $password).textInputAutocapitalization(.never).autocorrectionDisabled().frame(minHeight: 44)
+                if let error = store.error { Text(error).foregroundStyle(.red) }
+                if store.unlockingBackup { ProgressView("Đang giải mã…") }
+                Button("Mở bản sao lưu") { store.unlockBackup(password: password); password = "" }.frame(minHeight: 44).disabled(password.isEmpty || store.unlockingBackup)
+                Text("Sai mật khẩu hoặc file bị sửa đều không mở được. Dữ liệu hiện tại được giữ nguyên.").font(.footnote).foregroundStyle(.secondary)
+            }.navigationTitle("Mở backup mã hóa")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
+        }
+    }
 }

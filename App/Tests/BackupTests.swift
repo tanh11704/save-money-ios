@@ -137,7 +137,7 @@ final class BackupTests: XCTestCase {
         XCTAssertTrue(try f.current().payload.isEmpty)
         let backups = try BackupCatalog.entries(in: f.folder.appendingPathComponent("PreRestore"))
         XCTAssertEqual(backups.count, 1)
-        XCTAssertEqual(backups.first?.file.payload, old.payload)
+        XCTAssertEqual(backups.first?.file?.payload, old.payload)
     }
 
     func testNonemptyReplacementCommitsOnlyIncomingGraph() async throws {
@@ -154,7 +154,7 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(actual.payload, incoming.payload)
         XCTAssertEqual(actual.summary, incoming.summary)
         let pre = try BackupCatalog.entries(in: f.folder.appendingPathComponent("PreRestore"))
-        XCTAssertEqual(pre.first?.file.payload, original.payload)
+        XCTAssertEqual(pre.first?.file?.payload, original.payload)
     }
 
     func testChecksumTamperAndFutureVersionRejectWithoutMutation() async throws {

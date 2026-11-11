@@ -7,19 +7,28 @@ struct BackupCatalog {
     struct Entry: Identifiable {
         var id: URL { url }
         let url: URL
-        let file: BackupFile
+        let file: BackupFile?
+        let createdAt: Int64
+        let encrypted: Bool
     }
-    static func entries(in directory: URL) throws -> [Entry] {
+    static func entries(in directory: URL, protection: BackupProtection = BackupProtection()) throws -> [Entry] {
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
         return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "json" && $0.lastPathComponent.hasPrefix("SaveMoney-") }
+            .filter { ["json", "savemoney"].contains($0.pathExtension) && $0.lastPathComponent.hasPrefix("SaveMoney-") }
             .compactMap { url in
-                guard let data = try? Data(contentsOf: url), let validated = try? BackupValidator.read(data) else { return nil }
-                return Entry(url: url, file: validated.file)
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                if BackupCrypto.isEncrypted(data) {
+                    guard let envelope = try? BackupCrypto.envelope(data) else { return nil }
+                    let file = try? BackupValidator.decode(data, protection: protection).file
+                    return Entry(url: url, file: file, createdAt: envelope.header.createdAt, encrypted: true)
+                }
+                guard let file = try? BackupValidator.read(data).file else { return nil }
+                return Entry(url: url, file: file, createdAt: file.createdAt, encrypted: false)
             }.sorted {
-                $0.file.createdAt == $1.file.createdAt ? $0.url.lastPathComponent > $1.url.lastPathComponent : $0.file.createdAt > $1.file.createdAt
+                $0.createdAt == $1.createdAt ? $0.url.lastPathComponent > $1.url.lastPathComponent : $0.createdAt > $1.createdAt
             }
     }
+
     static func rotate(directory: URL) throws {
         for (folder, limit) in [(directory, 10), (directory.appendingPathComponent("PreRestore"), 5)] {
             for entry in try entries(in: folder).dropFirst(limit) { try FileManager.default.removeItem(at: entry.url) }
@@ -63,13 +72,14 @@ final class BackupScheduler {
 
     @discardableResult func automatic() -> URL? {
         do {
+            _ = try exporter.protection.exportKey()
             let captured = try exporter.capture(now: clock.now)
-            let previous = try BackupCatalog.entries(in: exporter.directory).first
+            let previous = try BackupCatalog.entries(in: exporter.directory, protection: exporter.protection).first
             if let previous {
-                if previous.file.checksum == captured.checksum {
+                if previous.file?.checksum == captured.checksum {
                     defaults.set(0, forKey: counterKey); lastError = nil; defaults.removeObject(forKey: "SaveMoney.lastBackupError"); defaults.set(0, forKey: "SaveMoney.backupFailures"); onChange?(); return nil
                 }
-                if captured.payload.isEmpty && !previous.file.payload.isEmpty { return nil }
+                if captured.payload.isEmpty && (previous.file?.payload.isEmpty != true) { return nil }
             }
             let url = try exporter.export(kind: .auto, now: clock.now, captured: captured)
             try BackupCatalog.rotate(directory: exporter.directory)

@@ -9,12 +9,12 @@ struct BackupRestorer {
     var checkpoint: ((ModelContext) throws -> Void)?
     var beforeSave: ((ModelContext) throws -> Void)?
 
-    func restore(_ data: Data, now: Date = Date()) throws -> BackupValidator.Validated {
+    func restore(_ data: Data, now: Date = Date(), password: String? = nil) throws -> BackupValidator.Validated {
         // Revalidate the exact bytes after the user's confirmation, before any writes.
-        let validated = try BackupValidator.read(data)
+        let validated = try BackupValidator.decode(data, protection: exporter.protection, password: password)
         do {
             let url = try exporter.export(kind: .preRestore, now: now)
-            _ = try BackupValidator.read(Data(contentsOf: url))
+            _ = try BackupValidator.decode(Data(contentsOf: url), protection: exporter.protection)
             try BackupCatalog.rotate(directory: exporter.directory)
         } catch { throw BackupError.preRestore }
         let context = ModelContext(container)

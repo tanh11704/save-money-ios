@@ -103,6 +103,10 @@ final class AppRuntime: ObservableObject {
 
 @MainActor
 final class BackupScreenStore: ObservableObject {
+    struct PasswordRequest: Identifiable { let id = UUID(); let data: Data; let name: String }
+    @Published var passwordRequest: PasswordRequest?
+    @Published private(set) var unlockingBackup = false
+    private var unlockedRestore: PendingRestore?
     struct PendingRestore: Identifiable {
         let id = UUID()
         let data: Data
@@ -128,7 +132,7 @@ final class BackupScreenStore: ObservableObject {
             total + (((try? FileManager.default.attributesOfItem(atPath: entry.url.path)[.size]) as? NSNumber)?.int64Value ?? 0)
         }
         let context = ModelContext(scheduler.exporter.container)
-        return BackupHealth.evaluate(now: scheduler.clock.now, lastBackup: last.flatMap { try? BackupFile.date($0.file.createdAt) },
+        return BackupHealth.evaluate(now: scheduler.clock.now, lastBackup: last.flatMap { try? BackupFile.date($0.createdAt) },
             lastBackupKind: last.map { $0.url.lastPathComponent.contains("-Auto") ? .auto : .manual }, fileCount: entries.count + preRestore.count,
             totalBytes: bytes, lastExternalCopy: scheduler.lastExternalCopy,
             lastIntegrityCheck: integrityDate.map { .init(date: $0, healthy: scheduler.defaults.bool(forKey: "SaveMoney.lastIntegrityHealthy")) },
@@ -137,8 +141,8 @@ final class BackupScreenStore: ObservableObject {
     var latest: URL? { entries.first?.url }
     func refresh() {
         do {
-            entries = try BackupCatalog.entries(in: scheduler.exporter.directory)
-            preRestore = try BackupCatalog.entries(in: scheduler.exporter.directory.appendingPathComponent("PreRestore"))
+            entries = try BackupCatalog.entries(in: scheduler.exporter.directory, protection: scheduler.exporter.protection)
+            preRestore = try BackupCatalog.entries(in: scheduler.exporter.directory.appendingPathComponent("PreRestore"), protection: scheduler.exporter.protection)
         } catch { self.error = "Không đọc được danh sách sao lưu." }
         refreshID = UUID()
     }
@@ -154,7 +158,8 @@ final class BackupScreenStore: ObservableObject {
             do {
                 let data = try IntegrityChecker.check(container: scheduler.exporter.container, backupDirectory: nil)
                 let directory = scheduler.exporter.directory
-                let files = try await Task.detached { try IntegrityChecker.checkFiles(in: directory) }.value
+                let protection = scheduler.exporter.protection
+                let files = try await Task.detached { try IntegrityChecker.checkFiles(in: directory, protection: protection) }.value
                 let report = IntegrityReport(checkedAt: scheduler.clock.now, issues: data.issues + files.issues,
                     transactionCount: data.transactionCount, totalBalance: data.totalBalance, backupFilesChecked: files.checked)
                 integrityReport = report
@@ -172,11 +177,31 @@ final class BackupScreenStore: ObservableObject {
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         do {
             let data = try Data(contentsOf: url)
-            let summary = try BackupValidator.read(data)
-            pending = PendingRestore(data: data, summary: summary)
+            do {
+                let plaintext = try scheduler.exporter.protection.plaintext(data)
+                let summary = try BackupValidator.read(plaintext)
+                pending = PendingRestore(data: plaintext, summary: summary)
+            } catch BackupCrypto.CryptoError.keyUnavailable {
+                _ = try BackupCrypto.envelope(data)
+                passwordRequest = PasswordRequest(data: data, name: url.lastPathComponent)
+            }
             error = nil
-        } catch { self.error = (error as? BackupError)?.localizedDescription ?? "Không đọc được file sao lưu." }
+        } catch { self.error = error.localizedDescription }
     }
+    func unlockBackup(password: String) {
+        guard let request = passwordRequest, !unlockingBackup else { return }
+        unlockingBackup = true
+        Task {
+            defer { unlockingBackup = false }
+            do {
+                let data = request.data
+                let plaintext = try await Task.detached { try BackupCrypto.open(data, password: password) }.value
+                unlockedRestore = PendingRestore(data: plaintext, summary: try BackupValidator.read(plaintext))
+                error = nil; passwordRequest = nil
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+    func finishPreparedRestore() { if let unlockedRestore { pending = unlockedRestore; self.unlockedRestore = nil } }
     func restoreConfirmed(_ candidate: PendingRestore) {
         guard !isRestoring else { return }
         isRestoring = true

@@ -15,6 +15,10 @@ struct BackupValidator {
         let lastDate: Date?
     }
 
+    static func decode(_ data: Data, protection: BackupProtection = BackupProtection(), password: String? = nil) throws -> Validated {
+        try read(protection.plaintext(data, password: password))
+    }
+
     static func read(_ data: Data) throws -> Validated {
         struct Header: Decodable { let format: String; let schemaVersion: Int }
         let header: Header

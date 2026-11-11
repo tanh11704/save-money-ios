@@ -107,10 +107,11 @@ struct IntegrityChecker {
         return IntegrityReport(checkedAt: Date(), issues: issues, transactionCount: transactions.count, totalBalance: balance, backupFilesChecked: 0)
     }
 
-    static func checkFiles(in directory: URL) throws -> (issues: [IntegrityIssue], checked: Int) {
+    static func checkFiles(in directory: URL, protection: BackupProtection = BackupProtection()) throws -> (issues: [IntegrityIssue], checked: Int) {
         var issues: [IntegrityIssue] = [], checked = 0
         for url in try files(in: directory) {
-            do { _ = try BackupValidator.read(Data(contentsOf: url)); checked += 1 }
+            do { _ = try BackupValidator.decode(Data(contentsOf: url), protection: protection); checked += 1 }
+            catch BackupCrypto.CryptoError.keyUnavailable { issues.append(.init(kind: .encryptedBackupUnchecked(url.lastPathComponent), severity: .warning)) }
             catch BackupError.checksum { issues.append(.init(kind: .backupChecksumMismatch(url.lastPathComponent), severity: .error)) }
             catch { issues.append(.init(kind: .backupUnreadable(url.lastPathComponent), severity: .error)) }
         }

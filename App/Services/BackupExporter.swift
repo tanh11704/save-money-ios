@@ -6,6 +6,7 @@ struct BackupExporter {
     enum Kind: String { case auto = "Auto", manual = "Manual", preRestore = "PreRestore" }
     let container: ModelContainer
     let directory: URL
+    var protection = BackupProtection()
     var appVersion = BackupExporter.applicationVersion
     static var applicationVersion: String {
         let info = Bundle.main.infoDictionary ?? [:]
@@ -48,6 +49,7 @@ struct BackupExporter {
     }
 
     func export(kind: Kind, now: Date = Date(), captured: BackupFile? = nil) throws -> URL {
+        let key = try protection.exportKey()
         let file = try captured ?? capture(now: now)
         _ = try BackupValidator.validate(file)
         let folder = kind == .preRestore ? directory.appendingPathComponent("PreRestore", isDirectory: true) : directory
@@ -56,9 +58,11 @@ struct BackupExporter {
         let temporary = folder.appendingPathComponent(".\(UUID().uuidString).tmp")
         defer { try? manager.removeItem(at: temporary) }
         try beforeWrite?()
-        try BackupFile.encoder().encode(file).write(to: temporary, options: .withoutOverwriting)
+        let plain = try BackupFile.encoder().encode(file)
+        let bytes = try key.map { try BackupCrypto.seal(plain, with: $0, createdAt: now) } ?? plain
+        try bytes.write(to: temporary, options: .withoutOverwriting)
         try afterWrite?(temporary)
-        let readBack = try BackupValidator.read(Data(contentsOf: temporary))
+        let readBack = try BackupValidator.decode(Data(contentsOf: temporary), protection: protection)
         guard readBack.file == file else { throw BackupError.unreadable }
         let formatter = DateFormatter()
         formatter.calendar = LocalCalendar.calendar; formatter.timeZone = LocalCalendar.calendar.timeZone
@@ -66,7 +70,7 @@ struct BackupExporter {
         // Preserve the specified filename format without overwriting a same-second backup.
         for offset in 0..<86_400 {
             let stamp = formatter.string(from: now.addingTimeInterval(TimeInterval(offset)))
-            let target = folder.appendingPathComponent("SaveMoney-\(stamp)-\(kind.rawValue).json")
+            let target = folder.appendingPathComponent("SaveMoney-\(stamp)-\(kind.rawValue)" + (key == nil ? ".json" : "-encrypted.savemoney"))
             if !manager.fileExists(atPath: target.path) {
                 try manager.moveItem(at: temporary, to: target)
                 return target
