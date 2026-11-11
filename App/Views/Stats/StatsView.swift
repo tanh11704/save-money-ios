@@ -47,6 +47,11 @@ struct StatsView: View {
                 .environment(\.modelContext, store.statisticsContext ?? context)
                 .id(store.snapshotVersion)
         }
+        .gesture(DragGesture(minimumDistance: 60).onEnded { value in
+            guard abs(value.translation.width) > abs(value.translation.height) * 2 else { return }
+            if value.translation.width > 0, let previous = month.previous { month = previous }
+            else if value.translation.width < 0, let next = month.next(upTo: current) { month = next }
+        })
         .navigationTitle("Thống kê")
         .sheet(isPresented: $showingMonthPicker) {
             NavigationStack { StatsMonthPicker(month: $month, current: current) }
@@ -124,14 +129,14 @@ private struct StatsReportSections: View {
                 Section("Chi theo ngày") {
                     switch Result(catching: { try StatsService.dailyExpenses(month: month, transactions: transactions) }) {
                     case .success(let days):
-                        StatsDailyChart(days: days, allowance: BudgetService.activeRule(for: .total, in: month, rules: budgets.compactMap(\.rule))
-                            .map { StatsService.dailyAllowance(limit: $0.limit, month: month) })
+                        Card { StatsDailyChart(days: days, allowance: BudgetService.activeRule(for: .total, in: month, rules: budgets.compactMap(\.rule))
+                            .map { StatsService.dailyAllowance(limit: $0.limit, month: month) }) }
                     case .failure(let error): Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red)
                     }
                 }
             }
             budgetSection
-            if report.isEmpty { Section { Text("Tháng này chưa có giao dịch.").foregroundStyle(.secondary) } }
+            if report.isEmpty { Section { EmptyState(image: "illus-empty-stats", title: "Tháng này chưa có giao dịch", message: "Đổi tháng để xem lịch sử", symbol: "chart.bar") } }
             categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.", report: report, comparison: comparison)
             categorySection("Thu theo danh mục", rows: report.incomes, empty: "Không có khoản thu.")
         case .failure(let error):
@@ -147,8 +152,11 @@ private struct StatsReportSections: View {
                     ForEach(progress, id: \.scope) { value in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(BudgetPresentation.name(for: value.scope, categories: categories)).font(.headline)
-                            ProgressView(value: value.fraction)
-                                .tint(value.level == .over ? Color.red : value.level == .warning ? Color.orange : Color.accentColor)
+                            if value.scope == .total { ProgressRing(fraction: value.fraction, level: value.level == .over ? "Đã vượt" : value.level == .warning ? "Sắp hết" : nil) }
+                            else {
+                                ProgressView(value: value.fraction)
+                                    .tint(categories.first { value.scope == .category($0.id) }.map { CategoryStyle.tint(for: $0.icon) } ?? .accentColor)
+                            }
                             Text(BudgetPresentation.usage(value))
                                 .monospacedDigit().fixedSize(horizontal: false, vertical: true)
                             Text(BudgetPresentation.remaining(value)).monospacedDigit()
@@ -168,13 +176,7 @@ private struct StatsReportSections: View {
     }
 
     private func summary(_ title: String, amount: String, negative: Bool, delta: StatsService.Comparison.Delta? = nil, label: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
-            Text(amount).font(.title2).monospacedDigit()
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(negative ? Color.red : Color.primary)
-            if let delta, let label { Text(delta.text + " " + label).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-        }
+        StatTile(title: title, value: amount, icon: title == "Tổng thu" ? "arrow.up.circle" : title == "Tổng chi" ? "arrow.down.circle" : "equal.circle", trend: delta.map { $0.text + " " + (label ?? "") })
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(amount), \(delta?.text ?? "") \(label ?? "")".replacingOccurrences(of: "₫", with: "đồng"))
     }
@@ -186,8 +188,7 @@ private struct StatsReportSections: View {
             ForEach(rows) { row in
                 Button { select(row.key) } label: {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label(row.name, systemImage: row.icon)
-                            .fixedSize(horizontal: false, vertical: true)
+                        HStack { CategoryIcon(icon: row.icon, size: 28); Text(row.name).fixedSize(horizontal: false, vertical: true) }
                         Text(MoneyFormatter.string(from: row.amount)).font(.headline).monospacedDigit()
                             .fixedSize(horizontal: false, vertical: true)
                         Text(row.percentageText).font(.subheadline).foregroundStyle(.secondary)

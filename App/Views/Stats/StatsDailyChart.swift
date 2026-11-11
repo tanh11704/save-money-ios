@@ -4,6 +4,7 @@ import SwiftUI
 struct StatsDailyChart: View {
     let days: [StatsService.DailyTotal]
     let allowance: Int64?
+    @State private var selectedDay: Int?
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .caption) private var axisFontSize: CGFloat = 12
     private var ticks: [Int] {
@@ -22,10 +23,19 @@ struct StatsDailyChart: View {
                 RuleMark(y: .value("Trung bình cho phép/ngày", StatsService.plotValue(allowance)))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 3]))
                     .foregroundStyle(.secondary)
+                    .annotation(position: .top, alignment: .trailing) { Text("Hạn mức/ngày").font(.caption2).foregroundStyle(.secondary) }
                     .accessibilityLabel("Trung bình cho phép/ngày")
                     .accessibilityValue(MoneyFormatter.string(from: allowance).replacingOccurrences(of: "₫", with: "đồng"))
             }
+            if let selectedDay, let day = days.first(where: { $0.day == selectedDay }) {
+                RuleMark(x: .value("Ngày chọn", selectedDay))
+                    .foregroundStyle(.secondary)
+                    .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                        Text("Ngày \(day.day): \(MoneyFormatter.string(from: day.expense))").font(.caption).padding(8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    }
+            }
         }
+        .chartXSelection(value: $selectedDay)
         .chartXScale(domain: 0...(days.count + 1))
         .chartXAxis {
             AxisMarks(values: ticks) { value in

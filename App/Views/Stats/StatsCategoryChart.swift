@@ -5,11 +5,10 @@ struct StatsCategoryChart: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let slices: [StatsService.CategoryTotal]
     let total: Int64
-    private let colors: [Color] = [.blue, .orange, .green, .purple, .pink, .secondary]
     var body: some View {
         Chart(Array(slices.enumerated()), id: \.element.id) { index, slice in
             SectorMark(angle: .value("Chi", StatsService.plotValue(slice.amount)), innerRadius: .ratio(0.6))
-                .foregroundStyle(colors[index % colors.count])
+                .foregroundStyle(CategoryStyle.tint(for: slice.icon))
                 .accessibilityLabel(slice.name)
                 .accessibilityValue("\(MoneyFormatter.string(from: slice.amount).replacingOccurrences(of: "₫", with: "đồng")), \(slice.percentageText)")
         }
@@ -22,9 +21,7 @@ struct StatsCategoryChart: View {
         if typeSize.isAccessibilitySize { Text(MoneyFormatter.string(from: total)).font(.headline).monospacedDigit().fixedSize(horizontal: false, vertical: true) }
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(slices.enumerated()), id: \.element.id) { index, slice in
-                Label("\(slice.name), \(slice.percentageText)", systemImage: "circle.fill")
-                    .foregroundStyle(colors[index % colors.count])
-                    .font(.caption).fixedSize(horizontal: false, vertical: true)
+                HStack { CategoryIcon(icon: slice.icon, size: 28); Text("\(slice.name), \(slice.percentageText)").font(.caption).fixedSize(horizontal: false, vertical: true) }
             }
         }
     }
