@@ -3,7 +3,8 @@ import Foundation
 struct MoneyFormatter {
     static let maximumInput: Int64 = 999_999_999_999
 
-    enum Key {
+    enum Key: Equatable {
+        case plus, minus, equals, clear
         case digit(Int)
         case tripleZero
         case backspace
@@ -47,6 +48,7 @@ struct MoneyFormatter {
         let multiplier: Int64
         let suffix: Int64
         switch key {
+        case .plus, .minus, .equals, .clear: return amount
         case .backspace: return amount / 10
         case .tripleZero: multiplier = 1_000; suffix = 0
         case .digit(let digit):
