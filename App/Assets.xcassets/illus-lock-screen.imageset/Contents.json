@@ -1,0 +1,12 @@
+{
+  "images": [
+    {
+      "filename": "illus-lock-screen.png",
+      "idiom": "universal"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}
