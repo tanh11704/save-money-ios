@@ -65,7 +65,13 @@ struct TransactionPresentation {
         return formatter.string(from: date)
     }
 
+    static func selectedDay(_ date: Date, now: Date = Date()) -> Date {
+        let calendar = LocalCalendar.calendar
+        if calendar.isDate(date, inSameDayAs: now) { return now }
+        return calendar.date(bySettingHour: 12, minute: 0, second: 0, of: date) ?? date
+    }
+
     static func yesterday(from date: Date = Date()) -> Date {
-        LocalCalendar.calendar.date(byAdding: .day, value: -1, to: date)!
+        selectedDay(LocalCalendar.calendar.date(byAdding: .day, value: -1, to: date)!, now: date)
     }
 }

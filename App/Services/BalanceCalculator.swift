@@ -31,13 +31,32 @@ struct BalanceCalculator {
         return result
     }
 
+    /// Validate once and accumulate all wallets in ledger order, preserving overflow semantics.
+    static func balances(wallets: [Wallet], transactions: [Transaction], allowMissingCategory: Bool = false) throws -> [UUID: Int64] {
+        var values: [UUID: Int64] = [:]
+        for wallet in wallets {
+            guard values[wallet.id] == nil else { throw CalculationError.invalidTransaction(wallet.id) }
+            values[wallet.id] = wallet.openingBalance
+        }
+        for transaction in transactions {
+            let kind = try validatedKind(transaction, allowMissingCategory: allowMissingCategory)
+            if let id = transaction.wallet?.id, let value = values[id] {
+                values[id] = try add(value, kind == .income ? transaction.amount : -transaction.amount)
+            }
+            if kind == .transfer, let id = transaction.toWallet?.id, let value = values[id] {
+                values[id] = try add(value, transaction.amount)
+            }
+        }
+        return values
+    }
+
     /// Includes archived wallets. A transfer whose two wallets are included
     /// cancels naturally when the individual balances are added.
     static func totalBalance(wallets: [Wallet], transactions: [Transaction], allowMissingCategory: Bool = false) throws -> Int64 {
         var total: Int64 = 0
-        for wallet in wallets {
-            total = try add(total, balance(for: wallet, transactions: transactions, allowMissingCategory: allowMissingCategory))
-        }
+        guard !wallets.isEmpty else { return total }
+        let values = try balances(wallets: wallets, transactions: transactions, allowMissingCategory: allowMissingCategory)
+        for wallet in wallets { total = try add(total, values[wallet.id]!) }
         return total
     }
 

@@ -16,6 +16,7 @@ struct WalletService {
     }
 
     let container: ModelContainer
+    var origin: UUID? = nil
 
     static func validate(_ draft: WalletDraft, wallets: [Wallet], editing id: UUID? = nil) throws {
         let name = try ManagementValidation.name(draft.name)
@@ -50,7 +51,7 @@ struct WalletService {
 
     @discardableResult
     func create(_ draft: WalletDraft) throws -> UUID {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             try Self.validate(draft, wallets: context.fetch(FetchDescriptor<Wallet>()))
             let wallet = Wallet(name: try ManagementValidation.name(draft.name), openingBalance: draft.openingBalance, kind: draft.kind)
             context.insert(wallet)
@@ -59,7 +60,7 @@ struct WalletService {
     }
 
     func update(id: UUID, with draft: WalletDraft) throws {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
             guard let wallet = wallets.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             guard wallet.isPerson == (draft.kind == .person) else { throw ManagementError.invalidKind }
@@ -73,7 +74,7 @@ struct WalletService {
     }
 
     func archive(id: UUID) throws {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
             guard let wallet = wallets.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             guard !wallet.isArchived else { return }
@@ -87,7 +88,7 @@ struct WalletService {
     }
 
     func restore(id: UUID) throws {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
             guard let wallet = wallets.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             wallet.isArchived = false

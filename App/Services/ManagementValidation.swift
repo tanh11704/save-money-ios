@@ -8,15 +8,15 @@ enum ManagementError: LocalizedError, Equatable {
         switch self {
         case .personOpeningBalance: return "Ghi nợ cũ bằng giao dịch; số dư ban đầu của người phải bằng 0."
         case .personOutstanding: return "Chỉ lưu trữ người khi số nợ đã về 0."
-        case .emptyName: return "Hãy nhập tên."
+        case .emptyName: return "Nhập tên."
         case .nameTooLong: return "Tên tối đa 30 ký tự."
         case .duplicateName: return "Tên đã tồn tại, kể cả trong mục đã lưu trữ."
         case .invalidKind: return "Loại đã chọn không hợp lệ."
-        case .invalidIcon: return "Hãy chọn một biểu tượng trong danh sách."
+        case .invalidIcon: return "Chọn một biểu tượng trong danh sách."
         case .invalidOpeningBalance: return "Số dư ban đầu tối đa là 999.999.999.999 đồng hoặc khoản nợ tương ứng."
-        case .lastActiveWallet: return "Phải còn ít nhất một ví đang dùng. Hãy thêm hoặc khôi phục ví khác trước."
-        case .categoryInUse: return "Danh mục đã có giao dịch, hạn mức hoặc quy tắc định kỳ, không thể đổi loại. Hãy tạo danh mục mới."
-        case .missingRecord: return "Dữ liệu không còn tồn tại. Hãy tải lại và thử lại."
+        case .lastActiveWallet: return "Phải còn ít nhất một ví đang dùng. Thêm hoặc khôi phục ví khác trước."
+        case .categoryInUse: return "Danh mục đã có giao dịch, hạn mức hoặc quy tắc định kỳ, không thể đổi loại. Tạo danh mục mới."
+        case .missingRecord: return "Dữ liệu không còn tồn tại. Tải lại và thử lại."
         }
     }
 }

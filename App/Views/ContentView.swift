@@ -24,7 +24,7 @@ struct ContentView: View {
                     NavigationStack {
                         TransactionFormView(store: store, onNeedsWallet: { selectedTab = 2 })
                     }
-                    .tabItem { Label("Thêm", systemImage: "plus.circle") }
+                    .tabItem { Label("Thêm", systemImage: "plus.circle.fill") }
                     .tag(0)
                     NavigationStack {
                         TransactionHistoryView(store: store, onAdd: { selectedTab = 0 })
@@ -39,7 +39,7 @@ struct ContentView: View {
                     NavigationStack {
                         StatsView(store: store)
                     }
-                    .tabItem { Label("Thống kê", systemImage: "list.number") }
+                    .tabItem { Label("Thống kê", systemImage: "chart.bar.xaxis") }
                     .tag(3)
                     NavigationStack { SettingsView(store: settings, lock: lock) }
                         .tabItem { Label("Cài đặt", systemImage: "gearshape") }
@@ -60,17 +60,29 @@ struct ContentView: View {
         }
         .onChange(of: router.pending?.id, initial: true) { _, _ in consumeRoute() }
         .onChange(of: store.ready) { _, _ in consumeRoute() }
-        .onReceive(NotificationCenter.default.publisher(for: .ledgerDidChange)) { _ in
-            guard store.ready else { return }
-            do { try store.reload() } catch { store.errorMessage = "Chưa tải lại được dữ liệu. Hãy tải lại." }
+        .onReceive(NotificationCenter.default.publisher(for: .ledgerDidChange)) { notification in
+            store.receiveLedgerChange(notification)
         }
         .onReceive(NotificationCenter.default.publisher(for: .ledgerDidRestore)) { _ in
             selectedTab = 0
             navigationGeneration = UUID()
+            store.clearUndo()
             do { try store.reload() } catch { store.errorMessage = "Đã khôi phục, nhưng chưa tải lại được dữ liệu. Hãy mở lại app." }
         }
         .overlay(alignment: .top) {
-            if let count = settings.restoredTransactionCount {
+            if let action = store.undoAction {
+                HStack {
+                    Text(action.message)
+                        .font(.subheadline).lineLimit(2).minimumScaleFactor(0.8)
+                    Button("Hoàn tác") { store.undo() }.frame(minHeight: 44)
+                    Button("Đóng", systemImage: "xmark") { store.expireUndo(action.id) }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                }.padding(.horizontal).background(.regularMaterial, in: Capsule()).padding()
+                    .task(id: action.id) {
+                        try? await Task.sleep(for: .seconds(max(0, action.expiresAt.timeIntervalSinceNow)))
+                        guard !Task.isCancelled else { return }
+                        store.expireUndo(action.id)
+                    }
+            } else if let count = settings.restoredTransactionCount {
                 RestoreSuccessView(transactionCount: count) { settings.restoredTransactionCount = nil }.padding(Spacing.s)
             } else if let message = runtime.recurringMessage, dismissedBanner != message {
                 VStack {

@@ -5,6 +5,7 @@ import SwiftData
 @MainActor
 struct ManagementPersistence {
     let container: ModelContainer
+    var origin: UUID? = nil
 
     func write<T>(_ body: (ModelContext) throws -> T) throws -> T {
         let context = ModelContext(container)
@@ -12,7 +13,7 @@ struct ManagementPersistence {
         do {
             let result = try body(context)
             try context.save()
-            NotificationCenter.default.post(name: .ledgerDidChange, object: container)
+            NotificationCenter.default.post(name: .ledgerDidChange, object: container, userInfo: ["origin": origin?.uuidString ?? ""])
             return result
         } catch {
             context.rollback()

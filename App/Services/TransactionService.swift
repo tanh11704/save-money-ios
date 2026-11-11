@@ -7,14 +7,16 @@ import SwiftData
 final class TransactionService {
     enum ServiceError: LocalizedError {
         case missingRecord
-        var errorDescription: String? { "Dữ liệu không còn tồn tại. Hãy tải lại và thử lại." }
+        var errorDescription: String? { "Dữ liệu không còn tồn tại. Tải lại và thử lại." }
     }
 
     private let container: ModelContainer
     private var context: ModelContext
     private let recentSelections: RecentSelectionStore?
+    private let origin: UUID?
 
-    init(container: ModelContainer, recentSelections: RecentSelectionStore? = nil) {
+    init(container: ModelContainer, recentSelections: RecentSelectionStore? = nil, origin: UUID? = nil) {
+        self.origin = origin
         self.container = container
         context = ModelContext(container)
         context.autosaveEnabled = false
@@ -61,13 +63,54 @@ final class TransactionService {
         }
     }
 
+    func restore(_ snapshot: TransactionSnapshot) throws {
+        try perform {
+            let id = snapshot.id
+            guard try context.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == id })) == 0,
+                  let kind = TransactionKind(rawValue: snapshot.kind), let walletID = snapshot.walletID else {
+                throw ServiceError.missingRecord
+            }
+            if let key = snapshot.recurrenceKey {
+                guard try context.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.recurrenceKey == key })) == 0 else {
+                    throw ServiceError.missingRecord
+                }
+            }
+            let source = try wallet(walletID)
+            var category: Category?
+            if let id = snapshot.categoryID {
+                category = try context.fetch(FetchDescriptor<Category>(predicate: #Predicate { $0.id == id })).first
+                guard category != nil else { throw ServiceError.missingRecord }
+            }
+            let destination = try snapshot.destinationID.map { try wallet($0) }
+            let transaction = Transaction(amount: snapshot.amount, kind: kind, date: snapshot.date,
+                                          note: snapshot.note, wallet: source, toWallet: destination, category: category)
+            transaction.id = snapshot.id
+            transaction.recurrenceKey = snapshot.recurrenceKey
+            let draft = TransactionDraft(amount: snapshot.amount, kind: kind, date: snapshot.date,
+                                         note: snapshot.note, wallet: source, toWallet: destination, category: category)
+            // Existing archived references may be restored, but broken relationships may not.
+            try TransactionValidator.validate(draft, editing: transaction)
+            context.insert(transaction)
+            try context.save()
+        }
+    }
+
+    func delete(ifUnchanged snapshot: TransactionSnapshot) throws {
+        try perform {
+            let transaction = try find(snapshot.id)
+            guard TransactionSnapshot(transaction) == snapshot else { throw ServiceError.missingRecord }
+            context.delete(transaction)
+            try context.save()
+        }
+    }
+
     private func perform<T>(_ operation: () throws -> T) throws -> T {
         // Fresh identity map on each call: archive changes made elsewhere are visible.
         context = ModelContext(container)
         context.autosaveEnabled = false
         do {
             let result = try operation()
-            NotificationCenter.default.post(name: .ledgerDidChange, object: container, userInfo: ["transaction": true])
+            NotificationCenter.default.post(name: .ledgerDidChange, object: container, userInfo: ["transaction": true, "origin": origin?.uuidString ?? ""])
             return result
         }
         catch { context.rollback(); throw error }
@@ -95,5 +138,25 @@ final class TransactionService {
         let descriptor = FetchDescriptor<Wallet>(predicate: #Predicate { $0.id == id })
         guard let wallet = try context.fetch(descriptor).first else { throw ServiceError.missingRecord }
         return wallet
+    }
+}
+
+/// Immutable undo payload. Relationships are resolved afresh at restore time.
+struct TransactionSnapshot: Equatable {
+    let id: UUID
+    let amount: Int64
+    let kind: String
+    let date: Date
+    let note: String
+    let walletID: UUID?
+    let destinationID: UUID?
+    let categoryID: UUID?
+    let recurrenceKey: String?
+
+    init(_ transaction: Transaction) {
+        id = transaction.id; amount = transaction.amount; kind = transaction.kindRaw
+        date = transaction.date; note = transaction.note; walletID = transaction.wallet?.id
+        destinationID = transaction.toWallet?.id; categoryID = transaction.category?.id
+        recurrenceKey = transaction.recurrenceKey
     }
 }

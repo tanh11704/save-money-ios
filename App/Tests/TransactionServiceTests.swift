@@ -53,6 +53,48 @@ final class TransactionServiceTests: XCTestCase {
         return Fixture(container: container, a: a, b: b, income: income, expense: expense)
     }
 
+    func testUndoRestoresSameIdentityAndRejectsChangedCreate() async throws {
+        let f = try fixture()
+        let id = try f.service.create(f.draft(.expense))
+        let snapshot = try TransactionSnapshot(XCTUnwrap(f.transactions().first))
+        try f.service.delete(id: id)
+        try f.service.restore(snapshot)
+        XCTAssertEqual(try f.transactions().map(\.id), [id])
+        XCTAssertEqual(try TransactionSnapshot(XCTUnwrap(f.transactions().first)), snapshot)
+        XCTAssertThrowsError(try f.service.restore(snapshot))
+        try f.service.update(id: id, with: f.draft(.expense, amount: 200))
+        XCTAssertThrowsError(try f.service.delete(ifUnchanged: snapshot))
+        XCTAssertEqual(try f.transactions().first?.amount, 200)
+    }
+
+    func testUndoPreservesRecurrenceKeyAndArchivedReferences() async throws {
+        let f = try fixture()
+        let id = try f.service.create(f.draft(.expense))
+        let context = ModelContext(f.container)
+        let record = try XCTUnwrap(context.fetch(FetchDescriptor<Transaction>()).first)
+        record.recurrenceKey = "undo-recurring-key"
+        record.wallet?.isArchived = true
+        record.category?.isArchived = true
+        try context.save()
+        let snapshot = TransactionSnapshot(record)
+        try f.service.delete(id: id)
+        try f.service.restore(snapshot)
+        XCTAssertEqual(try f.transactions().first?.recurrenceKey, "undo-recurring-key")
+        XCTAssertEqual(try f.transactions().first?.id, id)
+    }
+
+    func testUndoRefusesMissingCategoryWithoutChangingLedger() async throws {
+        let f = try fixture()
+        let id = try f.service.create(f.draft(.expense))
+        let snapshot = try TransactionSnapshot(XCTUnwrap(f.transactions().first))
+        try f.service.delete(id: id)
+        let context = ModelContext(f.container)
+        for category in try context.fetch(FetchDescriptor<Category>()) where category.id == f.expense.id { context.delete(category) }
+        try context.save()
+        XCTAssertThrowsError(try f.service.restore(snapshot))
+        XCTAssertTrue(try f.transactions().isEmpty)
+    }
+
     func testBalancesAfterCreateEditChangeKindAndDelete() async throws {
         let f = try fixture()
         let service = f.service

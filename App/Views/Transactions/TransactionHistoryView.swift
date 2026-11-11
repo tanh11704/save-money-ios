@@ -6,21 +6,27 @@ struct TransactionHistoryView: View {
     @State private var filter = HistoryFilter()
     var onAdd: (() -> Void)? = nil
     @State private var editing: Transaction?
-    @State private var pendingDeletion: Transaction?
-    @State private var confirmingDeletion = false
+    @State private var duplicating: Transaction?
+    @State private var filtered: [Transaction] = []
+    @State private var days: [TransactionGrouping.Day] = []
+    @State private var dayFlows: [Date: String] = [:]
+    @State private var dayFlowLabels: [Date: String] = [:]
+    private struct RefreshKey: Equatable { let filter: HistoryFilter; let snapshot: UUID }
 
     var body: some View {
         List {
             Section {
-                StatTile(title: "Tổng số dư", value: store.totalBalance, icon: "wallet.bifold")
-                    .accessibilityIdentifier("history.totalBalance")
-                if let report = try? StatsService.report(month: ReportingMonth(), transactions: store.transactions) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack { monthlyTile(income: true, value: report.incomeText); monthlyTile(income: false, value: report.expenseText) }
-                        VStack { monthlyTile(income: true, value: report.incomeText); monthlyTile(income: false, value: report.expenseText) }
+                Card {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Tổng số dư").font(.subheadline).foregroundStyle(.secondary)
+                        Text(store.totalBalance).font(.title2.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
+                        if let report = store.currentMonthReport {
+                            Text("Tháng \(ReportingMonth().month) · Thu +\(MoneyFormatter.compact(report.income)) · Chi −\(MoneyFormatter.compact(report.expense))")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .accessibilityLabel("Tháng \(ReportingMonth().month), thu \(report.incomeText), chi \(report.expenseText)")
+                        }
                     }
-                }
-                filters
+                }.accessibilityIdentifier("history.totalBalance")
             }
             if let message = store.errorMessage {
                 Section {
@@ -31,20 +37,35 @@ struct TransactionHistoryView: View {
             if store.transactions.isEmpty {
                 EmptyState(image: "illus-empty-history", title: "Chưa có giao dịch", message: "Bắt đầu ghi chi tiêu", actionTitle: "Ghi khoản đầu tiên", action: onAdd)
             }
-            if !store.transactions.isEmpty && filter.apply(to: store.transactions).isEmpty {
+            if !store.transactions.isEmpty && filtered.isEmpty {
                 EmptyState(image: "illus-empty-search", title: "Không có kết quả", message: "Thử đổi tìm kiếm hoặc bộ lọc", symbol: "magnifyingglass", actionTitle: "Xóa bộ lọc") { filter = HistoryFilter() }
             }
-            ForEach(TransactionGrouping.group(filter.apply(to: store.transactions))) { day in
+            ForEach(days) { day in
                 Section {
                     ForEach(day.transactions, id: \.id) { transaction in
                         transactionRow(transaction)
                     }
                 } header: {
-                    HStack { Text(TransactionGrouping.title(for: day.date)); Spacer(); if let expense = HistoryFilter.expenseText(for: day.transactions) { Text(expense).monospacedDigit() } }
+                    HStack { Text(TransactionGrouping.title(for: day.date)); Spacer(); if let expense = dayFlows[day.date] { Text(expense).monospacedDigit().accessibilityLabel(dayFlowLabels[day.date] ?? expense) } }
                 }
             }
         }
-        .searchable(text: $filter.query, prompt: "Ghi chú hoặc danh mục")
+        .safeAreaInset(edge: .top, spacing: 0) { filters.background(.bar) }
+        .searchable(text: $filter.query, prompt: "Người, ví, danh mục, số tiền")
+        .task(id: RefreshKey(filter: filter, snapshot: store.snapshotVersion)) {
+            if !filter.query.isEmpty {
+                do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+            }
+            guard !Task.isCancelled else { return }
+            let result = filter.apply(to: store.transactions)
+            filtered = result
+            let grouped = TransactionGrouping.group(result)
+            days = grouped
+            dayFlows = Dictionary(uniqueKeysWithValues: grouped.compactMap { day in
+                HistoryFilter.flowText(for: day.transactions).map { (day.date, $0) }
+            })
+            dayFlowLabels = Dictionary(uniqueKeysWithValues: grouped.map { ($0.date, HistoryFilter.flowAccessibilityLabel(for: $0.transactions)) })
+        }
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Lịch sử")
         .refreshable { reload() }
@@ -53,26 +74,9 @@ struct TransactionHistoryView: View {
                 TransactionFormView(store: store, original: transaction)
             }
         }
-        .confirmationDialog("Xóa giao dịch này?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
-            Button("Xóa giao dịch", role: .destructive) {
-                if let transaction = pendingDeletion { store.delete(transaction.id) }
-                pendingDeletion = nil
-            }
-            Button("Hủy", role: .cancel) { pendingDeletion = nil }
-        } message: {
-            if let transaction = pendingDeletion {
-                Text("\(TransactionPresentation.title(transaction)) · \(TransactionPresentation.amount(transaction)). Thao tác này không thể hoàn tác.")
-            }
+        .sheet(item: $duplicating) { transaction in
+            NavigationStack { TransactionFormView(store: store, template: transaction) }
         }
-    }
-
-    private func monthlyTile(income: Bool, value: String) -> some View {
-        let title = income ? "Thu" : "Chi"
-        let month = ReportingMonth().month
-        return StatTile(title: "\(title) T\(month)", value: value,
-                        icon: income ? "arrow.up.circle" : "arrow.down.circle")
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(title) tháng \(month), \(value)")
     }
 
     private func transactionRow(_ transaction: Transaction) -> some View {
@@ -86,7 +90,12 @@ struct TransactionHistoryView: View {
             .accessibilityValue([transaction.wallet?.name ?? "", transaction.note].filter { !$0.isEmpty }.joined(separator: ", "))
             .accessibilityHint("Chạm hai lần để sửa giao dịch")
             .accessibilityAction(named: Text("Xóa giao dịch")) { requestDeletion(transaction) }
+            .contextMenu {
+                Button("Ghi lại khoản này", systemImage: "doc.on.doc") { duplicating = transaction }
+            }
+            .accessibilityAction(named: Text("Ghi lại khoản này")) { duplicating = transaction }
             .swipeActions(allowsFullSwipe: false) {
+                Button { duplicating = transaction } label: { Label("Ghi lại", systemImage: "doc.on.doc") }.tint(.blue)
                 Button { editing = transaction } label: { Label("Sửa", systemImage: "pencil") }.tint(.accentColor)
                 Button(role: .destructive) { requestDeletion(transaction) } label: { Label("Xóa", systemImage: "trash") }
             }
@@ -107,7 +116,7 @@ struct TransactionHistoryView: View {
                 if filter.categoryID != nil { Button { filter.categoryID = nil } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Bỏ lọc danh mục") }
                 Menu {
                     Button("Mọi tháng") { filter.month = nil }
-                    ForEach(Array(Set(store.transactions.map { ReportingMonth(containing: $0.date) })).sorted { $0.interval.start > $1.interval.start }, id: \.self) { month in
+                    ForEach(store.availableMonths, id: \.self) { month in
                         Button(month.title) { filter.month = month }
                     }
                 } label: { Label(filter.month?.title ?? "Tháng", systemImage: "calendar").frame(minHeight: 44) }
@@ -119,8 +128,7 @@ struct TransactionHistoryView: View {
     }
 
     private func requestDeletion(_ transaction: Transaction) {
-        pendingDeletion = transaction
-        confirmingDeletion = true
+        store.delete(transaction.id)
     }
 
     private func reload() {

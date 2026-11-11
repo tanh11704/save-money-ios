@@ -17,7 +17,17 @@ struct KeyboardSmokeHost: View {
         self.container = container
         let wallet = Wallet(name: "Tien mat")
         container.mainContext.insert(wallet)
-        container.mainContext.insert(Category(name: "Ăn uống", kind: .expense, icon: "fork.knife"))
+        let category = Category(name: "Ăn uống", kind: .expense, icon: "fork.knife")
+        container.mainContext.insert(category)
+        if screen == "performance" {
+            let bank = Wallet(name: "Ngân hàng", openingBalance: 20_000_000, kind: .bank)
+            container.mainContext.insert(bank)
+            for index in 0..<5_000 {
+                container.mainContext.insert(Transaction(amount: Int64(1_000 + index % 100 * 1_000), kind: .expense,
+                    date: Date().addingTimeInterval(-Double(index % 90) * 86_400),
+                    wallet: index.isMultiple(of: 2) ? wallet : bank, category: category))
+            }
+        }
         // The screen store reads through a separate ModelContext, so inserted
         // fixtures must be committed before configuring it.
         try! container.mainContext.save()
@@ -30,7 +40,7 @@ struct KeyboardSmokeHost: View {
     var body: some View {
         NavigationStack {
             switch screen {
-            case "transaction": TransactionFormView(store: store)
+            case "transaction", "performance": TransactionFormView(store: store)
             case "category": CategoryFormView(store: store)
             case "recurring": RecurringFormView(store: store)
             default: WalletFormView(store: store)

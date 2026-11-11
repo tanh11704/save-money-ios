@@ -33,19 +33,10 @@ struct RecurringListView: View {
     }
     private func row(_ rule: RecurringRule) -> some View {
         Button { editing = rule } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top) {
-                    if let date = RecurringPresentation.nextDate(rule) { CalendarTile(date: date) }
-                    else { Image(systemName: "calendar.badge.checkmark").accessibilityHidden(true) }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(rule.title).font(.headline).fixedSize(horizontal: false, vertical: true)
-                        if rule.isPaused { Label("Tạm dừng", systemImage: "pause.circle").font(.caption) }
-                    }
-                }
-                AmountText(amount: rule.amount, kind: TransactionKind(rawValue: rule.kindRaw))
-                TrendBadge(delta: RecurringPresentation.schedule(rule))
-                Text(RecurringPresentation.next(rule)).font(.caption).foregroundStyle(.secondary)
-            }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            LedgerRow(icon: "calendar", title: rule.title,
+                      subtitle: (rule.isPaused ? "Tạm dừng · " : "") + RecurringPresentation.schedule(rule),
+                      amount: MoneyFormatter.string(from: rule.amount),
+                      trailingSubtitle: RecurringPresentation.next(rule))
         }
         .buttonStyle(.plain)
         .opacity(rule.isPaused ? 0.65 : 1)

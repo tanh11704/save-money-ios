@@ -5,6 +5,14 @@ import XCTest
 @testable import SaveMoney
 #endif
 final class HistoryFilterTests: XCTestCase {
+    func testSearchPeopleWalletsAndFormattedMoney() {
+        let own = Wallet(name: "Ngân hàng"), person = Wallet(name: "Lan", kind: .person)
+        let transfer = Transaction(amount: 50_000, kind: .transfer, wallet: own, toWallet: person)
+        for query in ["lan", "ngan hang", "50000", "50.000 ₫"] {
+            XCTAssertEqual(HistoryFilter(query: query).apply(to: [transfer]).map(\.id), [transfer.id])
+        }
+        XCTAssertTrue(HistoryFilter(query: "Lan 99").apply(to: [transfer]).isEmpty)
+    }
     func testSearchAndTransferWalletFilter() {
         let wallet = Wallet(name: "Cash"), destination = Wallet(name: "Bank")
         let category = Category(name: "Ăn uống", kind: .expense, icon: "fork.knife")

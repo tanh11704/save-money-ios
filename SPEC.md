@@ -142,6 +142,7 @@ App/
 
 - [x] Hạn mức tổng và theo danh mục chi, lặp hàng tháng; bản sửa có tháng bắt đầu để giữ lịch sử. Đặt/tắt từ Ví → Ngân sách, không thêm tab.
 - [x] Tiến độ trong Thống kê theo tháng đang xem và số tiền còn/vượt trên chip danh mục chi. Tính cả danh mục đã lưu trữ; không tính thu/chuyển.
+- Thông báo ngân sách mặc định ẩn số tiền, gom nhóm `budget`; Cài đặt → “Hiện số tiền trong thông báo” mặc định tắt. Chi tiết đầy đủ xem sau khi mở khóa app.
 - [x] Cảnh báo 80% và 100% bằng thông báo cục bộ sau khi lưu thành công; mỗi scope/mốc/tháng chỉ gửi một lần, giữ key khi xóa/sửa giảm chi. Nhảy qua cả hai mốc gửi hai thông báo. Giao dịch tháng cũ không gửi.
 - Hạ hạn mức xuống dưới số đã chi không gửi thông báo ngay và không báo bù các mốc đã vượt. Chỉ một lần lưu giao dịch thành công vượt mốc so với số chi trước lần lưu đó mới có thể báo, nếu scope/mốc/tháng chưa gửi.
 - Khoản chi nhập lùi tháng trước không gửi thông báo; Thống kê và tiến độ ngân sách vẫn tính theo tháng của ngày giao dịch.
@@ -287,7 +288,12 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Ví đích không được trùng ví nguồn: ví đã chọn ở "Từ ví" bị ẩn khỏi "Đến ví".
 - Ví/danh mục đã archive không hiện khi chọn mới, nhưng vẫn hiện đúng khi xem hoặc sửa giao dịch cũ.
 - Nhớ ví và danh mục dùng gần nhất theo từng loại (thu, chi, chuyển), lưu ID trong UserDefaults.
-- Xóa giao dịch: vuốt và có hộp xác nhận.
+- Xóa giao dịch: vuốt để xóa, hiện Hoàn tác trong 5 giây. Khôi phục cùng ID/khóa định kỳ, không tạo bản ghi mới có ID khác; từ chối khi dữ liệu liên quan không còn hợp lệ. Hoàn tác sau tạo mới chỉ xóa nếu giao dịch chưa bị sửa.
+- Lưu mới thành công có Hoàn tác trong 5 giây. Chỉ giữ thao tác gần nhất, không tồn tại qua khôi phục backup.
+- Menu/vuốt “Ghi lại khoản này” mở form mới với loại, ví, danh mục, tiền và ghi chú cũ, ngày hôm nay; chưa ghi dữ liệu cho tới khi bấm Lưu.
+- Ngày quá khứ được chọn từ chip/lịch có giờ địa phương 12:00. Ngày hôm nay giữ giờ hiện tại.
+- Gợi ý “Chọn danh mục để ẩn bàn phím” hiện một lần đầu, không phải onboarding.
+- Người trả hộ là thẻ cuối dải ví, mở màn chọn/thêm người. Thêm thành công tự chọn người vừa tạo.
 
 ### Danh sách lịch sử
 - Nhóm theo ngày (múi giờ Asia/Saigon), mới nhất trước. Tiêu đề: "Hôm nay", "Hôm qua", sau đó "Thứ ba, 10/11/2026".
@@ -490,3 +496,12 @@ Nhiều loại tiền tệ, ảnh hóa đơn, nhiều người dùng, đồng b�
 - Form Thêm loại Chi có mục Người khác trả hộ. Thu và chuyển thông thường chỉ chọn ví của bạn. Định kỳ chưa hỗ trợ ví người; lựa chọn gần nhất là người được bỏ qua trong form thường.
 - Backup v4 giữ nguyên cấu trúc v3, chứa ví người và các giao dịch liên quan trong checksum. CSV giữ tên người ở cột Ví/Ví đích và nhãn rõ cho khoản vay/trả hộ, vẫn chống công thức ở ô chữ.
 - Chưa làm phí chuyển khoản tùy chọn hoặc hạn trả/nhắc nợ U7.6. Nhắc nợ chỉ xem xét sau khi bản cơ bản đã dùng ổn, vì cần migration riêng.
+
+### Cập nhật theo review hệ thống 11/11/2026 (chưa nghiệm thu)
+- Sau ghi: store bỏ qua thông báo ledger do thao tác đang ghi của chính nó, rồi tải snapshot một lần; thông báo từ writer khác vẫn làm mới dữ liệu.
+- Tính số dư tất cả ví bằng một lượt duyệt giao dịch, giữ phép cộng Int64 kiểm tra tràn và dùng lại dictionary cho tài sản ròng.
+- Cache tiến độ ngân sách theo tháng và snapshot, báo cáo tháng hiện tại, tháng có dữ liệu và ngày hoạt động gần nhất của ví. Đổi snapshot xóa cache; không cache ngược vào số dư gốc.
+- Tìm kiếm lịch sử theo ghi chú/danh mục/người/ví/số tiền, debounce 200ms, lọc và nhóm một lần mỗi lần cập nhật bộ lọc hoặc snapshot.
+- Các danh sách tài chính dùng hàng gọn hai dòng ở cỡ thường, cho mở rộng ở cỡ Accessibility và giữ VoiceOver đọc số đầy đủ.
+- Thống kê: Tóm tắt → Ngân sách (có Sửa hạn mức) → Chi theo danh mục → Chi theo ngày → Thu theo danh mục. Chênh lệch âm có màu chi; tiến độ có giá trị phần trăm cho VoiceOver.
+- Giữ ký hiệu tiền tệ ₫. Widget K1 vẫn chờ thử K0 trên thiết bị; chưa tự đánh dấu nghiệm thu.

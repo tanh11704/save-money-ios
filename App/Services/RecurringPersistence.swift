@@ -44,8 +44,9 @@ extension RecurringRule {
 @MainActor
 struct RecurringPersistence {
     let container: ModelContainer
+    var origin: UUID? = nil
     func save(_ input: RecurringDraft, editing id: UUID? = nil) throws {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             var draft = input
             let wallets = try context.fetch(FetchDescriptor<Wallet>()), categories = try context.fetch(FetchDescriptor<Category>())
             draft.transaction.wallet = wallets.first { $0.id == input.transaction.wallet?.id }
@@ -67,7 +68,7 @@ struct RecurringPersistence {
         NotificationCenter.default.post(name: .recurringRulesDidChange, object: container)
     }
     func setPaused(_ paused: Bool, id: UUID) throws {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             guard let rule = try context.fetch(FetchDescriptor<RecurringRule>()).first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             rule.isPaused = paused
         }

@@ -17,6 +17,7 @@ struct BudgetListView: View {
                     row(scope: .category(category.id), title: category.name, icon: category.icon)
                 }
             }
+            if let error = store.budgetError(in: month) { Callout(level: .danger, title: "Chưa tính được ngân sách", message: error) }
             if let error = store.errorMessage { Text(error).foregroundStyle(.red) }
         }
         .navigationTitle("Ngân sách")
@@ -27,20 +28,18 @@ struct BudgetListView: View {
     }
     private func row(scope: BudgetRule.Scope, title: String, icon: String) -> some View {
         Button { selection = Selection(id: scope) } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack { CategoryIcon(icon: icon); Text(title).font(.headline) }
-                if let progress = try? BudgetService.progress(month: month, rules: store.budgetRules, transactions: store.transactions).first(where: { $0.scope == scope }) {
-                    if scope == .total { ProgressRing(fraction: progress.fraction, level: progress.level == .over ? "Đã vượt" : progress.level == .warning ? "Sắp hết" : nil) }
-                    else { ProgressView(value: progress.fraction).tint(CategoryStyle.tint(for: icon)) }
-                    Text(BudgetPresentation.usage(progress)).font(.caption).monospacedDigit()
-                    Text(BudgetPresentation.remaining(progress)).font(.caption)
-                }
-                Text(BudgetService.activeRule(for: scope, in: month, rules: store.budgetRules)
-                    .map { MoneyFormatter.string(from: $0.limit) } ?? "+ Đặt")
-                    .monospacedDigit().foregroundStyle(.secondary)
+            if let progress = store.progress(in: month).first(where: { $0.scope == scope }) {
+                LedgerRow(icon: icon, title: title,
+                          subtitle: progress.level == .over ? "Đã vượt · " + BudgetPresentation.remainingCompact(progress) : progress.level == .warning ? "Sắp hết · " + BudgetPresentation.remainingCompact(progress) : BudgetPresentation.remainingCompact(progress),
+                          amount: MoneyFormatter.compact(progress.spent) + " / " + MoneyFormatter.compact(progress.limit),
+                          progress: progress.fraction,
+                          tint: progress.level == .over ? .red : progress.level == .warning ? .orange : .accentColor)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(BudgetPresentation.voiceOver(progress, name: title))
+                    .accessibilityValue(Text(progress.fraction, format: .percent.precision(.fractionLength(0))))
+            } else {
+                LedgerRow(icon: icon, title: title, amount: "+ Đặt")
             }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)

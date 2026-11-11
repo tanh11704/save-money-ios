@@ -3,6 +3,7 @@ import SwiftUI
 
 struct StatsDailyChart: View {
     let days: [StatsService.DailyTotal]
+    var month: ReportingMonth? = nil
     let allowance: Int64?
     @State private var selectedDay: Int?
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -15,7 +16,7 @@ struct StatsDailyChart: View {
         Chart {
             ForEach(days) { day in
                 BarMark(x: .value("Ngày", day.day), y: .value("Chi", day.plotValue))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.accentColor.opacity(month == ReportingMonth() && day.day > LocalCalendar.calendar.component(.day, from: Date()) ? 0.25 : 1))
                     .accessibilityLabel("Ngày \(day.day)")
                     .accessibilityValue(MoneyFormatter.string(from: day.expense).replacingOccurrences(of: "₫", with: "đồng"))
             }

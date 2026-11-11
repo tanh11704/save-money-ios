@@ -11,6 +11,33 @@ private typealias Category = SaveMoney.Category
 
 @MainActor
 final class BalanceCalculatorTests: XCTestCase {
+    func testBatchBalancesMatchSingleWalletWithSeededMixedLedger() async throws {
+        var seed: UInt64 = 42
+        func next(_ max: Int) -> Int {
+            seed = seed &* 6364136223846793005 &+ 1
+            return Int((seed >> 32) % UInt64(max))
+        }
+        let wallets = (0..<12).map { Wallet(name: "W\($0)", openingBalance: Int64($0 * 1000), kind: $0 > 7 ? .person : .cash) }
+        let expense = Category(name: "Chi", kind: .expense), income = Category(name: "Thu", kind: .income)
+        var transactions: [Transaction] = []
+        for _ in 0..<5_000 {
+            let kind = [TransactionKind.expense, .income, .transfer][next(3)]
+            let source = next(kind == .income ? 8 : wallets.count)
+            let destination = (source + 1 + next(7)) % 8
+            transactions.append(Transaction(amount: Int64(next(100_000) + 1), kind: kind,
+                wallet: wallets[source], toWallet: kind == .transfer ? wallets[destination] : nil,
+                category: kind == .transfer ? nil : kind == .income ? income : expense))
+        }
+        let values = try BalanceCalculator.balances(wallets: wallets, transactions: transactions)
+        for wallet in wallets {
+            XCTAssertEqual(values[wallet.id], try BalanceCalculator.balance(for: wallet, transactions: transactions))
+        }
+        XCTAssertEqual(try NetWorth.make(wallets: wallets, balances: values), try NetWorth.make(wallets: wallets, transactions: transactions))
+        let rich = Wallet(name: "Overflow", openingBalance: Int64.max)
+        XCTAssertThrowsError(try BalanceCalculator.balances(wallets: [rich], transactions: [Transaction(amount: 1, kind: .income, wallet: rich, category: income)]))
+        XCTAssertThrowsError(try BalanceCalculator.balances(wallets: wallets, transactions: [Transaction(amount: 0, kind: .expense, wallet: wallets[0], category: expense)]))
+    }
+
     private func store() throws -> ModelContainer {
         let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
         return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])

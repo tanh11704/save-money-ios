@@ -44,10 +44,12 @@ struct DebtPersonView: View {
                 Section(TransactionGrouping.title(for: day.date)) {
                     ForEach(day.transactions, id: \.id) { transaction in
                         Button { editingTransaction = transaction } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                TransactionRow(transaction: transaction, debt: store.debtLabels[transaction.id])
-                                if let label = store.debtLabels[transaction.id] { Text("Sau giao dịch: " + DebtPresentation.balanceText(label.balanceAfter, person: person)).font(.caption).foregroundStyle(.secondary) }
-                            }
+                            LedgerRow(icon: "arrow.left.arrow.right", title: store.debtLabels[transaction.id]?.title ?? TransactionPresentation.title(transaction),
+                                      subtitle: transaction.note,
+                                      amount: TransactionPresentation.amount(transaction),
+                                      trailingSubtitle: store.debtLabels[transaction.id].map { "Sau: " + MoneyFormatter.compact($0.balanceAfter) })
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel((store.debtLabels[transaction.id]?.title ?? TransactionPresentation.title(transaction)) + ", " + TransactionPresentation.amount(transaction) + (store.debtLabels[transaction.id].map { ", Sau giao dịch: " + DebtPresentation.balanceText($0.balanceAfter, person: person) } ?? ""))
                         }.buttonStyle(.plain)
                     }
                 }

@@ -3,6 +3,9 @@ import Foundation
 struct NetWorth: Equatable {
     let ownWallets: Int64, receivable: Int64, payable: Int64, net: Int64
     static func make(wallets: [Wallet], transactions: [Transaction]) throws -> NetWorth {
+        try make(wallets: wallets, balances: BalanceCalculator.balances(wallets: wallets, transactions: transactions, allowMissingCategory: true))
+    }
+    static func make(wallets: [Wallet], balances: [UUID: Int64]) throws -> NetWorth {
         func add(_ a: Int64, _ b: Int64) throws -> Int64 {
             let result = a.addingReportingOverflow(b)
             guard !result.overflow else { throw BalanceCalculator.CalculationError.overflow }
@@ -10,7 +13,7 @@ struct NetWorth: Equatable {
         }
         var own: Int64 = 0, receivable: Int64 = 0, payable: Int64 = 0
         for wallet in wallets {
-            let balance = try BalanceCalculator.balance(for: wallet, transactions: transactions, allowMissingCategory: true)
+            guard let balance = balances[wallet.id] else { throw BalanceCalculator.CalculationError.overflow }
             if !wallet.isPerson { own = try add(own, balance) }
             else if balance >= 0 { receivable = try add(receivable, balance) }
             else {

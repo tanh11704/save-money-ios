@@ -41,9 +41,8 @@ struct StatsView: View {
                         .buttonStyle(.borderless)
                 }
             }
-            // Query results are never cached. Replacing the read context after a
-            // save also avoids stale identity-map objects from a different context.
-            StatsReportSections(month: month) { selection = CategorySelection(id: $0) }
+            // Read the store snapshot; detail queries use its refreshed context.
+            StatsReportSections(store: store, month: month) { selection = CategorySelection(id: $0) }
                 .environment(\.modelContext, store.statisticsContext ?? context)
                 .id(store.snapshotVersion)
         }
@@ -54,7 +53,7 @@ struct StatsView: View {
         })
         .navigationTitle("Thống kê")
         .sheet(isPresented: $showingMonthPicker) {
-            NavigationStack { StatsMonthPicker(month: $month, current: current) }
+            NavigationStack { StatsMonthPicker(month: $month, current: current, availableMonths: store.availableMonths) }
         }
         .sheet(item: $selection) { selection in
             NavigationStack {
@@ -77,11 +76,13 @@ struct StatsView: View {
 private struct StatsMonthPicker: View {
     @Binding var month: ReportingMonth
     let current: ReportingMonth
+    let availableMonths: [ReportingMonth]
     @Environment(\.dismiss) private var dismiss
     @State private var year: Int
     @State private var selectedMonth: Int
 
-    init(month: Binding<ReportingMonth>, current: ReportingMonth) {
+    init(month: Binding<ReportingMonth>, current: ReportingMonth, availableMonths: [ReportingMonth]) {
+        self.availableMonths = availableMonths
         _month = month
         self.current = current
         _year = State(initialValue: month.wrappedValue.year)
@@ -90,6 +91,13 @@ private struct StatsMonthPicker: View {
 
     var body: some View {
         Form {
+            if !availableMonths.isEmpty {
+                Section("Tháng có giao dịch") {
+                    ForEach(availableMonths.filter { $0 <= current }, id: \.self) { value in
+                        Button(value.title) { month = value; dismiss() }
+                    }
+                }
+            }
             Stepper("Năm \(String(year))", value: $year, in: 1...current.year).frame(minHeight: 44)
             Picker("Tháng", selection: $selectedMonth) {
                 ForEach(1...12, id: \.self) { value in Text("Tháng \(value)").tag(value) }
@@ -109,11 +117,11 @@ private struct StatsMonthPicker: View {
 
 @MainActor
 private struct StatsReportSections: View {
+    @ObservedObject var store: TransactionScreenStore
     let month: ReportingMonth
     let select: (StatsService.CategoryKey) -> Void
-    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
-    @Query private var budgets: [Budget]
-    @Query private var categories: [Category]
+    private var transactions: [Transaction] { store.transactions }
+    private var categories: [Category] { store.categories }
 
     var body: some View {
         let comparison = try? StatsService.comparison(month: month, now: Date(), transactions: transactions)
@@ -121,62 +129,56 @@ private struct StatsReportSections: View {
         switch result {
         case .success(let report):
             Section("Tóm tắt") {
-                summary("Tổng thu", amount: report.incomeText, negative: false, delta: comparison?.income, label: comparison?.label)
-                summary("Tổng chi", amount: report.expenseText, negative: false, delta: comparison?.expense, label: comparison?.label)
                 summary("Chênh lệch", amount: report.differenceText, negative: report.difference < 0, delta: comparison?.balance, label: comparison?.label)
-            }
-            if report.expense > 0 {
-                Section("Chi theo ngày") {
-                    switch Result(catching: { try StatsService.dailyExpenses(month: month, transactions: transactions) }) {
-                    case .success(let days):
-                        Card { StatsDailyChart(days: days, allowance: BudgetService.activeRule(for: .total, in: month, rules: budgets.compactMap(\.rule))
-                            .map { StatsService.dailyAllowance(limit: $0.limit, month: month) }) }
-                    case .failure(let error): Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red)
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        summary("Thu", amount: report.incomeText, delta: comparison?.income, label: comparison?.label)
+                        summary("Chi", amount: report.expenseText, delta: comparison?.expense, label: comparison?.label)
+                    }
+                    VStack {
+                        summary("Thu", amount: report.incomeText, delta: comparison?.income, label: comparison?.label)
+                        summary("Chi", amount: report.expenseText, delta: comparison?.expense, label: comparison?.label)
                     }
                 }
             }
             budgetSection
             if report.isEmpty { Section { EmptyState(image: "illus-empty-stats", title: "Tháng này chưa có giao dịch", message: "Đổi tháng để xem lịch sử", symbol: "chart.bar") } }
             categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.", report: report, comparison: comparison)
+            if report.expense > 0 {
+                Section("Chi theo ngày") {
+                    switch Result(catching: { try StatsService.dailyExpenses(month: month, transactions: transactions) }) {
+                    case .success(let days):
+                        Card { StatsDailyChart(days: days, month: month, allowance: BudgetService.activeRule(for: .total, in: month, rules: store.budgetRules)
+                            .map { StatsService.dailyAllowance(limit: $0.limit, month: month) }) }
+                    case .failure(let error): Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red)
+                    }
+                }
+            }
             categorySection("Thu theo danh mục", rows: report.incomes, empty: "Không có khoản thu.")
         case .failure(let error):
             Section { Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red) }
         }
     }
 
-    @ViewBuilder private var budgetSection: some View {
-        switch Result(catching: { try BudgetService.progress(month: month, rules: budgets.compactMap(\.rule), transactions: transactions) }) {
-        case .success(let progress):
-            if !progress.isEmpty {
-                Section("Ngân sách") {
-                    ForEach(progress, id: \.scope) { value in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(BudgetPresentation.name(for: value.scope, categories: categories)).font(.headline)
-                            if value.scope == .total { ProgressRing(fraction: value.fraction, level: value.level == .over ? "Đã vượt" : value.level == .warning ? "Sắp hết" : nil) }
-                            else {
-                                ProgressView(value: value.fraction)
-                                    .tint(categories.first { value.scope == .category($0.id) }.map { CategoryStyle.tint(for: $0.icon) } ?? .accentColor)
-                            }
-                            Text(BudgetPresentation.usage(value))
-                                .monospacedDigit().fixedSize(horizontal: false, vertical: true)
-                            Text(BudgetPresentation.remaining(value)).monospacedDigit()
-                            if value.level != .normal {
-                                Text(value.level == .over ? "Đã vượt" : "Sắp hết")
-                                    .foregroundStyle(value.level == .over ? Color.red : Color.orange)
-                            }
-                        }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(BudgetPresentation.voiceOver(value, name: BudgetPresentation.name(for: value.scope, categories: categories)))
-                    }
-                }
+    private var budgetSection: some View {
+        Section("Ngân sách") {
+            if let error = store.budgetError(in: month) { Callout(level: .danger, title: "Chưa tính được ngân sách", message: error) }
+            ForEach(store.progress(in: month), id: \.scope) { value in
+                LedgerRow(icon: "target", title: BudgetPresentation.name(for: value.scope, categories: categories),
+                          subtitle: value.level == .over ? "Đã vượt" : value.level == .warning ? "Sắp hết" : BudgetPresentation.remainingCompact(value),
+                          amount: MoneyFormatter.compact(value.spent) + " / " + MoneyFormatter.compact(value.limit),
+                          progress: value.fraction,
+                          tint: value.level == .over ? .red : value.level == .warning ? .orange : .accentColor)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(BudgetPresentation.voiceOver(value, name: BudgetPresentation.name(for: value.scope, categories: categories)))
+                    .accessibilityValue(Text(value.fraction, format: .percent.precision(.fractionLength(0))))
             }
-        case .failure(let error):
-            Section("Ngân sách") { Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red) }
+            NavigationLink("Sửa hạn mức") { BudgetListView(store: store) }
         }
     }
 
-    private func summary(_ title: String, amount: String, negative: Bool, delta: StatsService.Comparison.Delta? = nil, label: String? = nil) -> some View {
-        StatTile(title: title, value: amount, icon: title == "Tổng thu" ? "arrow.up.circle" : title == "Tổng chi" ? "arrow.down.circle" : "equal.circle", trend: delta.map { $0.text + " " + (label ?? "") })
+    private func summary(_ title: String, amount: String, negative: Bool = false, delta: StatsService.Comparison.Delta? = nil, label: String? = nil) -> some View {
+        StatTile(title: title, value: amount, icon: title == "Thu" ? "arrow.up.circle" : title == "Chi" ? "arrow.down.circle" : "equal.circle", trend: delta.map { $0.text + " " + (label ?? "") }, valueTint: negative ? Color("Expense") : .primary)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(amount), \(delta?.text ?? "") \(label ?? "")".replacingOccurrences(of: "₫", with: "đồng"))
     }
@@ -187,18 +189,9 @@ private struct StatsReportSections: View {
             if rows.isEmpty { Text(empty).foregroundStyle(.secondary) }
             ForEach(rows) { row in
                 Button { select(row.key) } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack { CategoryIcon(icon: row.icon, size: 28); Text(row.name).fixedSize(horizontal: false, vertical: true) }
-                        Text(MoneyFormatter.string(from: row.amount)).font(.headline).monospacedDigit()
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(row.percentageText).font(.subheadline).foregroundStyle(.secondary)
-                        if let delta = comparison?.expenseByCategory[row.key.categoryID], delta.difference != 0 {
-                            Text(delta.text + " " + (comparison?.label ?? ""))
-                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    LedgerRow(icon: row.icon, title: row.name,
+                              subtitle: row.percentageText + (comparison?.expenseByCategory[row.key.categoryID].map { " · " + ($0.difference > 0 ? "+" : "") + MoneyFormatter.compact($0.difference) + " cùng kỳ" } ?? ""),
+                              amount: MoneyFormatter.string(from: row.amount))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(row.name), \(MoneyFormatter.string(from: row.amount)), \(row.percentageText)")

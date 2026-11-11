@@ -28,6 +28,16 @@ final class BudgetAlertTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         return (BudgetAlertService(scheduler: scheduler, defaults: defaults), scheduler, defaults, suite)
     }
+    func testAmountsArePrivateByDefaultAndDetailedOnlyWhenOptedIn() async throws {
+        let (service, scheduler, defaults, suite) = setup(); defer { defaults.removePersistentDomain(forName: suite) }
+        await service.notify(month: ReportingMonth(), before: try progress(0), after: try progress(80), categories: [])
+        XCTAssertEqual(scheduler.alerts.first?.body, "Đã dùng hơn 80% hạn mức tổng tháng này.")
+        XCTAssertFalse(scheduler.alerts[0].body.contains("₫"))
+        defaults.set(true, forKey: BudgetAlertService.showsAmountsKey)
+        await service.notify(month: ReportingMonth(), before: try progress(80), after: try progress(100), categories: [])
+        XCTAssertTrue(scheduler.alerts[1].body.contains("100 / 100 ₫"))
+    }
+
     func testEightyPercentOnlyOnceUntilHundred() async throws {
         let (service, scheduler, defaults, suite) = setup(); defer { defaults.removePersistentDomain(forName: suite) }
         await service.notify(month: ReportingMonth(), before: try progress(70), after: try progress(80), categories: [])

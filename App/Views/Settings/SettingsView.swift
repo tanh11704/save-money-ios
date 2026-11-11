@@ -6,6 +6,7 @@ import UIKit
 struct SettingsView: View {
     @ObservedObject var store: BackupScreenStore
     @ObservedObject var lock: AppLockService
+    @AppStorage(BudgetAlertService.showsAmountsKey) private var showsNotificationAmounts = false
     @State private var importing = false
     @State private var sharing: ShareItem?
     private struct ShareItem: Identifiable { let id = UUID(); let url: URL }
@@ -14,8 +15,8 @@ struct SettingsView: View {
         List {
             Section { backupStatus }
             Section("Sao lưu") {
-                if let error = store.error ?? store.scheduler.lastError { Text(error).foregroundStyle(.red) }
-                if let message = store.message { Text(message).foregroundStyle(.secondary) }
+                if let error = store.error ?? store.scheduler.lastError { Callout(level: .danger, title: "Sao lưu cần kiểm tra", message: error) }
+                if let message = store.message { Callout(level: .info, title: message) }
                 Button { store.backupNow() } label: { IconRow(icon: "externaldrive", title: "Sao lưu ngay") }
                 Button {
                     if let latest = store.latest { sharing = ShareItem(url: latest) }
@@ -24,8 +25,7 @@ struct SettingsView: View {
                 NavigationLink { backupList } label: { IconRow(icon: "doc.on.doc", title: "Danh sách bản sao lưu") }
                 Button { importing = true } label: { IconRow(icon: "arrow.counterclockwise", tint: .orange, title: "Khôi phục từ file") }
                 HStack { IconRow(icon: "icloud", title: "Sao lưu iCloud của iPhone"); InfoButton(text: "1. Mở Cài đặt → tên bạn → iCloud.\n2. Bật Sao lưu iCloud.\n3. Chia sẻ file backup sang iCloud Drive và giữ thêm một bản ngoài iPhone.") }
-                Text(store.scheduler.exporter.protection.enabled ? "Mọi bản sao lưu mới đều được mã hóa, kể cả trước khôi phục." : "Backup mới chưa mã hóa và có thể đọc từ ứng dụng Tệp dù app đang khóa.")
-                    .font(.footnote).foregroundStyle(.secondary)
+
             }
             Section("Dữ liệu") {
                 NavigationLink { CSVExportView() } label: { IconRow(icon: "tablecells", tint: .green, title: "Xuất CSV") }
@@ -35,15 +35,27 @@ struct SettingsView: View {
                 NavigationLink { IntegrityView(store: store) } label: { IconRow(icon: "checkmark.shield", tint: .green, title: "Kiểm tra toàn vẹn") }
             }
             Section("Bảo mật") {
-                NavigationLink { BackupEncryptionView(store: store) } label: { IconRow(icon: "lock.shield", tint: .purple, title: "Mã hóa bản sao lưu") }
-                Toggle(isOn: Binding(get: { lock.enabled }, set: { value in Task { _ = await lock.setEnabled(value) } })) { IconRow(icon: "faceid", tint: .purple, title: "Khóa bằng Face ID") }
+                NavigationLink { BackupEncryptionView(store: store) } label: { IconRow(icon: "lock.shield", tint: .purple, title: "Mã hóa bản sao lưu", value: store.scheduler.exporter.protection.enabled ? "Đang bật" : "Tắt") }
+                Toggle(isOn: Binding(get: { lock.enabled }, set: { value in Task { _ = await lock.setEnabled(value) } })) { VStack(alignment: .leading, spacing: 4) {
+                    IconRow(icon: "faceid", tint: .purple, title: "Khóa bằng Face ID")
+                    Text("Khóa sau 30 giây ở nền").font(.footnote).foregroundStyle(.secondary)
+                } }
                     .frame(minHeight: 44).disabled(lock.state == .authenticating)
-                Text("Khóa sau 30 giây ở nền")
-                    .font(.footnote).foregroundStyle(.secondary)
+                Toggle("Hiện số tiền trong thông báo", isOn: $showsNotificationAmounts)
                 if let message = lock.message { Text(message).foregroundStyle(.red) }
             }
             Section("Phím tắt") {
-                IconRow(icon: "square.stack.3d.up", tint: .purple, title: "Mở nhanh SaveMoney")
+                NavigationLink {
+                    List {
+                        Section("Trong ứng dụng Phím tắt, tìm SaveMoney") {
+                            Label("Thêm chi", systemImage: "minus.circle")
+                            Label("Thêm thu", systemImage: "plus.circle")
+                            Label("Lịch sử", systemImage: "list.bullet")
+                            Label("Thống kê", systemImage: "chart.bar.xaxis")
+                        }
+                        Text("Các phím tắt mở app. Mở khóa và bấm Lưu để ghi giao dịch.")
+                    }.navigationTitle("Phím tắt SaveMoney")
+                } label: { IconRow(icon: "square.stack.3d.up", tint: .purple, title: "Mở nhanh SaveMoney") }
                 InfoButton(text: "Trong ứng dụng Phím tắt, tìm SaveMoney để mở Thêm chi, Thêm thu, Lịch sử hoặc Thống kê. Phím tắt luôn mở app và yêu cầu mở khóa trước khi nhập dữ liệu.")
             }
             Section("Thông tin") {
@@ -82,6 +94,9 @@ struct SettingsView: View {
             Text("\(health.fileCount) bản, \(ByteCountFormatter.string(fromByteCount: health.totalBytes, countStyle: .file))")
             if let kind = health.lastBackupKind { Text("Loại gần nhất: " + (kind == .auto ? "Tự động" : kind == .manual ? "Thủ công" : "Trước khôi phục")) }
             if let age = store.scheduler.externalCopyAge { Text("Bản chép ra ngoài gần nhất: \(age) ngày trước") }
+            if !store.scheduler.exporter.protection.enabled {
+                Callout(level: .warning, title: "Bản sao lưu chưa mã hóa", message: "File có thể đọc từ ứng dụng Tệp dù app đang khóa.")
+            }
             Button("Sao lưu ngay") { store.backupNow() }.appProminentButton().frame(minHeight: 44)
         } }
         .foregroundStyle(.primary)

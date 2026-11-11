@@ -1,5 +1,6 @@
 #if !SWIFT_PACKAGE
 import Foundation
+import Combine
 import SwiftData
 import XCTest
 @testable import SaveMoney
@@ -26,6 +27,38 @@ final class TransactionBudgetIntegrationTests: XCTestCase {
         let store = TransactionScreenStore(budgetAlerts: alerts); store.configure(container: container)
         return (container, store, scheduler, defaults, suite)
     }
+    #if DEBUG
+    func testOneReloadPerWriteAndUndoRefreshesCachedPresentation() async throws {
+        let (container, store, _, defaults, suite) = try fixture()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let subscription = NotificationCenter.default.publisher(for: .ledgerDidChange).sink { notification in
+            MainActor.assumeIsolated { store.receiveLedgerChange(notification) }
+        }
+        defer { subscription.cancel() }
+        let wallet = try XCTUnwrap(store.wallets.first), category = try XCTUnwrap(store.categories.first)
+        let baseline = store.reloadCount
+        let id = try store.save(TransactionDraft(amount: 50_000, wallet: wallet, category: category), editing: nil)
+        XCTAssertEqual(store.reloadCount, baseline + 1)
+        XCTAssertEqual(store.currentMonthReport?.expense, 50_000)
+        XCTAssertEqual(store.lastActivityByWallet[wallet.id], store.transactions.first?.date)
+        XCTAssertEqual(store.availableMonths, [ReportingMonth()])
+        XCTAssertEqual(store.budgetSubtitles(on: Date())[category.id], "Còn 50.000 ₫")
+        store.delete(id)
+        XCTAssertEqual(store.reloadCount, baseline + 2)
+        XCTAssertEqual(store.currentMonthReport?.expense, 0)
+        store.undo()
+        XCTAssertEqual(store.reloadCount, baseline + 3)
+        XCTAssertEqual(store.transactions.first?.id, id)
+        XCTAssertEqual(store.currentMonthReport?.expense, 50_000)
+        try store.saveWallet(WalletDraft(name: "Ví đổi tên"), editing: wallet.id)
+        XCTAssertEqual(store.reloadCount, baseline + 4)
+        // External writers still refresh the screen through the notification path.
+        _ = try TransactionService(container: container).create(
+            TransactionDraft(amount: 1, wallet: store.wallets[0], category: store.categories[0]))
+        XCTAssertEqual(store.reloadCount, baseline + 5)
+    }
+    #endif
+
     func testCalculatorSaveAndEditUpdateLedgerAndBudgetChips() async throws {
         let (_, store, _, defaults, suite) = try fixture(); defer { defaults.removePersistentDomain(forName: suite) }
         var expression = AmountExpression(amount: 120_000)

@@ -10,6 +10,7 @@ struct CategoryDraft {
 @MainActor
 struct CategoryService {
     let container: ModelContainer
+    var origin: UUID? = nil
 
     static func validate(_ draft: CategoryDraft, categories: [Category], editing original: Category? = nil,
                          hasTransactions: Bool = false) throws {
@@ -26,7 +27,7 @@ struct CategoryService {
 
     @discardableResult
     func create(_ draft: CategoryDraft) throws -> UUID {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             try Self.validate(draft, categories: context.fetch(FetchDescriptor<Category>()))
             let category = Category(name: try ManagementValidation.name(draft.name), kind: draft.kind, icon: draft.icon)
             context.insert(category)
@@ -35,7 +36,7 @@ struct CategoryService {
     }
 
     func update(id: UUID, with draft: CategoryDraft) throws {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             let categories = try context.fetch(FetchDescriptor<Category>())
             guard let category = categories.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
             let usedByTransactions = try context.fetch(FetchDescriptor<Transaction>()).contains { $0.category?.id == id }
@@ -53,7 +54,7 @@ struct CategoryService {
     func restore(id: UUID) throws { try setArchived(false, id: id) }
 
     private func setArchived(_ archived: Bool, id: UUID) throws {
-        try ManagementPersistence(container: container).write { context in
+        try ManagementPersistence(container: container, origin: origin).write { context in
             guard let category = try context.fetch(FetchDescriptor<Category>()).first(where: { $0.id == id }) else {
                 throw ManagementError.missingRecord
             }

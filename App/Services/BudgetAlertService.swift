@@ -20,6 +20,7 @@ struct SystemBudgetNotificationScheduler: NotificationScheduling {
     }
     func schedule(_ alert: BudgetAlert) async throws {
         let content = UNMutableNotificationContent()
+        content.threadIdentifier = "budget"
         content.title = "Ngân sách SaveMoney"; content.body = alert.body; content.sound = .default
         try await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: alert.id, content: content,
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)))
@@ -30,6 +31,7 @@ struct SystemBudgetNotificationScheduler: NotificationScheduling {
 final class BudgetAlertService {
     let scheduler: any NotificationScheduling
     let defaults: UserDefaults
+    static let showsAmountsKey = "SaveMoney.notifications.showAmounts"
     private var inFlight = Set<String>()
     init(scheduler: (any NotificationScheduling)? = nil, defaults: UserDefaults = .standard) {
         self.scheduler = scheduler ?? SystemBudgetNotificationScheduler(); self.defaults = defaults
@@ -49,9 +51,13 @@ final class BudgetAlertService {
                 defer { inFlight.remove(key) }
                 let name = BudgetPresentation.name(for: progress.scope, categories: categories)
                 let amounts = BudgetPresentation.usage(progress)
-                let body = threshold == .warning
+                let detailedBody = threshold == .warning
                     ? "\(name) đã dùng 80% hạn mức tháng \(month.month) (\(amounts))"
                     : "Đã vượt \(name.lowercased()) tháng \(month.month): \(amounts)"
+                let privateBody = threshold == .warning
+                    ? (progress.scope == .total ? "Đã dùng hơn 80% hạn mức tổng tháng này." : "\(name) đã dùng hơn 80% hạn mức tháng này.")
+                    : "Đã vượt \(progress.scope == .total ? "hạn mức tổng" : "hạn mức " + name) tháng này."
+                let body = defaults.bool(forKey: Self.showsAmountsKey) ? detailedBody : privateBody
                 do {
                     try await scheduler.schedule(BudgetAlert(id: key, body: body))
                     defaults.set(true, forKey: key)

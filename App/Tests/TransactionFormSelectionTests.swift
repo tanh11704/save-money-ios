@@ -10,6 +10,15 @@ private typealias Category = SaveMoney.Category
 
 @MainActor
 final class TransactionFormSelectionTests: XCTestCase {
+    func testBackdatedSelectionUsesLocalNoonAndTodayKeepsCurrentTime() async throws {
+        let calendar = LocalCalendar.calendar
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 18)))
+        let yesterday = TransactionPresentation.yesterday(from: now)
+        XCTAssertEqual(calendar.component(.day, from: yesterday), 10)
+        XCTAssertEqual(calendar.component(.hour, from: yesterday), 12)
+        XCTAssertEqual(TransactionPresentation.selectedDay(now, now: now), now)
+    }
+
     func testSaveButtonTitlesAndInlineErrorPolicy() {
         typealias Error = TransactionValidator.ValidationError
         XCTAssertEqual(TransactionPresentation.saveButtonTitle(for: Error.invalidAmount), "Nhập số tiền")

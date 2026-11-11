@@ -13,25 +13,31 @@ struct DebtListView: View {
         List {
             if let worth = store.netWorth {
                 Section {
-                    StatTile(title: "Người khác nợ bạn", value: MoneyFormatter.string(from: worth.receivable), icon: "person.badge.plus")
-                    StatTile(title: "Bạn đang nợ", value: MoneyFormatter.string(from: worth.payable), icon: "person.badge.minus")
-                    StatTile(title: "Tài sản ròng", value: MoneyFormatter.string(from: worth.net), icon: "equal.circle")
+                    ViewThatFits(in: .horizontal) {
+                        HStack {
+                            StatTile(title: "Họ nợ bạn", value: MoneyFormatter.string(from: worth.receivable), icon: "person.badge.plus")
+                            StatTile(title: "Bạn nợ", value: MoneyFormatter.string(from: worth.payable), icon: "person.badge.minus")
+                        }
+                        VStack {
+                            StatTile(title: "Họ nợ bạn", value: MoneyFormatter.string(from: worth.receivable), icon: "person.badge.plus")
+                            StatTile(title: "Bạn nợ", value: MoneyFormatter.string(from: worth.payable), icon: "person.badge.minus")
+                        }
+                    }
+                    LabeledContent("Tài sản ròng", value: MoneyFormatter.string(from: worth.net)).font(.subheadline)
                 }
             }
             if let error { Callout(level: .warning, title: "Chưa thể lưu trữ", message: error) }
             if people.isEmpty {
                 EmptyState(image: "illus-empty-debt", title: "Chưa có người", message: "Ghi nhận khoản vay và trả hộ", symbol: "person.2", actionTitle: "Thêm người") { adding = true }
             }
-            Section("Họ nợ bạn") { ForEach(people.filter { balance($0) > 0 }.sorted { balance($0) > balance($1) }, id: \.id) { row($0) } }
-            Section("Bạn nợ họ") { ForEach(people.filter { balance($0) < 0 }.sorted { balance($0) < balance($1) }, id: \.id) { row($0) } }
+            if people.contains(where: { balance($0) > 0 }) { Section("Họ nợ bạn") { ForEach(people.filter { balance($0) > 0 }.sorted { balance($0) > balance($1) }, id: \.id) { row($0) } } }
+            if people.contains(where: { balance($0) < 0 }) { Section("Bạn nợ họ") { ForEach(people.filter { balance($0) < 0 }.sorted { balance($0) < balance($1) }, id: \.id) { row($0) } } }
             DisclosureGroup("Đã xong (\(people.filter { balance($0) == 0 }.count))", isExpanded: $settledExpanded) {
                 ForEach(people.filter { balance($0) == 0 }, id: \.id) { row($0) }
             }.frame(minHeight: 44)
             DisclosureGroup("Đã lưu trữ", isExpanded: $archivedExpanded) {
                 ForEach(store.wallets.filter { $0.isPerson && $0.isArchived && (store.balanceValues[$0.id] ?? 0) == 0 }, id: \.id) { person in
-                    Button("Khôi phục \(person.name)") {
-                        do { try store.restoreWallet(person.id); error = nil } catch { self.error = error.localizedDescription }
-                    }.frame(minHeight: 44)
+                    row(person)
                 }
             }.frame(minHeight: 44)
         }.navigationTitle("Sổ nợ")
@@ -40,15 +46,10 @@ struct DebtListView: View {
     }
     private func row(_ person: Wallet) -> some View {
         NavigationLink { DebtPersonView(store: store, person: person) } label: {
-            HStack(alignment: .top, spacing: 12) {
-                Text(String(person.name.prefix(1)).uppercased()).font(.headline).foregroundStyle(.white).frame(width: 44, height: 44).background(CategoryStyle.tint(for: person.name), in: Circle()).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(person.name).font(.headline)
-                    if person.isArchived { Label("Đã lưu trữ", systemImage: "archivebox").font(.caption) }
-                    Text(DebtPresentation.balanceText(balance(person), person: person)).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                    if let date = WalletLedger.transactions(for: person, in: store.transactions).map(\.date).max() { Text(TransactionPresentation.shortDate(date)).font(.caption).foregroundStyle(.secondary) }
-                }
-            }.frame(minHeight: 44)
+            LedgerRow(icon: "person.crop.circle", title: person.name,
+                      subtitle: (person.isArchived ? "Đã lưu trữ · " : "") + (balance(person) >= 0 ? "nợ bạn" : "bạn nợ") + (store.lastActivityByWallet[person.id].map { " · " + TransactionPresentation.shortDate($0) } ?? ""),
+                      amount: MoneyFormatter.string(from: balance(person) < 0 ? -balance(person) : balance(person)),
+                      tint: balance(person) < 0 ? Color("Expense") : Color("Income"))
         }
         .swipeActions(allowsFullSwipe: false) {
             Button(person.isArchived ? "Khôi phục" : "Lưu trữ", systemImage: person.isArchived ? "arrow.uturn.backward" : "archivebox") {
@@ -66,6 +67,7 @@ struct DebtListView: View {
 struct DebtPersonForm: View {
     @ObservedObject var store: TransactionScreenStore
     var original: Wallet? = nil
+    var onSaved: ((Wallet) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var error: String?
@@ -76,7 +78,15 @@ struct DebtPersonForm: View {
             TextField("Tên, tối đa 30 ký tự", text: $name).focused($focus, equals: .name).submitLabel(.done).onSubmit { focus = nil }.frame(minHeight: 44).accessibilityIdentifier("debt.name")
             if let error { InlineError(message: error) }
             Button("Lưu") {
-                do { try store.saveWallet(WalletDraft(name: name, kind: .person), editing: original?.id); dismiss() }
+                do {
+                    let existingIDs = Set(store.wallets.map(\.id))
+                    try store.saveWallet(WalletDraft(name: name, kind: .person), editing: original?.id)
+                    if let person = store.wallets.first(where: {
+                        $0.isPerson && (original != nil ? $0.id == original?.id : !existingIDs.contains($0.id))
+                    }), let onSaved {
+                        onSaved(person)
+                    } else { dismiss() }
+                }
                 catch { self.error = error.localizedDescription }
             }.frame(minHeight: 44)
         }.scrollDismissesKeyboard(.interactively).keyboardDoneButton($focus)

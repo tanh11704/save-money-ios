@@ -52,11 +52,12 @@ struct StatTile: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let title: String, value: String, icon: String
     var trend: String? = nil
+    var valueTint: Color = .primary
     var body: some View {
         Card { VStack(alignment: .leading, spacing: 8) {
             Label(title, systemImage: icon).font(.subheadline).foregroundStyle(.secondary)
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.85)
-            Text(value).font(.title2.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.35)
+            Text(value).foregroundStyle(valueTint).font(.title2.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.35)
             if let trend { TrendBadge(delta: trend) }
         } }.accessibilityElement(children: .combine)
     }
@@ -123,6 +124,7 @@ struct ProgressRing: View {
             Circle().trim(from: 0, to: min(1, max(0, fraction))).stroke(fraction >= 1 ? Color.red : fraction >= 0.8 ? .orange : .accentColor, style: StrokeStyle(lineWidth: 10, lineCap: .round)).rotationEffect(.degrees(-90))
             VStack { Text(fraction, format: .percent.precision(.fractionLength(0))).font(.headline); if let level { Text(level).font(.caption) } }
         }.frame(width: 120, height: 120).accessibilityElement(children: .combine)
+            .accessibilityValue(Text(fraction, format: .percent.precision(.fractionLength(0))))
     }
 }
 struct IconRow: View {
@@ -228,5 +230,49 @@ struct AppProminentButtonStyle: ButtonStyle {
                 }
             }
             .opacity(isEnabled && configuration.isPressed ? 0.85 : 1)
+    }
+}
+
+/// Compact two-line financial row; accessibility sizes can expand vertically.
+struct LedgerRow: View {
+    let icon: String
+    let title: String
+    var subtitle: String? = nil
+    let amount: String
+    var trailingSubtitle: String? = nil
+    var progress: Double? = nil
+    var tint: Color = .accentColor
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var leading: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.headline).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+            if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? nil : 1) }
+        }
+    }
+    private var trailing: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(amount).font(.headline).monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
+            if let trailingSubtitle { Text(trailingSubtitle).font(.caption).foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? nil : 1) }
+        }
+    }
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: icon).foregroundStyle(tint).frame(width: 28, height: 28).accessibilityHidden(true)
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 8) { leading; trailing }
+                } else {
+                    leading.layoutPriority(1)
+                    Spacer(minLength: 8)
+                    trailing
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            if let progress {
+                ProgressView(value: min(1, max(0, progress))).tint(tint)
+                    .accessibilityValue(Text(progress, format: .percent.precision(.fractionLength(0))))
+            }
+        }.frame(minHeight: 44).foregroundStyle(.primary)
+            .accessibilityElement(children: .combine)
     }
 }

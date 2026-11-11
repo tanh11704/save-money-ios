@@ -39,6 +39,34 @@ final class SmokeTests: XCTestCase {
         app.terminate()
     }
 
+    @MainActor func testPaidOnBehalfCanAddAndSelectPerson() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--keyboard-smoke", "transaction"]
+        app.launch()
+        defer { app.terminate() }
+        guard app.buttons["keypad.hide"].waitForExistence(timeout: 10) else { XCTFail("Thiếu bàn phím fixture"); return }
+        app.buttons["keypad.hide"].tap()
+        let payer = app.buttons["transaction.payer"]
+        for _ in 0..<3 {
+            if payer.isHittable { break }
+            app.swipeUp()
+        }
+        guard payer.isHittable else { XCTFail("Không chạm được Người khác trả"); return }
+        payer.tap()
+        let add = app.buttons["Thêm người…"]
+        guard add.waitForExistence(timeout: 5) else { XCTFail("Không mở được màn chọn người"); return }
+        add.tap()
+        let name = app.textFields["debt.name"]
+        guard name.waitForExistence(timeout: 5) else { XCTFail("Không mở được form thêm người"); return }
+        name.tap()
+        name.typeText("Lan")
+        app.buttons["keyboard.done"].tap()
+        app.buttons["Lưu"].tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: name)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed)
+        XCTAssertTrue(app.staticTexts["Lan trả hộ"].waitForExistence(timeout: 5))
+    }
+
     @MainActor private func check(_ screen: String, field: String, returnKey: Bool = false) {
         let app = XCUIApplication()
         app.launchArguments = ["--keyboard-smoke", screen]

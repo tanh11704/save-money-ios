@@ -11,7 +11,12 @@ Có kiểm tra toàn vẹn, CSV, tình trạng/nhắc backup, mã hóa và 5 App
 SwiftData giữ V3; backup mới là v4 để nhận diện ví người, đọc được v1–v3.
 Phong bì mã hóa không đổi.
 
-**Kiểm tra ngày 11/11/2026:** 194/194 test core macOS; bộ iOS đầy đủ
+**Thay đổi mới theo review 11/11/2026 chưa chạy build/test:** ẩn số tiền thông báo mặc định,
+cache và tải snapshot một lần, số dư ví một lượt, giao diện danh sách gọn,
+Hoàn tác 5 giây và Ghi lại khoản này. Xem [checklist](docs/qa/system-review-fixes.md).
+Các số test dưới đây là kết quả lịch sử, không xác nhận các thay đổi mới này.
+
+**Kiểm tra trước các thay đổi review ngày 11/11/2026:** 194/194 test core macOS; bộ iOS đầy đủ
 203/203 và lượt bổ sung 15/15; bốn UI test đóng bàn phím đều đạt.
 Các lượt render cuối và giới hạn nghiệm thu nằm trong checklist QA.
 IPA thử K0 build Release arm64, có appex và kiểm tra zip đạt. Không coi đây
