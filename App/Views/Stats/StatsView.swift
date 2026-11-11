@@ -119,6 +119,16 @@ private struct StatsReportSections: View {
                 summary("Tổng chi", amount: report.expenseText, negative: false)
                 summary("Chênh lệch", amount: report.differenceText, negative: report.difference < 0)
             }
+            if report.expense > 0 {
+                Section("Chi theo ngày") {
+                    switch Result(catching: { try StatsService.dailyExpenses(month: month, transactions: transactions) }) {
+                    case .success(let days):
+                        StatsDailyChart(days: days, allowance: BudgetService.activeRule(for: .total, in: month, rules: budgets.compactMap(\.rule))
+                            .map { StatsService.dailyAllowance(limit: $0.limit, month: month) })
+                    case .failure(let error): Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red)
+                    }
+                }
+            }
             budgetSection
             if report.isEmpty { Section { Text("Tháng này chưa có giao dịch.").foregroundStyle(.secondary) } }
             categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.")
@@ -167,7 +177,7 @@ private struct StatsReportSections: View {
         .accessibilityLabel("\(title), \(amount)")
     }
 
-    private func categorySection(_ title: String, rows: [StatsService.CategoryTotal], empty: String) -> some View {
+    private func categorySection(_ title: String, rows: [StatsService.CategoryTotal], empty: String, report: StatsService.Report? = nil) -> some View {
         Section(title) {
             if rows.isEmpty { Text(empty).foregroundStyle(.secondary) }
             ForEach(rows) { row in
