@@ -86,7 +86,7 @@ final class BackupScheduler {
             defaults.set(0, forKey: counterKey); lastError = nil; defaults.removeObject(forKey: "SaveMoney.lastBackupError"); defaults.set(0, forKey: "SaveMoney.backupFailures"); onChange?()
             return url
         } catch {
-            lastError = "Sao lưu tự động thất bại. Hãy sao lưu lại trong Cài đặt."
+            lastError = error is BackupCrypto.CryptoError ? error.localizedDescription : "Sao lưu tự động thất bại. Hãy sao lưu lại trong Cài đặt."
             defaults.set(lastError, forKey: "SaveMoney.lastBackupError")
             defaults.set(consecutiveFailures + 1, forKey: "SaveMoney.backupFailures")
             onAutomaticFailure?(consecutiveFailures)

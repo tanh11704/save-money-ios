@@ -36,6 +36,7 @@ struct SettingsView: View {
                 NavigationLink { IntegrityView(store: store) } label: { Text("Kiểm tra dữ liệu").frame(minHeight: 44) }
             }
             Section("Bảo mật") {
+                NavigationLink { BackupEncryptionView(store: store) } label: { Text("Mã hóa bản sao lưu").frame(minHeight: 44) }
                 Toggle("Khóa bằng Face ID", isOn: Binding(get: { lock.enabled }, set: { value in Task { _ = await lock.setEnabled(value) } }))
                     .frame(minHeight: 44).disabled(lock.state == .authenticating)
                 Text("Dùng Face ID hoặc mật mã máy. Khóa khi mở app và khi quay lại sau hơn 30 giây ở nền.")

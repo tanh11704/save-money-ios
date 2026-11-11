@@ -136,7 +136,8 @@ final class BackupScreenStore: ObservableObject {
             lastBackupKind: last.map { $0.url.lastPathComponent.contains("-Auto") ? .auto : .manual }, fileCount: entries.count + preRestore.count,
             totalBytes: bytes, lastExternalCopy: scheduler.lastExternalCopy,
             lastIntegrityCheck: integrityDate.map { .init(date: $0, healthy: scheduler.defaults.bool(forKey: "SaveMoney.lastIntegrityHealthy")) },
-            changesSinceBackup: scheduler.changes, lastError: scheduler.lastError, transactionCount: (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0)
+            changesSinceBackup: scheduler.changes, lastError: scheduler.lastError, transactionCount: (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0,
+            encryptionEnabled: scheduler.exporter.protection.enabled, lastPasswordCheck: scheduler.exporter.protection.defaults.object(forKey: "SaveMoney.lastBackupPasswordCheck") as? Date)
     }
     var latest: URL? { entries.first?.url }
     func refresh() {
