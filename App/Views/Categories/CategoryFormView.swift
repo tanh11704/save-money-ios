@@ -43,15 +43,14 @@ struct CategoryFormView: View {
                     Text("Thu").tag(TransactionKind.income)
                 }.pickerStyle(.menu).disabled(lockedKind).frame(minHeight: 44)
                 if lockedKind {
-                    Text("Danh mục đã có giao dịch, hạn mức hoặc quy tắc định kỳ nên không thể đổi loại. Muốn khác loại, hãy tạo danh mục mới.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    HStack { Label("Đã khóa loại", systemImage: "lock"); InfoButton(text: "Danh mục đã có giao dịch, hạn mức hoặc quy tắc định kỳ. Tạo danh mục mới để dùng loại khác.") }
                 }
                 Text("Biểu tượng").font(.headline)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 140 : 88))], spacing: 8) {
                     ForEach(CategorySymbols.all) { symbol in
                         Button { draft.icon = symbol.name; saveError = nil } label: {
                             VStack(spacing: 6) {
-                                Image(systemName: symbol.name).font(.title2).accessibilityHidden(true)
+                                CategoryIcon(icon: symbol.name)
                                 Text(symbol.label).font(.caption).fixedSize(horizontal: false, vertical: true)
                                 if draft.icon == symbol.name { Image(systemName: "checkmark.circle.fill").accessibilityHidden(true) }
                             }.frame(maxWidth: .infinity, minHeight: 44).padding(.vertical, 4)

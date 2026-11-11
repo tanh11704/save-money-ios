@@ -83,7 +83,7 @@ struct RecurringFormView: View {
                 Text(preview.upcoming).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if original?.isPaused == true { Text("Quy tắc đang tạm dừng. Chỉ sinh khi bạn bấm Tiếp tục.").font(.footnote) }
                 else if let catchUp = preview.catchUp { Text(catchUp).font(.footnote).fixedSize(horizontal: false, vertical: true) }
-                if original != nil { Text("Thay đổi chỉ áp dụng cho các lần sau; giao dịch đã sinh giữ nguyên.").font(.footnote).foregroundStyle(.secondary) }
+                if original != nil { Callout(level: .info, title: "Chỉ áp dụng các lần sau", message: "Giao dịch đã sinh giữ nguyên.") }
             }.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).padding()
         }
         .keyboardDoneButton($focus)

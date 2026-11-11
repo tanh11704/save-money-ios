@@ -17,7 +17,7 @@ struct RecurringListView: View {
                 }
             }
             Section("Đang dùng") {
-                if store.recurringRules.isEmpty { Text("Chưa có giao dịch định kỳ.").foregroundStyle(.secondary) }
+                if store.recurringRules.isEmpty { EmptyState(image: "illus-empty-recurring", title: "Chưa có định kỳ", message: "Tự ghi các khoản lặp lại", symbol: "calendar", actionTitle: "Thêm định kỳ") { showingAdd = true } }
                 ForEach(store.recurringRules.filter { !$0.isPaused }, id: \.id) { rule in row(rule) }
             }
             DisclosureGroup("Đã tạm dừng (\(store.recurringRules.filter { $0.isPaused }.count))", isExpanded: $expanded) {
@@ -34,13 +34,14 @@ struct RecurringListView: View {
     private func row(_ rule: RecurringRule) -> some View {
         Button { editing = rule } label: {
             VStack(alignment: .leading, spacing: 6) {
-                Text(rule.title).font(.headline)
-                Text((rule.kindRaw == "expense" ? "−" : rule.kindRaw == "income" ? "+" : "") + MoneyFormatter.string(from: rule.amount)).monospacedDigit()
-                Text(RecurringPresentation.schedule(rule)).font(.subheadline).foregroundStyle(.secondary)
+                HStack { Image(systemName: rule.isPaused ? "pause.circle" : "calendar").font(.title); Text(rule.title).font(.headline) }
+                AmountText(amount: rule.amount, kind: TransactionKind(rawValue: rule.kindRaw))
+                TrendBadge(delta: RecurringPresentation.schedule(rule))
                 Text(RecurringPresentation.next(rule)).font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).fixedSize(horizontal: false, vertical: true)
         }
         .buttonStyle(.plain)
+        .opacity(rule.isPaused ? 0.65 : 1)
         .swipeActions(allowsFullSwipe: false) {
             Button(rule.isPaused ? "Tiếp tục" : "Tạm dừng") {
                 do { try store.setRecurringPaused(!rule.isPaused, id: rule.id); error = nil }

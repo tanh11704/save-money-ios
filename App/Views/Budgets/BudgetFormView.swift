@@ -26,11 +26,9 @@ struct BudgetFormView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }.buttonStyle(.plain).frame(minHeight: 44)
                     .accessibilityIdentifier("budget.amount").accessibilityHint("Ẩn hoặc hiện bàn phím số tiền")
-                Text("Áp dụng từ tháng \(month.month)/\(String(month.year)) và các tháng sau. Các tháng trước giữ hạn mức cũ.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                HStack { TrendBadge(delta: "Từ \(month.month)/\(String(month.year)) →"); InfoButton(text: "Áp dụng tháng này và các tháng sau. Các tháng trước giữ hạn mức cũ.") }
                 if BudgetPresentation.categoryLimitsExceedTotal(month: month, rules: store.budgetRules, replacing: scope, limit: amount) {
-                    Text("Tổng hạn mức danh mục lớn hơn hạn mức tổng. Bạn vẫn có thể lưu.")
-                        .foregroundStyle(.orange)
+                    Callout(level: .warning, title: "Danh mục vượt hạn mức tổng", message: "Bạn vẫn có thể lưu các hạn mức độc lập.")
                 }
                 if BudgetService.activeRule(for: scope, in: month, rules: store.budgetRules) != nil {
                     Button("Tắt hạn mức", role: .destructive) { confirmingOff = true }.frame(minHeight: 44)

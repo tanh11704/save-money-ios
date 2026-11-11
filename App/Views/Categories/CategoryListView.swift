@@ -69,8 +69,7 @@ struct CategoryListView: View {
 
     private func categoryRow(_ category: Category) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label(category.name, systemImage: category.icon).foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack { CategoryIcon(icon: category.icon); Text(category.name).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true) }
             Text(category.kindRaw == "income" ? "Thu" : "Chi").font(.caption).foregroundStyle(.secondary)
         }
         .frame(minHeight: 44)
