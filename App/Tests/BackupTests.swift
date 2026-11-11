@@ -162,8 +162,8 @@ final class BackupTests: XCTestCase {
         let original = try f.current()
         var tampered = original; tampered.payload.wallets[0].name += "x"
         XCTAssertThrowsError(try f.restorer().restore(f.bytes(tampered))) { XCTAssertEqual($0 as? BackupError, .checksum) }
-        var future = original; future.schemaVersion = 3
-        XCTAssertThrowsError(try f.restorer().restore(f.bytes(future))) { XCTAssertEqual($0 as? BackupError, .unsupportedVersion(3)) }
+        var future = original; future.schemaVersion = 4
+        XCTAssertThrowsError(try f.restorer().restore(f.bytes(future))) { XCTAssertEqual($0 as? BackupError, .unsupportedVersion(4)) }
         XCTAssertEqual(try f.current().payload, original.payload)
         XCTAssertFalse(FileManager.default.fileExists(atPath: f.folder.path))
     }

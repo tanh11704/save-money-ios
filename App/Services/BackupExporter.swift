@@ -23,20 +23,26 @@ struct BackupExporter {
         let categories = try context.fetch(FetchDescriptor<Category>()).sorted { $0.id.uuidString < $1.id.uuidString }
         let transactions = try context.fetch(FetchDescriptor<Transaction>()).sorted { $0.id.uuidString < $1.id.uuidString }
         let budgets = try context.fetch(FetchDescriptor<Budget>()).sorted { $0.id.uuidString < $1.id.uuidString }
+        let recurringRules = try context.fetch(FetchDescriptor<RecurringRule>()).sorted { $0.id.uuidString < $1.id.uuidString }
         let payload = BackupFile.Payload(
             wallets: try wallets.map { .init(id: $0.id.uuidString, name: $0.name, kind: $0.kindRaw,
                 openingBalance: $0.openingBalance, isArchived: $0.isArchived, createdAt: try BackupFile.milliseconds($0.createdAt)) },
             categories: categories.map { .init(id: $0.id.uuidString, name: $0.name, kind: $0.kindRaw, icon: $0.icon, isArchived: $0.isArchived) },
             transactions: try transactions.map { .init(id: $0.id.uuidString, amount: $0.amount, kind: $0.kindRaw,
                 date: try BackupFile.milliseconds($0.date), note: $0.note, walletId: $0.wallet?.id.uuidString,
-                toWalletId: $0.toWallet?.id.uuidString, categoryId: $0.category?.id.uuidString) },
+                toWalletId: $0.toWallet?.id.uuidString, categoryId: $0.category?.id.uuidString, recurrenceKey: $0.recurrenceKey, includesRecurrenceKey: true) },
             budgets: try budgets.map { .init(id: $0.id.uuidString, scopeRaw: $0.scopeRaw, categoryID: $0.category?.id.uuidString,
                 limit: $0.limit, startYear: $0.startYear, startMonth: $0.startMonth, isArchived: $0.isArchived,
-                createdAt: try BackupFile.milliseconds($0.createdAt)) })
+                createdAt: try BackupFile.milliseconds($0.createdAt)) },
+            recurringRules: try recurringRules.map { .init(id: $0.id.uuidString, name: $0.name, kindRaw: $0.kindRaw, amount: $0.amount,
+                note: $0.note, walletId: $0.wallet?.id.uuidString, toWalletId: $0.toWallet?.id.uuidString, categoryId: $0.category?.id.uuidString,
+                frequencyRaw: $0.frequencyRaw, interval: $0.interval, startDate: try BackupFile.milliseconds($0.startDate),
+                endDate: try $0.endDate.map(BackupFile.milliseconds), generatedThrough: try $0.generatedThrough.map(BackupFile.milliseconds),
+                isPaused: $0.isPaused, createdAt: try BackupFile.milliseconds($0.createdAt)) })
         let graph = BackupValidator.Graph(wallets: wallets, categories: categories, transactions: transactions)
-        let file = BackupFile(schemaVersion: 2, createdAt: try BackupFile.milliseconds(now), appVersion: appVersion,
+        let file = BackupFile(schemaVersion: 3, createdAt: try BackupFile.milliseconds(now), appVersion: appVersion,
             checksum: try BackupFile.digest(payload), summary: .init(wallets: wallets.count, categories: categories.count,
-                transactions: transactions.count, budgets: budgets.count, expectedBalances: try BackupValidator.expectedBalances(graph)), payload: payload)
+                transactions: transactions.count, budgets: budgets.count, recurringRules: recurringRules.count, expectedBalances: try BackupValidator.expectedBalances(graph)), payload: payload)
         _ = try BackupValidator.validate(file)
         return file
     }

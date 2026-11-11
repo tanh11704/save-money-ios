@@ -15,6 +15,7 @@ struct BackupFile: Codable, Equatable {
         var categories: Int
         var transactions: Int
         var budgets: Int? = nil
+        var recurringRules: Int? = nil
         var expectedBalances: [String: Int64]
     }
     struct Payload: Codable, Equatable {
@@ -22,18 +23,23 @@ struct BackupFile: Codable, Equatable {
         var categories: [CategoryRecord]
         var transactions: [TransactionRecord]
         var budgets: [BudgetRecord] = []
+        var recurringRules: [RecurringRuleRecord] = []
+        private(set) var includesRecurringRules = false
         private(set) var includesBudgets: Bool = false
-        var isEmpty: Bool { wallets.isEmpty && categories.isEmpty && transactions.isEmpty && budgets.isEmpty }
-        enum CodingKeys: String, CodingKey { case wallets, categories, transactions, budgets }
-        init(wallets: [WalletRecord], categories: [CategoryRecord], transactions: [TransactionRecord], budgets: [BudgetRecord]? = nil) {
+        var isEmpty: Bool { wallets.isEmpty && categories.isEmpty && transactions.isEmpty && budgets.isEmpty && recurringRules.isEmpty }
+        enum CodingKeys: String, CodingKey { case wallets, categories, transactions, budgets, recurringRules }
+        init(wallets: [WalletRecord], categories: [CategoryRecord], transactions: [TransactionRecord], budgets: [BudgetRecord]? = nil, recurringRules: [RecurringRuleRecord]? = nil) {
             self.wallets = wallets; self.categories = categories; self.transactions = transactions
             self.budgets = budgets ?? []; includesBudgets = budgets != nil
+            self.recurringRules = recurringRules ?? []; includesRecurringRules = recurringRules != nil
         }
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             wallets = try c.decode([WalletRecord].self, forKey: .wallets)
             categories = try c.decode([CategoryRecord].self, forKey: .categories)
             transactions = try c.decode([TransactionRecord].self, forKey: .transactions)
+            includesRecurringRules = c.contains(.recurringRules)
+            recurringRules = includesRecurringRules ? try c.decode([RecurringRuleRecord].self, forKey: .recurringRules) : []
             includesBudgets = c.contains(.budgets)
             budgets = includesBudgets ? try c.decode([BudgetRecord].self, forKey: .budgets) : []
         }
@@ -41,7 +47,44 @@ struct BackupFile: Codable, Equatable {
             var c = encoder.container(keyedBy: CodingKeys.self)
             try c.encode(wallets, forKey: .wallets); try c.encode(categories, forKey: .categories)
             try c.encode(transactions, forKey: .transactions)
+            if includesRecurringRules || !recurringRules.isEmpty { try c.encode(recurringRules, forKey: .recurringRules) }
             if includesBudgets || !budgets.isEmpty { try c.encode(budgets, forKey: .budgets) }
+        }
+    }
+    struct RecurringRuleRecord: Codable, Equatable {
+        var id: String
+        var name: String
+        var kindRaw: String
+        var amount: Int64
+        var note: String
+        var walletId: String?
+        var toWalletId: String?
+        var categoryId: String?
+        var frequencyRaw: String
+        var interval: Int
+        var startDate: Int64
+        var endDate: Int64?
+        var generatedThrough: Int64?
+        var isPaused: Bool
+        var createdAt: Int64
+        enum CodingKeys: String, CodingKey { case id, name, kindRaw, amount, note, walletId, toWalletId, categoryId, frequencyRaw, interval, startDate, endDate, generatedThrough, isPaused, createdAt }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id)
+            try c.encode(name, forKey: .name)
+            try c.encode(kindRaw, forKey: .kindRaw)
+            try c.encode(amount, forKey: .amount)
+            try c.encode(note, forKey: .note)
+            try c.encode(walletId, forKey: .walletId)
+            try c.encode(toWalletId, forKey: .toWalletId)
+            try c.encode(categoryId, forKey: .categoryId)
+            try c.encode(frequencyRaw, forKey: .frequencyRaw)
+            try c.encode(interval, forKey: .interval)
+            try c.encode(startDate, forKey: .startDate)
+            try c.encode(endDate, forKey: .endDate)
+            try c.encode(generatedThrough, forKey: .generatedThrough)
+            try c.encode(isPaused, forKey: .isPaused)
+            try c.encode(createdAt, forKey: .createdAt)
         }
     }
     struct BudgetRecord: Codable, Equatable {
@@ -86,10 +129,13 @@ struct BackupFile: Codable, Equatable {
         var walletId: String?
         var toWalletId: String?
         var categoryId: String?
-        enum CodingKeys: String, CodingKey { case id, amount, kind, date, note, walletId, toWalletId, categoryId }
-        init(id: String, amount: Int64, kind: String, date: Int64, note: String, walletId: String?, toWalletId: String?, categoryId: String?) {
+        var recurrenceKey: String? = nil
+        var includesRecurrenceKey = false
+        enum CodingKeys: String, CodingKey { case id, amount, kind, date, note, walletId, toWalletId, categoryId, recurrenceKey }
+        init(id: String, amount: Int64, kind: String, date: Int64, note: String, walletId: String?, toWalletId: String?, categoryId: String?, recurrenceKey: String? = nil, includesRecurrenceKey: Bool = false) {
             self.id = id; self.amount = amount; self.kind = kind; self.date = date; self.note = note
             self.walletId = walletId; self.toWalletId = toWalletId; self.categoryId = categoryId
+            self.recurrenceKey = recurrenceKey; self.includesRecurrenceKey = includesRecurrenceKey
         }
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -101,11 +147,14 @@ struct BackupFile: Codable, Equatable {
             walletId = try c.decode(String?.self, forKey: .walletId)
             toWalletId = try c.decode(String?.self, forKey: .toWalletId)
             categoryId = try c.decode(String?.self, forKey: .categoryId)
+            includesRecurrenceKey = c.contains(.recurrenceKey)
+            recurrenceKey = includesRecurrenceKey ? try c.decode(String?.self, forKey: .recurrenceKey) : nil
         }
         func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: CodingKeys.self)
             try c.encode(id, forKey: .id); try c.encode(amount, forKey: .amount)
             try c.encode(kind, forKey: .kind); try c.encode(date, forKey: .date); try c.encode(note, forKey: .note)
+            if includesRecurrenceKey || recurrenceKey != nil { try c.encode(recurrenceKey, forKey: .recurrenceKey) }
             try c.encode(walletId, forKey: .walletId); try c.encode(toWalletId, forKey: .toWalletId); try c.encode(categoryId, forKey: .categoryId)
         }
     }

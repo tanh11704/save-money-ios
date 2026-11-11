@@ -102,6 +102,7 @@ private struct RestoreSummaryView: View {
         List {
             Section("Dữ liệu trong file") {
                 Text("\(candidate.summary.file.summary.wallets) ví")
+                Text("\(candidate.summary.file.payload.recurringRules.count) giao dịch định kỳ")
                 Text("\(candidate.summary.file.payload.budgets.count) hạn mức")
                 Text("\(candidate.summary.file.summary.categories) danh mục")
                 Text("\(candidate.summary.file.summary.transactions) giao dịch")

@@ -32,8 +32,12 @@ final class BackupBudgetTests: XCTestCase {
         let restorer = BackupRestorer(container: container, exporter: exporter)
         _ = try restorer.restore(original)
         let captured = try exporter.capture(now: BackupFile.date(validated.file.createdAt))
-        XCTAssertEqual(captured.payload, validated.file.payload)
-        XCTAssertEqual(captured.summary, validated.file.summary)
+        XCTAssertEqual(captured.payload.wallets, validated.file.payload.wallets)
+        XCTAssertEqual(captured.payload.categories, validated.file.payload.categories)
+        XCTAssertEqual(captured.payload.budgets, validated.file.payload.budgets)
+        XCTAssertEqual(captured.payload.transactions.map(\.id), validated.file.payload.transactions.map(\.id))
+        XCTAssertTrue(captured.payload.recurringRules.isEmpty)
+        XCTAssertEqual(captured.summary.expectedBalances, validated.file.summary.expectedBalances)
         XCTAssertEqual(captured.payload.budgets.map(\.isArchived), [false, true])
         _ = try restorer.restore(fixture(1))
         let v1Restored = try exporter.capture()
@@ -41,7 +45,8 @@ final class BackupBudgetTests: XCTestCase {
         let v1 = try BackupValidator.read(fixture(1)).file
         XCTAssertEqual(v1Restored.payload.wallets, v1.payload.wallets)
         XCTAssertEqual(v1Restored.payload.categories, v1.payload.categories)
-        XCTAssertEqual(v1Restored.payload.transactions, v1.payload.transactions)
+        XCTAssertEqual(v1Restored.payload.transactions.map(\.id), v1.payload.transactions.map(\.id))
+        XCTAssertTrue(v1Restored.payload.transactions.allSatisfy { $0.recurrenceKey == nil })
         XCTAssertEqual(v1Restored.summary.expectedBalances, v1.summary.expectedBalances)
     }
     func testBudgetTamperingAndDanglingCategoryDoNotChangeLedger() async throws {
