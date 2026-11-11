@@ -35,7 +35,7 @@ struct CategoryFormView: View {
                     .accessibilityIdentifier("category.name")
                     .focused($focus, equals: .name).submitLabel(.done).onSubmit { focus = nil }
                 if let message = saveError ?? validationMessage {
-                    Text(message).font(.footnote).foregroundStyle(.red)
+                    InlineError(message: message)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Picker("Loại danh mục", selection: $draft.kind) {
@@ -62,7 +62,7 @@ struct CategoryFormView: View {
                     }
                 }
                 Button(action: save) { Text("Lưu danh mục").frame(maxWidth: .infinity, minHeight: 44) }
-                    .buttonStyle(.borderedProminent).disabled(validationMessage != nil)
+                    .appProminentButton().disabled(validationMessage != nil)
             }.padding()
         }
         .keyboardDoneButton($focus)

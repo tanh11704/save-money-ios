@@ -34,7 +34,14 @@ struct RecurringListView: View {
     private func row(_ rule: RecurringRule) -> some View {
         Button { editing = rule } label: {
             VStack(alignment: .leading, spacing: 6) {
-                HStack { Image(systemName: rule.isPaused ? "pause.circle" : "calendar").font(.title); Text(rule.title).font(.headline) }
+                HStack(alignment: .top) {
+                    if let date = RecurringPresentation.nextDate(rule) { CalendarTile(date: date) }
+                    else { Image(systemName: "calendar.badge.checkmark").accessibilityHidden(true) }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(rule.title).font(.headline).fixedSize(horizontal: false, vertical: true)
+                        if rule.isPaused { Label("Tạm dừng", systemImage: "pause.circle").font(.caption) }
+                    }
+                }
                 AmountText(amount: rule.amount, kind: TransactionKind(rawValue: rule.kindRaw))
                 TrendBadge(delta: RecurringPresentation.schedule(rule))
                 Text(RecurringPresentation.next(rule)).font(.caption).foregroundStyle(.secondary)

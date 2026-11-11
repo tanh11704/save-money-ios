@@ -8,13 +8,19 @@ final class SmokeTests: XCTestCase {
         let input = app.textFields[field]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
+        // A cold Simulator can drop the first focus event while opening its keyboard service.
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 8) { input.tap() }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
         input.typeText("Ten moi")
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         if returnKey { input.typeText("\n") }
-        else { app.buttons["keyboard.done"].tap() }
+        else {
+            XCTAssertTrue(app.buttons["keyboard.done"].waitForExistence(timeout: 5))
+            app.buttons["keyboard.done"].tap()
+        }
         let gone = NSPredicate(format: "count == 0")
         expectation(for: gone, evaluatedWith: app.keyboards)
         waitForExpectations(timeout: 5)
+        XCTAssertEqual(app.keyboards.count, 0)
         app.terminate()
     }
     @MainActor func testWalletDoneClosesKeyboard() { check("wallet", field: "wallet.name") }

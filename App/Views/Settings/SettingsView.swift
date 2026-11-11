@@ -36,7 +36,7 @@ struct SettingsView: View {
             }
             Section("Bảo mật") {
                 NavigationLink { BackupEncryptionView(store: store) } label: { IconRow(icon: "lock.shield", tint: .purple, title: "Mã hóa bản sao lưu") }
-                Toggle("Khóa bằng Face ID", isOn: Binding(get: { lock.enabled }, set: { value in Task { _ = await lock.setEnabled(value) } }))
+                Toggle(isOn: Binding(get: { lock.enabled }, set: { value in Task { _ = await lock.setEnabled(value) } })) { IconRow(icon: "faceid", tint: .purple, title: "Khóa bằng Face ID") }
                     .frame(minHeight: 44).disabled(lock.state == .authenticating)
                 Text("Khóa sau 30 giây ở nền")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -47,6 +47,7 @@ struct SettingsView: View {
                 InfoButton(text: "Trong ứng dụng Phím tắt, tìm SaveMoney để mở Thêm chi, Thêm thu, Lịch sử hoặc Thống kê. Phím tắt luôn mở app và yêu cầu mở khóa trước khi nhập dữ liệu.")
             }
             Section("Thông tin") {
+                NavigationLink { ReadmeView() } label: { IconRow(icon: "book.closed", tint: .secondary, title: "README") }
                 IconRow(icon: "info.circle", tint: .secondary, title: "Phiên bản", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
             }
         }
@@ -81,10 +82,10 @@ struct SettingsView: View {
             Text("\(health.fileCount) bản, \(ByteCountFormatter.string(fromByteCount: health.totalBytes, countStyle: .file))")
             if let kind = health.lastBackupKind { Text("Loại gần nhất: " + (kind == .auto ? "Tự động" : kind == .manual ? "Thủ công" : "Trước khôi phục")) }
             if let age = store.scheduler.externalCopyAge { Text("Bản chép ra ngoài gần nhất: \(age) ngày trước") }
-            Button("Sao lưu ngay") { store.backupNow() }.buttonStyle(.borderedProminent).frame(minHeight: 44)
+            Button("Sao lưu ngay") { store.backupNow() }.appProminentButton().frame(minHeight: 44)
         } }
-        .foregroundStyle(health.level == .critical ? Color.red : health.level == .attention ? Color.orange : Color.primary)
-        .accessibilityElement(children: .combine)
+        .foregroundStyle(.primary)
+        .accessibilityElement(children: .contain)
     }
 
     private var backupList: some View {
@@ -120,7 +121,9 @@ private struct BackupCounts: View {
         }.font(.caption).monospacedDigit()
     }
     @ViewBuilder private var counts: some View {
-        Label(String(file.summary.wallets), systemImage: "wallet.bifold").accessibilityLabel("\(file.summary.wallets) ví")
+        let people = file.payload.wallets.filter { $0.kind == WalletKind.person.rawValue }.count
+        Label(String(file.summary.wallets - people), systemImage: "wallet.bifold").accessibilityLabel("\(file.summary.wallets - people) ví")
+        if people > 0 { Label(String(people), systemImage: "person.2").accessibilityLabel("\(people) người") }
         Label(String(file.summary.categories), systemImage: "tag").accessibilityLabel("\(file.summary.categories) danh mục")
         Label(String(file.summary.transactions), systemImage: "arrow.left.arrow.right").accessibilityLabel("\(file.summary.transactions) giao dịch")
         Label(String(file.payload.budgets.count), systemImage: "target").accessibilityLabel("\(file.payload.budgets.count) hạn mức")
@@ -133,20 +136,14 @@ struct RestoreSummaryView: View {
     let candidate: BackupScreenStore.PendingRestore
     @ObservedObject var store: BackupScreenStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var confirm = false
     @State private var current: BackupValidator.Validated?
     var body: some View {
         List {
             Section("So sánh dữ liệu") {
-                if let current {
-                    Card { VStack(alignment: .leading, spacing: 8) { Text("Hiện tại").font(.headline); BackupCounts(file: current.file); AmountText(amount: current.totalBalance, style: .title2.bold()) } }
-                } else { Text("Chưa đọc được tóm tắt hiện tại").foregroundStyle(.secondary) }
-                Card { VStack(alignment: .leading, spacing: 8) {
-                    Text("Trong file").font(.headline)
-                    BackupCounts(file: candidate.summary.file)
-                    AmountText(amount: candidate.summary.totalBalance, style: .title2.bold())
-                    if let first = candidate.summary.firstDate, let last = candidate.summary.lastDate { TrendBadge(delta: "\(TransactionPresentation.shortDate(first)) → \(TransactionPresentation.shortDate(last))") }
-                } }
+                if typeSize.isAccessibilitySize { VStack(spacing: Spacing.m) { currentCard; fileCard } }
+                else { HStack(alignment: .top, spacing: Spacing.m) { currentCard; fileCard } }
                 ForEach(candidate.summary.file.payload.wallets, id: \.id) { wallet in
                     Text("\(wallet.name): \(MoneyFormatter.string(from: candidate.summary.file.summary.expectedBalances[wallet.id] ?? 0))")
                         .fixedSize(horizontal: false, vertical: true)
@@ -166,6 +163,20 @@ struct RestoreSummaryView: View {
             Button("Hủy", role: .cancel) { }
         }
     }
+    @ViewBuilder private var currentCard: some View {
+        if let current {
+            Card { VStack(alignment: .leading, spacing: Spacing.s) { Text("Hiện tại").font(.headline); BackupCounts(file: current.file); AmountText(amount: current.totalBalance, style: .title2.bold()) } }
+        } else { Text("Chưa đọc được tóm tắt hiện tại").foregroundStyle(.secondary) }
+    }
+    private var fileCard: some View {
+        Card { VStack(alignment: .leading, spacing: Spacing.s) {
+            Text("Trong file").font(.headline)
+            BackupCounts(file: candidate.summary.file)
+            AmountText(amount: candidate.summary.totalBalance, style: .title2.bold())
+            if let first = candidate.summary.firstDate, let last = candidate.summary.lastDate { TrendBadge(delta: "\(TransactionPresentation.shortDate(first)) → \(TransactionPresentation.shortDate(last))") }
+        } }
+    }
+
 }
 
 private struct BackupShareSheet: UIViewControllerRepresentable {

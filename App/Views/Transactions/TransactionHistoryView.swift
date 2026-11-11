@@ -38,18 +38,7 @@ struct TransactionHistoryView: View {
             ForEach(TransactionGrouping.group(filter.apply(to: store.transactions))) { day in
                 Section {
                     ForEach(day.transactions, id: \.id) { transaction in
-                        Button { editing = transaction } label: { TransactionRow(transaction: transaction) }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(TransactionPresentation.accessibilityLabel(transaction))
-                            .accessibilityValue([transaction.wallet?.name ?? "", transaction.note].filter { !$0.isEmpty }.joined(separator: ", "))
-                            .accessibilityHint("Chạm hai lần để sửa giao dịch")
-                            .accessibilityAction(named: Text("Xóa giao dịch")) { requestDeletion(transaction) }
-                            .swipeActions(allowsFullSwipe: false) {
-                                Button { editing = transaction } label: { Label("Sửa", systemImage: "pencil") }.tint(.accentColor)
-                                Button(role: .destructive) { requestDeletion(transaction) } label: {
-                                    Label("Xóa", systemImage: "trash")
-                                }
-                            }
+                        transactionRow(transaction)
                     }
                 } header: {
                     HStack { Text(TransactionGrouping.title(for: day.date)); Spacer(); if let expense = HistoryFilter.expenseText(for: day.transactions) { Text(expense).monospacedDigit() } }
@@ -76,6 +65,23 @@ struct TransactionHistoryView: View {
                 Text("\(TransactionPresentation.title(transaction)) · \(TransactionPresentation.amount(transaction)). Thao tác này không thể hoàn tác.")
             }
         }
+    }
+
+    private func transactionRow(_ transaction: Transaction) -> some View {
+        let debt = store.debtLabels[transaction.id]
+        let label: String
+        if let debt { label = debt.title + ", " + TransactionPresentation.amount(transaction) }
+        else { label = TransactionPresentation.accessibilityLabel(transaction) }
+        return Button { editing = transaction } label: { TransactionRow(transaction: transaction, debt: debt) }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
+            .accessibilityValue([transaction.wallet?.name ?? "", transaction.note].filter { !$0.isEmpty }.joined(separator: ", "))
+            .accessibilityHint("Chạm hai lần để sửa giao dịch")
+            .accessibilityAction(named: Text("Xóa giao dịch")) { requestDeletion(transaction) }
+            .swipeActions(allowsFullSwipe: false) {
+                Button { editing = transaction } label: { Label("Sửa", systemImage: "pencil") }.tint(.accentColor)
+                Button(role: .destructive) { requestDeletion(transaction) } label: { Label("Xóa", systemImage: "trash") }
+            }
     }
 
     private var filters: some View {

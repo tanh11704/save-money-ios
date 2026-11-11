@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var transferSourceID: UUID?
     @State private var dismissedBanner: String?
     @State private var selectedTab = 0
+    @State private var navigationGeneration = UUID()
 
     var body: some View {
         Group {
@@ -44,7 +45,7 @@ struct ContentView: View {
                     NavigationStack { SettingsView(store: settings, lock: lock) }
                         .tabItem { Label("Cài đặt", systemImage: "gearshape") }
                         .badge(settings.health.level == .critical ? "!" : nil).tag(4)
-                }
+                }.id(navigationGeneration)
             } else {
                 VStack(spacing: 16) {
                     if let message = store.errorMessage {
@@ -58,25 +59,21 @@ struct ContentView: View {
                 .padding()
             }
         }
-        .onChange(of: router.pending?.id, initial: true) { _, _ in
-            guard let route = router.take(unlocked: lock.state == .unlocked) else { return }
-            switch route {
-            case .transfer(let from): selectedTab = 2; transferSourceID = from; showingTransfer = true
-            case .history: selectedTab = 1
-            case .stats: selectedTab = 3
-            case .add(let kind, let amount): selectedTab = 0; store.addPrefill = .init(kind: kind, amount: amount)
-            }
-        }
+        .onChange(of: router.pending?.id, initial: true) { _, _ in consumeRoute() }
+        .onChange(of: store.ready) { _, _ in consumeRoute() }
         .onReceive(NotificationCenter.default.publisher(for: .ledgerDidChange)) { _ in
             guard store.ready else { return }
             do { try store.reload() } catch { store.errorMessage = "Chưa tải lại được dữ liệu. Hãy tải lại." }
         }
         .onReceive(NotificationCenter.default.publisher(for: .ledgerDidRestore)) { _ in
             selectedTab = 0
+            navigationGeneration = UUID()
             do { try store.reload() } catch { store.errorMessage = "Đã khôi phục, nhưng chưa tải lại được dữ liệu. Hãy mở lại app." }
         }
         .overlay(alignment: .top) {
-            if let message = runtime.recurringMessage, dismissedBanner != message {
+            if let count = settings.restoredTransactionCount {
+                RestoreSuccessView(transactionCount: count) { settings.restoredTransactionCount = nil }.padding(Spacing.s)
+            } else if let message = runtime.recurringMessage, dismissedBanner != message {
                 VStack {
                     Callout(level: .info, title: "Giao dịch định kỳ", message: message, actionTitle: "Xem") { showingRecurring = true }
                     Button("Đóng", systemImage: "xmark") { dismissedBanner = message }.frame(minHeight: 44)
@@ -88,7 +85,7 @@ struct ContentView: View {
                 }.padding(8).background(.regularMaterial)
             }
         }
-        .sheet(isPresented: $showingTransfer) { NavigationStack { TransferSheet(store: store, source: store.wallets.first { $0.id == transferSourceID && !$0.isArchived }) } }
+        .sheet(isPresented: $showingTransfer) { NavigationStack { TransferSheet(store: store, source: store.wallets.first { $0.id == transferSourceID && !$0.isArchived && !$0.isPerson }) } }
         .sheet(isPresented: $showingRecurring) {
             NavigationStack { RecurringListView(store: store) }
         }
@@ -102,4 +99,14 @@ struct ContentView: View {
             catch { store.errorMessage = TransactionPresentation.errorMessage(error) }
         }
     }
+    private func consumeRoute() {
+        guard store.ready, let route = router.take(unlocked: lock.state == .unlocked) else { return }
+        switch route {
+        case .transfer(let from): selectedTab = 2; transferSourceID = from; showingTransfer = true
+        case .history: selectedTab = 1
+        case .stats: selectedTab = 3
+        case .add(let kind, let amount): selectedTab = 0; store.addPrefill = .init(kind: kind, amount: amount)
+        }
+    }
+
 }

@@ -119,6 +119,7 @@ final class BackupScreenStore: ObservableObject {
     @Published private(set) var preRestore: [BackupCatalog.Entry] = []
     @Published private(set) var isRestoring = false
     @Published var pending: PendingRestore?
+    @Published var restoredTransactionCount: Int?
     @Published var message: String?
     @Published var error: String?
     @Published private(set) var refreshID = UUID()
@@ -175,6 +176,7 @@ final class BackupScreenStore: ObservableObject {
         catch { self.error = "Không tạo được bản sao lưu. Các bản cũ được giữ nguyên." }
     }
     func prepare(url: URL) {
+        restoredTransactionCount = nil
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -206,11 +208,13 @@ final class BackupScreenStore: ObservableObject {
     func finishPreparedRestore() { if let unlockedRestore { pending = unlockedRestore; self.unlockedRestore = nil } }
     func restoreConfirmed(_ candidate: PendingRestore) {
         guard !isRestoring else { return }
+        restoredTransactionCount = nil
         isRestoring = true
         defer { isRestoring = false }
         do {
             let restored = try BackupRestorer(container: scheduler.exporter.container, exporter: scheduler.exporter).restore(candidate.data)
             pending = nil; error = nil
+            restoredTransactionCount = restored.file.summary.transactions
             message = "Đã khôi phục \(restored.file.summary.transactions) giao dịch. Số dư tất cả ví khớp bản sao lưu."
             refresh()
         } catch {

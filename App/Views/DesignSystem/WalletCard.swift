@@ -15,13 +15,21 @@ struct WalletCard: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(wallet.name, systemImage: (WalletKind(rawValue: wallet.kindRaw) ?? .other).icon).font(.headline)
+            HStack(alignment: .top) {
+                Image(systemName: (WalletKind(rawValue: wallet.kindRaw) ?? .other).icon).accessibilityHidden(true)
+                Text(wallet.name).fixedSize(horizontal: false, vertical: true)
+            }.font(.headline)
             if let balance {
                 AmountText(amount: balance, style: .system(.title, design: .rounded).bold())
                 if balance < 0 { Label("Đang nợ", systemImage: "exclamationmark.circle").font(.caption) }
             } else { Text("Chưa tính được số dư") }
         }.frame(maxWidth: .infinity, minHeight: 110, alignment: .leading).padding(16)
             .background(LinearGradient(colors: [tint.opacity(contrast == .increased ? 0 : 0.2), Color(uiColor: .secondarySystemGroupedBackground)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(alignment: .bottomTrailing) {
+                if contrast != .increased {
+                    Image(systemName: (WalletKind(rawValue: wallet.kindRaw) ?? .other).icon).font(.system(size: 64)).foregroundStyle(tint.opacity(0.08)).padding(12).accessibilityHidden(true).allowsHitTesting(false)
+                }
+            }
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(tint, lineWidth: contrast == .increased ? 2 : 0.5))
             .accessibilityElement(children: .combine)
     }

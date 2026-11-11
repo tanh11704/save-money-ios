@@ -17,7 +17,7 @@ struct RecurringFormView: View {
         self.store = store; self.original = original
         var initial = original?.draft ?? RecurringDraft()
         if original == nil {
-            initial.transaction = TransactionFormSelection.restoring(initial.transaction, wallets: store.wallets, categories: store.categories, recent: store.recent)
+            initial.transaction = TransactionFormSelection.restoring(initial.transaction, wallets: store.wallets.filter { !$0.isPerson }, categories: store.categories, recent: store.recent)
         }
         _draft = State(initialValue: initial)
         _expression = State(initialValue: AmountExpression(amount: initial.transaction.amount))
@@ -98,7 +98,7 @@ struct RecurringFormView: View {
                     do { try store.saveRecurring(draft, editing: original?.id); dismiss() }
                     catch { self.error = error.localizedDescription }
                 } label: { Text("Lưu").frame(maxWidth: .infinity, minHeight: 44) }
-                    .buttonStyle(.borderedProminent).disabled(validation != nil)
+                    .appProminentButton().disabled(validation != nil)
                 if let message = error ?? validation { Text(message).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
             }.padding().background(.bar)
         }
@@ -107,7 +107,7 @@ struct RecurringFormView: View {
         .task { if typeSize.isAccessibilitySize { keypadVisible = false } }
         .onChange(of: hasEnd) { _, enabled in draft.endDate = enabled ? draft.startDate : nil }
         .onChange(of: draft.transaction.kind) { _, kind in
-            draft.transaction = TransactionFormSelection.restoring(draft.transaction.changingKind(to: kind), wallets: store.wallets,
+            draft.transaction = TransactionFormSelection.restoring(draft.transaction.changingKind(to: kind), wallets: store.wallets.filter { !$0.isPerson },
                 categories: store.categories, recent: store.recent)
         }
     }
@@ -115,10 +115,10 @@ struct RecurringFormView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(destination ? "Đến ví" : "Ví").font(.headline)
             LazyVGrid(columns: columns) {
-                ForEach(store.wallets.filter { !$0.isArchived && (!destination || $0.id != draft.transaction.wallet?.id) }, id: \.id) { wallet in
+                ForEach(store.wallets.filter { !$0.isPerson && !$0.isArchived && (!destination || $0.id != draft.transaction.wallet?.id) }, id: \.id) { wallet in
                     SelectionChip(title: wallet.name, selected: (destination ? draft.transaction.toWallet?.id : draft.transaction.wallet?.id) == wallet.id) {
                         if destination { draft.transaction.toWallet = wallet }
-                        else { draft.transaction = TransactionFormSelection.selectingWallet(wallet, in: draft.transaction, available: store.wallets) }
+                        else { draft.transaction = TransactionFormSelection.selectingWallet(wallet, in: draft.transaction, available: store.wallets.filter { !$0.isPerson }) }
                         keypadVisible = false
                     }
                 }

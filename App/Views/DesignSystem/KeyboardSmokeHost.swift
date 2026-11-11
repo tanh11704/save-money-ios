@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Isolated fixtures for UI automation. Never opens the user's store.
 @MainActor
@@ -10,6 +11,7 @@ struct KeyboardSmokeHost: View {
     @StateObject private var store: TransactionScreenStore
     init(screen: String) {
         self.screen = screen
+        UIView.setAnimationsEnabled(false) // UI fixture only; leaves focus and keyboard dismissal real.
         let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
         let container = try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         self.container = container

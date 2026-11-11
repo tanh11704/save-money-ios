@@ -7,6 +7,8 @@ import SwiftUI
 final class TransactionScreenStore: ObservableObject {
     struct AddPrefill: Identifiable { let id = UUID(); let kind: TransactionKind?; let amount: Int64? }
     @Published var addPrefill: AddPrefill?
+    @Published private(set) var netWorth: NetWorth?
+    @Published private(set) var debtLabels: [UUID: DebtPresentation.Label] = [:]
     @Published private(set) var wallets: [Wallet] = []
     @Published private(set) var categories: [Category] = []
     @Published private(set) var transactions: [Transaction] = []
@@ -58,7 +60,8 @@ final class TransactionScreenStore: ObservableObject {
             values[wallet.id] = value
             balances[wallet.id] = MoneyFormatter.string(from: value)
         }
-        let total = try BalanceCalculator.totalBalance(wallets: wallets, transactions: transactions, allowMissingCategory: true)
+        let worth = try NetWorth.make(wallets: wallets, transactions: transactions)
+        let labels = try DebtPresentation.labels(transactions: transactions)
         recurringRules = try context.fetch(FetchDescriptor<RecurringRule>(sortBy: [SortDescriptor(\RecurringRule.createdAt)]))
         budgetRules = try context.fetch(FetchDescriptor<Budget>()).compactMap(\.rule)
         readContext = context
@@ -67,7 +70,9 @@ final class TransactionScreenStore: ObservableObject {
         self.transactions = transactions
         self.balances = balances
         balanceValues = values
-        totalBalance = MoneyFormatter.string(from: total)
+        netWorth = worth
+        debtLabels = labels
+        totalBalance = MoneyFormatter.string(from: worth.ownWallets)
         errorMessage = nil
         snapshotVersion = UUID()
     }
@@ -145,6 +150,14 @@ final class TransactionScreenStore: ObservableObject {
 
     func categoryKindIsLocked(_ id: UUID) -> Bool {
         transactions.contains { $0.category?.id == id } || budgetRules.contains { $0.scope == .category(id) } || recurringRules.contains { $0.category?.id == id }
+    }
+
+    func overBudgetCategories(on date: Date) -> Set<UUID> {
+        guard let progress = try? BudgetService.progress(month: ReportingMonth(containing: date), rules: budgetRules, transactions: transactions) else { return [] }
+        return Set(progress.compactMap { value in
+            guard value.level == .over, case .category(let id) = value.scope else { return nil }
+            return id
+        })
     }
 
     func budgetSubtitles(on date: Date) -> [UUID: String] {

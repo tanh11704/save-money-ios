@@ -17,6 +17,7 @@ struct AmountText: View {
     let amount: Int64
     var kind: TransactionKind? = nil
     var style: Font = .headline
+    var prefix = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var text: String {
         let formatted = MoneyFormatter.string(from: amount)
@@ -24,7 +25,7 @@ struct AmountText: View {
         switch kind { case .income: return "+" + formatted; case .expense: return "−" + formatted; default: return formatted }
     }
     var body: some View {
-        Text(text).font(style).monospacedDigit().lineLimit(1).minimumScaleFactor(0.35)
+        Text(prefix + text).font(style).monospacedDigit().lineLimit(1).minimumScaleFactor(0.25)
             .foregroundStyle(kind.map { Color($0 == .income ? "Income" : $0 == .expense ? "Expense" : "Transfer") } ?? .primary)
             .contentTransition(reduceMotion ? .identity : .numericText())
     }
@@ -40,7 +41,12 @@ struct Card<Content: View>: View {
 }
 struct TrendBadge: View {
     let delta: String
-    var body: some View { Text(delta).font(.caption).padding(.horizontal, 8).padding(.vertical, 4).background(.quaternary, in: Capsule()).accessibilityLabel(delta.replacingOccurrences(of: "▲", with: "Tăng").replacingOccurrences(of: "▼", with: "Giảm")) }
+    private var visible: String {
+        if delta.hasPrefix("Tăng ") { return "▲ " + delta.dropFirst(5) }
+        if delta.hasPrefix("Giảm ") { return "▼ " + delta.dropFirst(5) }
+        return delta
+    }
+    var body: some View { Text(visible).font(.caption).fixedSize(horizontal: false, vertical: true).padding(.horizontal, Spacing.s).padding(.vertical, Spacing.xs).background(.quaternary, in: Capsule()).accessibilityLabel(delta.replacingOccurrences(of: "▲", with: "Tăng").replacingOccurrences(of: "▼", with: "Giảm")) }
 }
 struct StatTile: View {
     let title: String, value: String, icon: String
@@ -57,15 +63,16 @@ struct Callout: View {
     enum Level { case info, warning, danger }
     let level: Level
     let title: String
+    var symbol: String? = nil
     var message: String? = nil
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
     @State private var expanded = false
-    private var icon: String { level == .info ? "info.circle" : level == .warning ? "exclamationmark.triangle" : "xmark.octagon" }
+    private var icon: String { symbol ?? (level == .info ? "info.circle" : level == .warning ? "exclamationmark.triangle" : "xmark.octagon") }
     private var tint: Color { level == .info ? .accentColor : level == .warning ? .orange : .red }
     var body: some View {
         Card { VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: icon).font(.headline).foregroundStyle(tint)
+            HStack(alignment: .top) { Image(systemName: icon).foregroundStyle(tint).accessibilityHidden(true); Text(title).foregroundStyle(.primary) }.font(.headline)
             if let message { DisclosureGroup("Chi tiết", isExpanded: $expanded) { Text(message).font(.subheadline).foregroundStyle(.secondary) } }
             if let actionTitle, let action { Button(actionTitle, action: action).frame(minHeight: 44) }
         } }
@@ -101,7 +108,7 @@ struct EmptyState: View {
             Illustration(name: image)
             Label(title, systemImage: symbol)
         } description: { Text(message) } actions: {
-            if let actionTitle, let action { Button(actionTitle, action: action).buttonStyle(.borderedProminent).frame(minHeight: 44) }
+            if let actionTitle, let action { Button(actionTitle, action: action).appProminentButton().frame(minHeight: 44) }
         }
     }
 }
@@ -134,9 +141,58 @@ struct Toast: View {
     let message: String
     var icon = "checkmark.circle.fill"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bounce = false
     var body: some View {
-        Label(message, systemImage: icon).font(.subheadline.bold()).padding().background(.regularMaterial, in: Capsule())
+        HStack {
+            if reduceMotion { Image(systemName: icon).accessibilityHidden(true) }
+            else { Image(systemName: icon).symbolEffect(.bounce, value: bounce).accessibilityHidden(true) }
+            Text(message)
+        }.font(.subheadline.bold()).padding().background(.regularMaterial, in: Capsule())
             .padding(.horizontal).accessibilityElement(children: .combine)
-            .task { UIAccessibility.post(notification: .announcement, argument: message) }
+            .task { bounce = !reduceMotion; UIAccessibility.post(notification: .announcement, argument: message) }
+    }
+}
+
+
+extension View {
+    /// Light text on dark tints by day; dark text on bright tints at night.
+    func appProminentButton() -> some View {
+        buttonStyle(.borderedProminent).foregroundStyle(Color("OnAccent"))
+    }
+}
+
+
+struct CalendarTile: View {
+    let date: Date
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(String(format: "%02d", LocalCalendar.calendar.component(.day, from: date))).font(.title2.bold()).monospacedDigit()
+            Text("TH\(LocalCalendar.calendar.component(.month, from: date))").font(.caption2.bold())
+        }.padding(8).frame(minWidth: 52, minHeight: 60)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10)).accessibilityHidden(true)
+    }
+}
+
+
+struct InlineError: View {
+    let message: String
+    var body: some View {
+        Label(message, systemImage: "exclamationmark.circle").font(.footnote)
+            .foregroundStyle(Color("Expense")).fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel("Lỗi, " + message)
+    }
+}
+
+
+struct RestoreSuccessView: View {
+    let transactionCount: Int
+    let done: () -> Void
+    var body: some View {
+        Card { VStack(spacing: Spacing.m) {
+            Illustration(name: "illus-restore-success")
+            Label("Đã khôi phục", systemImage: "checkmark.circle.fill").font(.headline)
+            Text("\(transactionCount) giao dịch. Số dư đã được kiểm tra.").font(.subheadline).multilineTextAlignment(.center)
+            Button("Xong", action: done).appProminentButton().frame(minHeight: 44)
+        }.frame(maxWidth: .infinity) }
     }
 }

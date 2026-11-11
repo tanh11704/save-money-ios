@@ -52,7 +52,7 @@ struct WalletFormView: View {
                 TextField("Tên ví, tối đa 30 ký tự", text: $name)
                     .textFieldStyle(.roundedBorder).focused($focus, equals: .name).submitLabel(.done).onSubmit { focus = nil }.frame(minHeight: 44)
                     .accessibilityIdentifier("wallet.name")
-                if let nameMessage { Text(nameMessage).font(.footnote).foregroundStyle(.red) }
+                if let nameMessage { InlineError(message: nameMessage) }
                 Text("Loại ví").font(.headline)
                 Picker("Loại ví", selection: $kind) {
                     ForEach(WalletKind.allCases.filter { $0 != .person }, id: \.self) { kind in Text(kind.title).tag(kind) }
@@ -66,10 +66,10 @@ struct WalletFormView: View {
                     .accessibilityLabel("Số dư ban đầu \(WalletService.displayOpening(magnitude: magnitude, isDebt: isDebt))")
                     .accessibilityHint("Ẩn hoặc hiện bàn phím số tiền")
                 Toggle("Đang nợ", isOn: $isDebt).frame(minHeight: 44)
-                if let amountMessage { Text(amountMessage).font(.footnote).foregroundStyle(.red) }
+                if let amountMessage { InlineError(message: amountMessage) }
                 openingBalanceWarning
                 if let message = saveError {
-                    Text(message).font(.footnote).foregroundStyle(.red)
+                    InlineError(message: message)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }.padding()
@@ -79,7 +79,7 @@ struct WalletFormView: View {
                 if focus == nil {
                     if keypadVisible { MoneyKeypad { magnitude = MoneyFormatter.applying($0, to: magnitude); saveError = nil } }
                     Button(action: save) { Text("Lưu ví").frame(maxWidth: .infinity, minHeight: 44) }
-                        .buttonStyle(.borderedProminent)
+                        .appProminentButton()
                         .disabled(validationMessage != nil)
                 }
             }.padding(8).background(.bar)

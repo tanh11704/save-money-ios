@@ -33,7 +33,7 @@ struct BudgetFormView: View {
                 if BudgetService.activeRule(for: scope, in: month, rules: store.budgetRules) != nil {
                     Button("Tắt hạn mức", role: .destructive) { confirmingOff = true }.frame(minHeight: 44)
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { InlineError(message: error) }
             }.frame(maxWidth: .infinity, alignment: .leading).padding()
         }
         .safeAreaInset(edge: .bottom) {
@@ -43,9 +43,9 @@ struct BudgetFormView: View {
                     do { try store.saveBudget(amount, scope: scope, month: month); dismiss() }
                     catch { self.error = error.localizedDescription }
                 } label: { Text("Lưu").frame(maxWidth: .infinity, minHeight: 44) }
-                    .buttonStyle(.borderedProminent).disabled(!valid)
+                    .appProminentButton().disabled(!valid)
                     .accessibilityIdentifier("budget.save")
-                if !valid { Text("Hạn mức phải lớn hơn 0 và không quá 999.999.999.999 ₫.").font(.footnote).foregroundStyle(.secondary) }
+                if !valid { InlineError(message: "Hạn mức phải trong 1…999.999.999.999 ₫") }
             }.padding().background(.bar)
         }
         .task { if typeSize.isAccessibilitySize { keypadVisible = false } }

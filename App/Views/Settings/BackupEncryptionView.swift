@@ -18,9 +18,9 @@ struct BackupEncryptionView: View {
             Illustration(name: "illus-encryption")
             Section("Mã hóa bản sao lưu") {
                 Text(enabled ? "Đang bật: mọi bản mới đều mã hóa, kể cả trước khôi phục." : "Đang tắt. Bật sẽ mã hóa cả các bản rõ đang có trong Backups/ và tạo một bản mới đã kiểm tra.")
-                Callout(level: .danger, title: "Không thể lấy lại mật khẩu", message: "Quên mật khẩu sẽ không mở được file mã hóa.")
-                Callout(level: .warning, title: "Giữ mật khẩu ngoài máy", message: "Đổi Apple ID ký SideStore hoặc cài lại app có thể mất khóa Keychain. Khi đó cần mật khẩu để khôi phục.")
-                Callout(level: .info, title: "File cũ giữ mật khẩu cũ", message: "Chỉ đổi khi chọn mã hóa lại. Tắt mã hóa không giải mã file cũ.")
+                Callout(level: .danger, title: "Không thể lấy lại mật khẩu", symbol: "key.slash", message: "Quên mật khẩu sẽ không mở được file mã hóa.")
+                Callout(level: .warning, title: "Giữ mật khẩu ngoài máy", symbol: "person.crop.circle.badge.exclamationmark", message: "Đổi Apple ID ký SideStore hoặc cài lại app có thể mất khóa Keychain. Khi đó cần mật khẩu để khôi phục.")
+                Callout(level: .info, title: "File cũ giữ mật khẩu cũ", symbol: "lock.open", message: "Chỉ đổi khi chọn mã hóa lại. Tắt mã hóa không giải mã file cũ.")
             }
             if enabled {
                 Section("Mật khẩu hiện tại") {

@@ -19,8 +19,8 @@ struct CSVExportView: View {
                 Button("Tháng này") { from = ReportingMonth().interval.start; to = ReportingMonth().interval.end.addingTimeInterval(-1); url = nil }.frame(minHeight: 44)
                 Button("Tháng trước") { if let month = ReportingMonth().previous { from = month.interval.start; to = month.interval.end.addingTimeInterval(-1); url = nil } }.frame(minHeight: 44)
                 Button("Năm nay") { from = LocalCalendar.calendar.date(from: DateComponents(year: ReportingMonth().year, month: 1, day: 1))!; to = Date(); url = nil }.frame(minHeight: 44)
-                DatePicker("Từ ngày", selection: $from, displayedComponents: .date).frame(minHeight: 44)
-                DatePicker("Đến ngày", selection: $to, displayedComponents: .date).frame(minHeight: 44)
+                VStack(alignment: .leading, spacing: Spacing.s) { Text("Từ ngày"); DatePicker("Từ ngày", selection: $from, displayedComponents: .date).labelsHidden().dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44) }
+                VStack(alignment: .leading, spacing: Spacing.s) { Text("Đến ngày"); DatePicker("Đến ngày", selection: $to, displayedComponents: .date).labelsHidden().dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(minHeight: 44) }
             }
             Text("Sẽ xuất \(count) giao dịch.")
             Button("Xuất") {

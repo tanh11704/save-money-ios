@@ -123,7 +123,7 @@ private struct StatsReportSections: View {
             Section("Tóm tắt") {
                 summary("Tổng thu", amount: report.incomeText, negative: false, delta: comparison?.income, label: comparison?.label)
                 summary("Tổng chi", amount: report.expenseText, negative: false, delta: comparison?.expense, label: comparison?.label)
-                summary("Chênh lệch", amount: report.differenceText, negative: report.difference < 0)
+                summary("Chênh lệch", amount: report.differenceText, negative: report.difference < 0, delta: comparison?.balance, label: comparison?.label)
             }
             if report.expense > 0 {
                 Section("Chi theo ngày") {

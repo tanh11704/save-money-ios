@@ -3,7 +3,9 @@ import SwiftUI
 @MainActor
 struct WalletDetailView: View {
     @ObservedObject var store: TransactionScreenStore
-    let wallet: Wallet
+    private let initialWallet: Wallet
+    private var wallet: Wallet { store.wallets.first { $0.id == initialWallet.id } ?? initialWallet }
+    init(store: TransactionScreenStore, wallet: Wallet) { self.store = store; self.initialWallet = wallet }
     @State private var editingWallet = false
     @State private var showingTransfer = false
     @State private var adding: AddKind?
@@ -30,7 +32,7 @@ struct WalletDetailView: View {
             ForEach(TransactionGrouping.group(transactions)) { day in
                 Section {
                     ForEach(day.transactions, id: \.id) { transaction in
-                        Button { editingTransaction = transaction } label: { TransactionRow(transaction: transaction) }.buttonStyle(.plain)
+                        Button { editingTransaction = transaction } label: { TransactionRow(transaction: transaction, debt: store.debtLabels[transaction.id]) }.buttonStyle(.plain)
                     }
                 } header: {
                     VStack(alignment: .leading) {

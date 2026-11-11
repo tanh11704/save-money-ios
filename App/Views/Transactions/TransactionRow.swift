@@ -3,6 +3,7 @@ import SwiftUI
 @MainActor
 struct TransactionRow: View {
     let transaction: Transaction
+    var debt: DebtPresentation.Label? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -34,9 +35,10 @@ struct TransactionRow: View {
         HStack(alignment: .top, spacing: 8) {
             CategoryIcon(icon: transaction.kindRaw == "transfer" ? "arrow.left.arrow.right" : transaction.category?.icon ?? "tag")
             VStack(alignment: .leading, spacing: 4) {
-                Text(TransactionPresentation.title(transaction)).fontWeight(.semibold)
+                Text(debt?.title ?? (transaction.kindRaw == "expense" && transaction.wallet?.isPerson == true ? "\(transaction.wallet?.name ?? "") trả hộ · \(transaction.category?.name ?? "Chi tiêu")" : TransactionPresentation.title(transaction))).fontWeight(.semibold)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let detail = debt?.detail { Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
                 if transaction.recurrenceKey != nil {
                     Label("Định kỳ", systemImage: "arrow.triangle.2.circlepath").font(.caption).foregroundStyle(.secondary)
                 }

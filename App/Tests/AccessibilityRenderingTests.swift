@@ -7,6 +7,34 @@ import UIKit
 
 @MainActor
 final class AccessibilityRenderingTests: XCTestCase {
+    func testReadmeIsBundledForOfflineHelp() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "README", withExtension: "md"))
+        XCTAssertTrue(try String(contentsOf: url, encoding: .utf8).contains("SaveMoney"))
+    }
+    func testButtonTextAndCategorySymbolsMeetContrastInBothAppearances() throws {
+        func luminance(_ color: UIColor) -> Double {
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            XCTAssertTrue(color.getRed(&r, green: &g, blue: &b, alpha: &a))
+            func linear(_ component: CGFloat) -> Double {
+                let value = Double(component)
+                if value <= 0.04045 { return value / 12.92 }
+                return pow((value + 0.055) / 1.055, 2.4)
+            }
+            return linear(r) * 0.2126 + linear(g) * 0.7152 + linear(b) * 0.0722
+        }
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            let foreground = luminance(try XCTUnwrap(UIColor(named: "OnAccent", in: .main, compatibleWith: traits)))
+            for name in ["AccentColor", "Income", "Expense", "Transfer"] {
+                let background = luminance(try XCTUnwrap(UIColor(named: name, in: .main, compatibleWith: traits)))
+                XCTAssertGreaterThanOrEqual((max(foreground, background) + 0.05) / (min(foreground, background) + 0.05), 4.5, name)
+            }
+            for index in 1...10 {
+                let background = luminance(try XCTUnwrap(UIColor(named: "CategoryTint\(index)", in: .main, compatibleWith: traits)))
+                XCTAssertGreaterThanOrEqual(1.05 / (background + 0.05), 4.5)
+            }
+        }
+    }
     func testSemanticAssetColorsAreOpaqueInBothAppearances() throws {
         for style in [UIUserInterfaceStyle.light, .dark] {
             for name in ["AccentColor", "Income", "Expense", "Transfer"] {
@@ -20,7 +48,7 @@ final class AccessibilityRenderingTests: XCTestCase {
     }
     func testRenderUpdatedMainScreensForReview() async throws {
         for (type, scheme, size, suffix) in [(DynamicTypeSize.accessibility5, ColorScheme.dark, CGSize(width: 375, height: 667), "AX5-dark-small"), (.xSmall, .light, CGSize(width: 430, height: 932), "smallest-light-large")] {
-            try await render(type: type, scheme: scheme, size: size, suffix: suffix, includeNames: ["add", "history", "stats", "wallets", "transfer", "wallet-detail", "settings", "encryption", "restore"])
+            try await render(type: type, scheme: scheme, size: size, suffix: suffix, includeNames: ["add", "history", "stats", "wallets", "transfer", "wallet-detail", "debts", "debt-person", "debt-payment", "settings", "encryption", "restore", "lock", "restore-success", "recurring"])
         }
     }
     func testRenderScreensAtAX5DarkForVisualReview() async throws {
@@ -38,6 +66,10 @@ final class AccessibilityRenderingTests: XCTestCase {
         let context = container.mainContext, wallet = Wallet(name: "Tiền mặt và sinh hoạt", openingBalance: 5_000_000)
         let category = SaveMoney.Category(name: "Ăn uống và sinh hoạt gia đình", kind: .expense, icon: "fork.knife")
         context.insert(wallet); context.insert(category)
+        let bank = Wallet(name: "Ngân hàng", openingBalance: 3_000_000)
+        let person = Wallet(name: "Lan", kind: .person)
+        context.insert(bank); context.insert(person)
+        context.insert(Transaction(amount: 500_000, kind: .transfer, date: Date().addingTimeInterval(-172800), wallet: wallet, toWallet: person))
         let transaction = Transaction(amount: 1_250_000, kind: .expense, note: "Ghi chú dài để kiểm tra khả năng xuống dòng", wallet: wallet, category: category)
         context.insert(transaction)
         let recurring = RecurringRule(); recurring.name = "Tiền nhà và sinh hoạt hằng tháng"; recurring.amount = 500_000; recurring.wallet = wallet; recurring.category = category
@@ -63,12 +95,15 @@ final class AccessibilityRenderingTests: XCTestCase {
             ("wallet-form", AnyView(WalletFormView(store: store, original: wallet))), ("categories", AnyView(CategoryListView(store: store))),
             ("budgets", AnyView(BudgetListView(store: store))), ("budget-form", AnyView(BudgetFormView(store: store, scope: .category(category.id), month: ReportingMonth()))),
             ("recurring", AnyView(RecurringListView(store: store))), ("recurring-form", AnyView(RecurringFormView(store: store, original: recurring))),
-            ("transfer", AnyView(TransferSheet(store: store, source: wallet))), ("wallet-detail", AnyView(WalletDetailView(store: store, wallet: wallet))),
+            ("debts", AnyView(DebtListView(store: store))), ("debt-person", AnyView(DebtPersonView(store: store, person: person))),
+            ("debt-payment", AnyView(TransferSheet(store: store, mode: .debt(person: person, action: .collect), amount: 600_000))),
+            ("transfer", AnyView(TransferSheet(store: store, source: wallet, amount: 150_000))), ("wallet-detail", AnyView(WalletDetailView(store: store, wallet: wallet))),
             ("stats", AnyView(StatsView(store: store))), ("category-detail", AnyView(StatsCategoryDetailView(month: ReportingMonth(), key: .init(kind: .expense, categoryID: category.id)))),
             ("daily-chart", AnyView(ScrollView { StatsDailyChart(days: daily, allowance: 66_666).padding() })),
             ("category-chart", AnyView(ScrollView { StatsCategoryChart(slices: StatsService.expenseSlices(report), total: report.expense).padding() })),
             ("category-form", AnyView(CategoryFormView(store: store, original: category))),
             ("integrity", AnyView(IntegrityView(store: runtime.settings))),
+            ("restore-success", AnyView(RestoreSuccessView(transactionCount: 2, done: {}))),
             ("settings", AnyView(SettingsView(store: runtime.settings, lock: lock))), ("restore", AnyView(RestoreSummaryView(candidate: pending, store: runtime.settings))),
             ("encryption", AnyView(BackupEncryptionView(store: runtime.settings))), ("csv", AnyView(CSVExportView())), ("lock", AnyView(LockScreen(lock: lock)))
         ]

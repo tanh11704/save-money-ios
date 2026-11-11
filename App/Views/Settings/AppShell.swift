@@ -65,21 +65,25 @@ struct LockScreen: View {
     @ObservedObject var lock: AppLockService
     @Environment(\.scenePhase) private var phase
     @State private var automaticallyRequested = false
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
+        ZStack {
+            if !typeSize.isAccessibilitySize { Illustration(name: "illus-lock-screen").opacity(0.3) }
         VStack(spacing: 20) {
             VStack(spacing: 8) {
-                Illustration(name: "illus-lock-screen").opacity(0.6)
-                Text("SaveMoney").multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                if !typeSize.isAccessibilitySize { Image("AppLogo").resizable().scaledToFit().frame(width: 80, height: 80).clipShape(RoundedRectangle(cornerRadius: 18)).accessibilityHidden(true) }
+                Text("SaveMoney").font(.largeTitle.bold()).lineLimit(1).minimumScaleFactor(0.5)
             }.font(.title).accessibilityElement(children: .combine)
             if lock.state == .authenticating { ProgressView("Đang xác thực…") }
             else {
                 Button { Task { await lock.unlock() } } label: {
                     Label("Mở khóa bằng Face ID", systemImage: "faceid").frame(minWidth: 100, minHeight: 44)
-                }.buttonStyle(.borderedProminent)
+                }.appProminentButton()
             }
             if let message = lock.message { Text(message).foregroundStyle(.secondary) }
         }
         .padding()
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(uiColor: .systemBackground))
         .task { requestAutomaticUnlock() }
