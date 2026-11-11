@@ -64,6 +64,7 @@ final class DebtTests: XCTestCase {
         let (wallets, transactions) = scenario()
         let labels = try DebtPresentation.labels(transactions: transactions)
         XCTAssertEqual(transactions.map { labels[$0.id]?.title }, ["Cho Lan vay", "Lan trả nợ", "Vay Nam", "Trả nợ Nam", "Lan trả hộ · Ăn uống", "Cho Lan vay"])
+        XCTAssertEqual(transactions.map { labels[$0.id]?.csvKind }, ["Cho vay", "Thu nợ", "Đi vay", "Trả nợ", "Trả hộ", "Cho vay"])
         let overpayment = Transaction(amount: 400_000, kind: .transfer, date: transactions.last!.date.addingTimeInterval(1), wallet: wallets[2], toWallet: wallets[0])
         let label = try XCTUnwrap(DebtPresentation.labels(transactions: transactions + [overpayment])[overpayment.id])
         XCTAssertEqual(label.title, "Lan trả nợ"); XCTAssertEqual(label.balanceAfter, -170_000)
@@ -104,7 +105,7 @@ final class DebtTests: XCTestCase {
         let restoredTransactions = try restoredContainer.mainContext.fetch(FetchDescriptor<Transaction>())
         XCTAssertEqual(try NetWorth.make(wallets: restoredWallets, transactions: restoredTransactions), try NetWorth.make(wallets: wallets, transactions: transactions))
         let csv = try CSVExporter.csv(transactions: transactions, from: transactions.first!.date, to: transactions.last!.date)
-        XCTAssertTrue(String(decoding: csv, as: UTF8.self).contains("Lan trả hộ"))
+        XCTAssertTrue(String(decoding: csv, as: UTF8.self).contains("Trả hộ"))
     }
     func testLastOwnWalletAndOutstandingPersonCannotArchive() throws {
         let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)

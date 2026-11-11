@@ -2,7 +2,7 @@ import Foundation
 
 struct DebtPresentation {
     enum Action: String, Identifiable { case lend, collect, borrow, repay; var id: String { rawValue } }
-    struct Label: Equatable { let title: String; let detail: String?; let balanceAfter: Int64 }
+    struct Label: Equatable { let title: String; let csvKind: String; let detail: String?; let balanceAfter: Int64 }
     static func title(_ action: Action, person: Wallet) -> String {
         switch action {
         case .lend: return "Cho \(person.name) vay"
@@ -19,15 +19,21 @@ struct DebtPresentation {
             let before = balances[person.id] ?? person.openingBalance
             let after = try BalanceCalculator.balance(for: person, transactions: [transaction], openingBalance: before, allowMissingCategory: true)
             balances[person.id] = after
-            let title: String
-            if transaction.kindRaw == "expense" { title = "\(person.name) trả hộ · \(transaction.category?.name ?? "Chi tiêu")" }
-            else if transaction.toWallet?.id == person.id { title = before < 0 ? "Trả nợ \(person.name)" : "Cho \(person.name) vay" }
-            else { title = before > 0 ? "\(person.name) trả nợ" : "Vay \(person.name)" }
+            let title: String, csvKind: String
+            if transaction.kindRaw == "expense" {
+                title = "\(person.name) trả hộ · \(transaction.category?.name ?? "Chi tiêu")"; csvKind = "Trả hộ"
+            } else if transaction.toWallet?.id == person.id {
+                title = before < 0 ? "Trả nợ \(person.name)" : "Cho \(person.name) vay"
+                csvKind = before < 0 ? "Trả nợ" : "Cho vay"
+            } else {
+                title = before > 0 ? "\(person.name) trả nợ" : "Vay \(person.name)"
+                csvKind = before > 0 ? "Thu nợ" : "Đi vay"
+            }
             let detail: String?
             if before > 0 && after < 0 { detail = "Dư \(MoneyFormatter.string(from: after).replacingOccurrences(of: "−", with: "")) thành bạn nợ \(person.name)" }
             else if before < 0 && after > 0 { detail = "Dư \(MoneyFormatter.string(from: after)) thành \(person.name) nợ bạn" }
             else { detail = nil }
-            result[transaction.id] = Label(title: title, detail: detail, balanceAfter: after)
+            result[transaction.id] = Label(title: title, csvKind: csvKind, detail: detail, balanceAfter: after)
         }
         return result
     }
