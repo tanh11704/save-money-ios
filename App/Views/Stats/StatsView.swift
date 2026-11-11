@@ -111,12 +111,13 @@ private struct StatsReportSections: View {
     @Query private var categories: [Category]
 
     var body: some View {
+        let comparison = try? StatsService.comparison(month: month, now: Date(), transactions: transactions)
         let result = Result { try StatsService.report(month: month, transactions: transactions) }
         switch result {
         case .success(let report):
             Section("Tóm tắt") {
-                summary("Tổng thu", amount: report.incomeText, negative: false)
-                summary("Tổng chi", amount: report.expenseText, negative: false)
+                summary("Tổng thu", amount: report.incomeText, negative: false, delta: comparison?.income, label: comparison?.label)
+                summary("Tổng chi", amount: report.expenseText, negative: false, delta: comparison?.expense, label: comparison?.label)
                 summary("Chênh lệch", amount: report.differenceText, negative: report.difference < 0)
             }
             if report.expense > 0 {
@@ -131,7 +132,7 @@ private struct StatsReportSections: View {
             }
             budgetSection
             if report.isEmpty { Section { Text("Tháng này chưa có giao dịch.").foregroundStyle(.secondary) } }
-            categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.", report: report)
+            categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.", report: report, comparison: comparison)
             categorySection("Thu theo danh mục", rows: report.incomes, empty: "Không có khoản thu.")
         case .failure(let error):
             Section { Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red) }
@@ -166,18 +167,19 @@ private struct StatsReportSections: View {
         }
     }
 
-    private func summary(_ title: String, amount: String, negative: Bool) -> some View {
+    private func summary(_ title: String, amount: String, negative: Bool, delta: StatsService.Comparison.Delta? = nil, label: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.headline)
             Text(amount).font(.title2).monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(negative ? Color.red : Color.primary)
+            if let delta, let label { Text(delta.text + " " + label).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title), \(amount)")
+        .accessibilityLabel("\(title), \(amount), \(delta?.text ?? "") \(label ?? "")".replacingOccurrences(of: "₫", with: "đồng"))
     }
 
-    private func categorySection(_ title: String, rows: [StatsService.CategoryTotal], empty: String, report: StatsService.Report? = nil) -> some View {
+    private func categorySection(_ title: String, rows: [StatsService.CategoryTotal], empty: String, report: StatsService.Report? = nil, comparison: StatsService.Comparison? = nil) -> some View {
         Section(title) {
             if let report, report.expense > 0 { StatsCategoryChart(slices: StatsService.expenseSlices(report), total: report.expense) }
             if rows.isEmpty { Text(empty).foregroundStyle(.secondary) }
@@ -189,6 +191,10 @@ private struct StatsReportSections: View {
                         Text(MoneyFormatter.string(from: row.amount)).font(.headline).monospacedDigit()
                             .fixedSize(horizontal: false, vertical: true)
                         Text(row.percentageText).font(.subheadline).foregroundStyle(.secondary)
+                        if let delta = comparison?.expenseByCategory[row.key.categoryID], delta.difference != 0 {
+                            Text(delta.text + " " + (comparison?.label ?? ""))
+                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
