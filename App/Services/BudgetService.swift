@@ -38,6 +38,8 @@ struct BudgetService {
         let level: Level
         /// Display only; capped at 999,9% so a tiny limit cannot overflow the text.
         let percentageTenths: Int
+        /// Display-only progress fraction; never used for money arithmetic.
+        var fraction: Double { min(1, max(0, Double(spent) / Double(limit))) }
         var percentageText: String { StatsPercentage.text(tenths: percentageTenths) }
     }
 

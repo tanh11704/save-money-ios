@@ -184,7 +184,8 @@ struct TransactionFormView: View {
     }
 
     private var categoryPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let subtitles = draft.kind == .expense ? store.budgetSubtitles(on: draft.date) : [:]
+        return VStack(alignment: .leading, spacing: 8) {
             Text("Danh mục").font(.headline)
             if visibleCategories.isEmpty {
                 Text("Không có danh mục phù hợp để chọn.").foregroundStyle(.secondary)
@@ -192,6 +193,7 @@ struct TransactionFormView: View {
             LazyVGrid(columns: columns, alignment: .leading) {
                 ForEach(visibleCategories, id: \.id) { category in
                     SelectionChip(title: category.name + (category.isArchived ? " (đã lưu trữ)" : ""),
+                                  subtitle: subtitles[category.id],
                                   icon: category.icon, selected: draft.category?.id == category.id) {
                         draft.category = category
                         saveError = nil

@@ -107,6 +107,8 @@ private struct StatsReportSections: View {
     let month: ReportingMonth
     let select: (StatsService.CategoryKey) -> Void
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+    @Query private var budgets: [Budget]
+    @Query private var categories: [Category]
 
     var body: some View {
         let result = Result { try StatsService.report(month: month, transactions: transactions) }
@@ -117,11 +119,40 @@ private struct StatsReportSections: View {
                 summary("Tổng chi", amount: report.expenseText, negative: false)
                 summary("Chênh lệch", amount: report.differenceText, negative: report.difference < 0)
             }
+            budgetSection
             if report.isEmpty { Section { Text("Tháng này chưa có giao dịch.").foregroundStyle(.secondary) } }
             categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.")
             categorySection("Thu theo danh mục", rows: report.incomes, empty: "Không có khoản thu.")
         case .failure(let error):
             Section { Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red) }
+        }
+    }
+
+    @ViewBuilder private var budgetSection: some View {
+        switch Result(catching: { try BudgetService.progress(month: month, rules: budgets.compactMap(\.rule), transactions: transactions) }) {
+        case .success(let progress):
+            if !progress.isEmpty {
+                Section("Ngân sách") {
+                    ForEach(progress, id: \.scope) { value in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(BudgetPresentation.name(for: value.scope, categories: categories)).font(.headline)
+                            ProgressView(value: value.fraction)
+                                .tint(value.level == .over ? Color.red : value.level == .warning ? Color.orange : Color.accentColor)
+                            Text("\(MoneyFormatter.string(from: value.spent)) / \(MoneyFormatter.string(from: value.limit))")
+                                .monospacedDigit().fixedSize(horizontal: false, vertical: true)
+                            Text(BudgetPresentation.remaining(value)).monospacedDigit()
+                            if value.level != .normal {
+                                Text(value.level == .over ? "Đã vượt" : "Sắp hết")
+                                    .foregroundStyle(value.level == .over ? Color.red : Color.orange)
+                            }
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(BudgetPresentation.voiceOver(value, name: BudgetPresentation.name(for: value.scope, categories: categories)))
+                    }
+                }
+            }
+        case .failure(let error):
+            Section("Ngân sách") { Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red) }
         }
     }
 

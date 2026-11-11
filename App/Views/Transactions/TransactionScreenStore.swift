@@ -124,6 +124,16 @@ final class TransactionScreenStore: ObservableObject {
         transactions.contains { $0.category?.id == id }
     }
 
+    func budgetSubtitles(on date: Date) -> [UUID: String] {
+        do {
+            let progress = try BudgetService.progress(month: ReportingMonth(containing: date), rules: budgetRules, transactions: transactions)
+            return Dictionary(uniqueKeysWithValues: progress.compactMap { progress in
+                guard case .category(let id) = progress.scope else { return nil }
+                return (id, BudgetPresentation.remaining(progress))
+            })
+        } catch { return [:] }
+    }
+
     func saveBudget(_ limit: Int64, scope: BudgetRule.Scope, month: ReportingMonth) throws {
         guard let container else { throw ManagementError.missingRecord }
         try ManagementPersistence(container: container).write { context in
