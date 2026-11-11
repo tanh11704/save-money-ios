@@ -38,7 +38,7 @@ struct MoneyKeypad: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.bordered)
-                        .tint(operatorKey(key) != nil ? Color.accentColor : Color.secondary)
+                        .tint(showsOperators ? (operatorKey(key) != nil || key == "delete" ? Color.accentColor : Color.secondary) : nil)
                         .accessibilityLabel(voiceLabels[key] ?? (key == "delete" ? "Xóa một chữ số" : key == "000" ? "Ba số không" : key))
                         .accessibilityIdentifier("keypad.\(key)")
                     }

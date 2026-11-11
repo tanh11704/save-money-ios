@@ -7,6 +7,9 @@ struct BudgetPresentation {
         case .category(let id): return categories.first { $0.id == id }?.name ?? "Danh mục không tồn tại"
         }
     }
+    static func usage(_ progress: BudgetService.Progress) -> String {
+        String(MoneyFormatter.string(from: progress.spent).dropLast(2)) + " / " + MoneyFormatter.string(from: progress.limit)
+    }
     static func remaining(_ progress: BudgetService.Progress) -> String {
         (progress.remaining < 0 ? "Vượt " : "Còn ") + MoneyFormatter.string(from: progress.remaining < 0 ? -progress.remaining : progress.remaining)
     }

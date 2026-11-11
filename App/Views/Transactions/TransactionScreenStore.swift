@@ -16,7 +16,11 @@ final class TransactionScreenStore: ObservableObject {
     @Published private(set) var balanceValues: [UUID: Int64] = [:]
     @Published var errorMessage: String?
     let recent = RecentSelectionStore()
-    private let budgetAlerts = BudgetAlertService()
+    private let budgetAlerts: BudgetAlertService
+
+    init(budgetAlerts: BudgetAlertService? = nil) {
+        self.budgetAlerts = budgetAlerts ?? BudgetAlertService()
+    }
     private var container: ModelContainer?
     private var readContext: ModelContext?
     var statisticsContext: ModelContext? { readContext }
@@ -135,8 +139,8 @@ final class TransactionScreenStore: ObservableObject {
         refreshAfterManagementWrite()
     }
 
-    func categoryHasTransactions(_ id: UUID) -> Bool {
-        transactions.contains { $0.category?.id == id }
+    func categoryKindIsLocked(_ id: UUID) -> Bool {
+        transactions.contains { $0.category?.id == id } || budgetRules.contains { $0.scope == .category(id) }
     }
 
     func budgetSubtitles(on date: Date) -> [UUID: String] {

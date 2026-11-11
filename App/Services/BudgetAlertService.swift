@@ -48,7 +48,7 @@ final class BudgetAlertService {
                 guard !defaults.bool(forKey: key), inFlight.insert(key).inserted else { continue }
                 defer { inFlight.remove(key) }
                 let name = BudgetPresentation.name(for: progress.scope, categories: categories)
-                let amounts = "\(MoneyFormatter.string(from: progress.spent)) / \(MoneyFormatter.string(from: progress.limit))"
+                let amounts = BudgetPresentation.usage(progress)
                 let body = threshold == .warning
                     ? "\(name) đã dùng 80% hạn mức tháng \(month.month) (\(amounts))"
                     : "Đã vượt \(name.lowercased()) tháng \(month.month): \(amounts)"

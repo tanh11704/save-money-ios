@@ -138,7 +138,7 @@ private struct StatsReportSections: View {
                             Text(BudgetPresentation.name(for: value.scope, categories: categories)).font(.headline)
                             ProgressView(value: value.fraction)
                                 .tint(value.level == .over ? Color.red : value.level == .warning ? Color.orange : Color.accentColor)
-                            Text("\(MoneyFormatter.string(from: value.spent)) / \(MoneyFormatter.string(from: value.limit))")
+                            Text(BudgetPresentation.usage(value))
                                 .monospacedDigit().fixedSize(horizontal: false, vertical: true)
                             Text(BudgetPresentation.remaining(value)).monospacedDigit()
                             if value.level != .normal {

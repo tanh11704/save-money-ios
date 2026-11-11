@@ -4,21 +4,28 @@
 
 ## Trạng thái
 
-Đã triển khai phần code bước 1–6: giao dịch, ví/danh mục, thống kê,
-backup/restore, tự sao lưu, Cài đặt và khóa ứng dụng. Bước 7 có hướng dẫn và
-checklist bên dưới, chưa nghiệm thu trên thiết bị/SideStore.
+Đã triển khai giao dịch, ví/danh mục, thống kê, backup/restore, tự sao lưu,
+Cài đặt, khóa ứng dụng, bàn phím cộng/trừ và hạn mức chi tiêu hàng tháng.
+Ngân sách vào từ tab Ví, có hạn mức tổng/danh mục, tiến độ và thông báo 80%/100%.
 
-**Kết quả mới nhất:** 96/96 unit test bước 1–6 đạt trên macOS bằng Xcode 27.2.
-App và test target iOS Simulator Debug build đạt; app Release build đạt.
-Smoke test iOS, kiểm tra trực quan và diễn tập thiết bị chưa thực hiện vì máy
-chưa có runtime iOS Simulator và chưa sử dụng iPhone thật.
+**Kiểm tra ngày 11/11/2026:** 139/139 unit test trên macOS đạt; 142/142 test
+trong lần chạy toàn bộ trên iPhone 18 Pro Simulator (iOS 27.2) đạt, gồm test
+lưu/sửa giao dịch qua TransactionScreenStore và cảnh báo ngân sách. Sau đó
+7/7 test migration/tích hợp cuối đạt, gồm trường hợp mở lại store V2.
+Build app Release cho iPhone đạt (không ký mã).
 
-Các ghi nhận thiếu Xcode/SwiftDataMacros ở bước 1–3 là lịch sử. Terminal vẫn
-trỏ vào Command Line Tools; dùng DEVELOPER_DIR như hướng dẫn để chạy Xcode.
+Schema SwiftData V2 thêm Budget, migration nhẹ từ V1. Các model V1 được đóng
+băng riêng để tránh lỗi checksum trùng khi mở app trên iOS. Test giữ nguyên ví,
+danh mục, giao dịch, quan hệ và số dư của store V1/unversioned. Backup xuất v2,
+vẫn khôi phục v1; cả golden-v1 và golden-v2 đều có test checksum.
+Chủ dự án đã xác nhận xuất backup trước khi triển khai migration.
 
+Chưa nghiệm thu thao tác giao diện với Dynamic Type/VoiceOver và cài đè trên
+iPhone thật/SideStore. Các checklist thiết bị bên dưới vẫn cần chủ dự án thực hiện.
+Không tự xác nhận đã dùng thử vài ngày hoặc đã qua ngày thứ 7.
+
+Terminal mặc định trỏ vào Command Line Tools; dùng DEVELOPER_DIR như hướng dẫn.
 Chưa có tag step-4-verified/step-5-verified/step-6-verified/step-7-verified.
-Theo yêu cầu làm toàn bộ rồi kiểm tra sau, đã tiếp tục code trước nghiệm thu
-thiết bị; không tự xác nhận việc đã dùng thử vài ngày hoặc đã qua ngày thứ 7.
 
 Bundle ID đã chốt: `vn.tanh11704.SaveMoney`. Giữ cố định trước và sau khi dùng thật.
 Deployment target tạm là iOS 17.0 (tối thiểu cho SwiftData); cần xác nhận phiên bản

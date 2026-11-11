@@ -38,7 +38,9 @@ struct CategoryService {
         try ManagementPersistence(container: container).write { context in
             let categories = try context.fetch(FetchDescriptor<Category>())
             guard let category = categories.first(where: { $0.id == id }) else { throw ManagementError.missingRecord }
-            let used = try context.fetch(FetchDescriptor<Transaction>()).contains { $0.category?.id == id }
+            let usedByTransactions = try context.fetch(FetchDescriptor<Transaction>()).contains { $0.category?.id == id }
+            let usedByBudgets = try context.fetch(FetchDescriptor<Budget>()).contains { $0.category?.id == id }
+            let used = usedByTransactions || usedByBudgets
             try Self.validate(draft, categories: categories, editing: category, hasTransactions: used)
             category.name = try ManagementValidation.name(draft.name)
             category.kindRaw = draft.kind.rawValue

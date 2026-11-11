@@ -116,7 +116,7 @@ struct BudgetService {
         var ratio = Decimal(spent) * 1_000 / Decimal(limit)
         var rounded = Decimal()
         NSDecimalRound(&rounded, &ratio, 0, .plain)
-        return min(NSDecimalNumber(decimal: rounded).intValue, 9_999)
+        return NSDecimalNumber(decimal: min(rounded, 9_999)).intValue
     }
 
     /// Total first, then the closest-to-limit categories.

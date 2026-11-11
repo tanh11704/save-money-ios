@@ -16,7 +16,7 @@ struct CategoryFormView: View {
             kind: TransactionKind(rawValue: original?.kindRaw ?? "expense") ?? .expense, icon: original?.icon ?? "tag"))
     }
 
-    private var lockedKind: Bool { original.map { store.categoryHasTransactions($0.id) } ?? false }
+    private var lockedKind: Bool { original.map { store.categoryKindIsLocked($0.id) } ?? false }
     private var validationMessage: String? {
         do {
             try CategoryService.validate(draft, categories: store.categories, editing: original, hasTransactions: lockedKind)
@@ -40,7 +40,7 @@ struct CategoryFormView: View {
                     Text("Thu").tag(TransactionKind.income)
                 }.pickerStyle(.menu).disabled(lockedKind).frame(minHeight: 44)
                 if lockedKind {
-                    Text("Danh mục đã có giao dịch nên không thể đổi loại. Muốn khác loại, hãy tạo danh mục mới.")
+                    Text("Danh mục đã có giao dịch hoặc hạn mức nên không thể đổi loại. Muốn khác loại, hãy tạo danh mục mới.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Text("Biểu tượng").font(.headline)

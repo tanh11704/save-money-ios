@@ -58,4 +58,17 @@ final class BudgetPersistenceTests: XCTestCase {
         }
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<Budget>()), 0)
     }
+    func testCategoryWithBudgetCannotBecomeIncomeWithoutTransactions() async throws {
+        let context = try context()
+        let category = Category(name: "Ăn uống", kind: .expense)
+        context.insert(category)
+        try BudgetPersistence.setLimit(100, scope: .category(category.id), from: ReportingMonth(), context: context)
+        try context.save()
+        XCTAssertThrowsError(try CategoryService(container: context.container).update(id: category.id,
+            with: CategoryDraft(name: category.name, kind: .income, icon: "tag")))
+        let fresh = ModelContext(context.container)
+        XCTAssertEqual(try fresh.fetch(FetchDescriptor<Category>()).first?.kindRaw, "expense")
+        XCTAssertNotNil(try fresh.fetch(FetchDescriptor<Budget>()).first?.rule)
+    }
+
 }

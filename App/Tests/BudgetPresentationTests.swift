@@ -20,4 +20,11 @@ final class BudgetPresentationTests: XCTestCase {
         XCTAssertEqual(BudgetPresentation.remaining(progress), "Vượt 20 ₫")
         XCTAssertEqual(BudgetPresentation.voiceOver(progress, name: "Tổng"), "Tổng, đã chi 120 đồng trên 100 đồng, Vượt 20 đồng")
     }
+    func testTinyLimitAndMaximumSpendingKeepDisplayPercentageCapped() throws {
+        let progress = try BudgetService.progress(scope: .total, limit: 1, spent: Int64.max)
+        XCTAssertEqual(progress.percentageTenths, 9_999)
+        XCTAssertEqual(progress.fraction, 1)
+        XCTAssertEqual(progress.level, .over)
+    }
+
 }
