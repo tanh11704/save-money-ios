@@ -54,21 +54,31 @@ struct TransactionValidator {
 
     /// Existing archived references can be kept in their original role when editing.
     static func validate(_ draft: TransactionDraft, editing original: Transaction? = nil) throws {
-        guard draft.amount > 0 else { throw ValidationError.invalidAmount }
-        guard draft.amount <= MoneyFormatter.maximumInput else { throw ValidationError.amountTooLarge }
-        guard let wallet = draft.wallet else { throw ValidationError.missingWallet }
-        if wallet.isArchived && wallet.id != original?.wallet?.id { throw ValidationError.archivedWallet }
+        if let error = validationErrors(draft, editing: original).first { throw error }
+    }
+
+    /// The integrity checker uses the same rules, while showing every defect.
+    static func validationErrors(_ draft: TransactionDraft, editing original: Transaction? = nil) -> [ValidationError] {
+        var errors: [ValidationError] = []
+        if draft.amount <= 0 { errors.append(.invalidAmount) }
+        if draft.amount > MoneyFormatter.maximumInput { errors.append(.amountTooLarge) }
+        if let wallet = draft.wallet {
+            if wallet.isArchived && wallet.id != original?.wallet?.id { errors.append(.archivedWallet) }
+        } else { errors.append(.missingWallet) }
         switch draft.kind {
         case .transfer:
-            guard draft.category == nil else { throw ValidationError.unexpectedCategory }
-            guard let destination = draft.toWallet else { throw ValidationError.missingDestination }
-            guard destination.id != wallet.id else { throw ValidationError.sameWallet }
-            if destination.isArchived && destination.id != original?.toWallet?.id { throw ValidationError.archivedDestination }
+            if draft.category != nil { errors.append(.unexpectedCategory) }
+            if let destination = draft.toWallet {
+                if destination.id == draft.wallet?.id { errors.append(.sameWallet) }
+                if destination.isArchived && destination.id != original?.toWallet?.id { errors.append(.archivedDestination) }
+            } else { errors.append(.missingDestination) }
         case .income, .expense:
-            guard draft.toWallet == nil else { throw ValidationError.unexpectedDestination }
-            guard let category = draft.category else { throw ValidationError.missingCategory }
-            guard category.kindRaw == draft.kind.rawValue else { throw ValidationError.categoryKindMismatch }
-            if category.isArchived && category.id != original?.category?.id { throw ValidationError.archivedCategory }
+            if draft.toWallet != nil { errors.append(.unexpectedDestination) }
+            if let category = draft.category {
+                if category.kindRaw != draft.kind.rawValue { errors.append(.categoryKindMismatch) }
+                if category.isArchived && category.id != original?.category?.id { errors.append(.archivedCategory) }
+            } else { errors.append(.missingCategory) }
         }
+        return errors
     }
 }

@@ -30,7 +30,7 @@ final class EncryptedBackupTests: XCTestCase {
         let scheduler = BackupScheduler(exporter: exporter, defaults: defaults)
         XCTAssertNil(scheduler.automatic()); XCTAssertNotNil(scheduler.lastError)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path).count, 1)
-        XCTAssertThrowsError(try BackupValidator.decode(data, protection: protection, password: "incorrect password"))
+        XCTAssertThrowsError(try BackupRestorer(container: container, exporter: exporter, defaults: defaults).restore(data, password: "incorrect password"))
         XCTAssertEqual(try exporter.capture(now: now), original)
         // Disable only the current export setting to simulate a fresh installation.
         defaults.set(false, forKey: "SaveMoney.backupEncryptionEnabled")

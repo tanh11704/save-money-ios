@@ -97,8 +97,10 @@ struct BackupCrypto {
     }
     static func open(_ data: Data, password: String) throws -> Data {
         let e = try envelope(data) // Validate KDF limits before doing any expensive work.
-        let key = try deriveKey(password: password, salt: e.header.kdf.salt, iterations: e.header.kdf.iterations)
-        return try open(data, key: key)
+        do {
+            let key = try deriveKey(password: password, salt: e.header.kdf.salt, iterations: e.header.kdf.iterations)
+            return try open(data, key: key)
+        } catch CryptoError.invalidPassword { throw CryptoError.wrongPasswordOrTampered }
     }
     static func isEncrypted(_ data: Data) -> Bool {
         struct Format: Decodable { let format: String }

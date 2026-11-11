@@ -68,16 +68,25 @@ struct IntegrityChecker {
         let walletIDs = Set(wallets.map(\.id)), categoryIDs = Set(categories.map(\.id))
         var keys = Set<String>()
         for t in transactions {
-            if t.wallet.map({ !walletIDs.contains($0.id) }) ?? true { add(.transactionMissingWallet(t.id)) }
-            if t.amount <= 0 { add(.nonPositiveAmount(t.id)) }
-            if t.kindRaw == "transfer" {
-                if t.toWallet.map({ !walletIDs.contains($0.id) }) ?? true { add(.transferMissingDestination(t.id)) }
-                if let to = t.toWallet, to.id == t.wallet?.id { add(.transferSameWallet(t.id)) }
-                if t.category != nil { add(.transferHasCategory(t.id)) }
-            } else if let kind = TransactionKind(rawValue: t.kindRaw) {
-                if t.category.map({ !categoryIDs.contains($0.id) }) ?? true { add(.transactionMissingCategory(t.id), .warning) }
-                if let category = t.category, category.kindRaw != kind.rawValue { add(.categoryKindMismatch(t.id)) }
-                if t.toWallet != nil { add(.invalidTransaction(t.id)) }
+            if let wallet = t.wallet, !walletIDs.contains(wallet.id) { add(.transactionMissingWallet(t.id)) }
+            if let destination = t.toWallet, !walletIDs.contains(destination.id) { add(.transferMissingDestination(t.id)) }
+            if let category = t.category, !categoryIDs.contains(category.id) { add(.transactionMissingCategory(t.id), .warning) }
+            if let kind = TransactionKind(rawValue: t.kindRaw) {
+                let draft = TransactionDraft(amount: t.amount, kind: kind, date: t.date, note: t.note, wallet: t.wallet, toWallet: t.toWallet, category: t.category)
+                for error in TransactionValidator.validationErrors(draft, editing: t) {
+                    switch error {
+                    case .invalidAmount: add(.nonPositiveAmount(t.id))
+                    case .amountTooLarge: add(.invalidTransaction(t.id), .warning)
+                    case .missingWallet: add(.transactionMissingWallet(t.id))
+                    case .missingCategory: add(.transactionMissingCategory(t.id), .warning)
+                    case .missingDestination: add(.transferMissingDestination(t.id))
+                    case .sameWallet: add(.transferSameWallet(t.id))
+                    case .unexpectedCategory: add(.transferHasCategory(t.id))
+                    case .categoryKindMismatch: add(.categoryKindMismatch(t.id))
+                    case .unexpectedDestination: add(.invalidTransaction(t.id))
+                    case .archivedWallet, .archivedDestination, .archivedCategory: break
+                    }
+                }
             } else { add(.invalidTransaction(t.id)) }
             if let key = t.recurrenceKey, !keys.insert(key).inserted { add(.duplicateRecurrenceKey(key)) }
         }

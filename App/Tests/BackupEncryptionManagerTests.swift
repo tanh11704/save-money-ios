@@ -16,10 +16,12 @@ final class BackupEncryptionManagerTests: XCTestCase {
         let keys = MemoryBackupKeys(); var exporter = BackupExporter(container: container, directory: folder)
         exporter.protection = BackupProtection(defaults: defaults, keyStore: keys)
         _ = try exporter.export(kind: .manual); _ = try exporter.export(kind: .preRestore)
+        container.mainContext.insert(Wallet(name: "Dữ liệu mới hơn bản cũ")); try container.mainContext.save()
         let manager = BackupEncryptionManager(exporter: exporter), first = "remember first password", second = "remember second password"
         try manager.enable(key: BackupCrypto.deriveKey(password: first, iterations: 100_000))
         let files = try IntegrityChecker.files(in: folder)
         XCTAssertEqual(files.count, 3)
+        XCTAssertEqual(try BackupCatalog.entries(in: folder, protection: exporter.protection).first?.file?.payload.wallets.first?.name, "Dữ liệu mới hơn bản cũ")
         for file in files { XCTAssertTrue(BackupCrypto.isEncrypted(try Data(contentsOf: file))) }
         try manager.checkPassword(first)
         try manager.changePassword(oldPassword: first, key: BackupCrypto.deriveKey(password: second, iterations: 100_000), reencrypt: true)

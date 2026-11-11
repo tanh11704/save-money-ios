@@ -39,7 +39,8 @@ struct BackupEncryptionManager {
             guard target == source || !FileManager.default.fileExists(atPath: target.path) else { throw BackupError.collision }
             rewrites.append(Rewrite(source: source, target: target, original: original, encrypted: encrypted))
         }
-        let oldEnabled = protection.enabled, oldKey = try? protection.keyStore.read()
+        let oldEnabled = protection.enabled, oldKey = try protection.keyStore.read()
+        if oldEnabled && oldKey == nil { throw BackupCrypto.CryptoError.keyUnavailable }
         var newBackup: URL?, written: [Rewrite] = []
         do {
             try protection.keyStore.save(key)

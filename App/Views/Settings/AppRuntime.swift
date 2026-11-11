@@ -127,14 +127,14 @@ final class BackupScreenStore: ObservableObject {
 
     init(scheduler: BackupScheduler) { self.scheduler = scheduler; refresh() }
     var health: BackupHealth {
-        let last = entries.first
+        let last = (entries + preRestore).max { $0.createdAt < $1.createdAt }
         let integrityDate = scheduler.defaults.object(forKey: "SaveMoney.lastIntegrityCheck") as? Date
         let bytes = (entries + preRestore).reduce(Int64(0)) { total, entry in
             total + (((try? FileManager.default.attributesOfItem(atPath: entry.url.path)[.size]) as? NSNumber)?.int64Value ?? 0)
         }
         let context = ModelContext(scheduler.exporter.container)
         return BackupHealth.evaluate(now: scheduler.clock.now, lastBackup: last.flatMap { try? BackupFile.date($0.createdAt) },
-            lastBackupKind: last.map { $0.url.lastPathComponent.contains("-Auto") ? .auto : .manual }, fileCount: entries.count + preRestore.count,
+            lastBackupKind: last.map { $0.url.lastPathComponent.contains("-Auto") ? .auto : $0.url.lastPathComponent.contains("-PreRestore") ? .preRestore : .manual }, fileCount: entries.count + preRestore.count,
             totalBytes: bytes, lastExternalCopy: scheduler.lastExternalCopy,
             lastIntegrityCheck: integrityDate.map { .init(date: $0, healthy: scheduler.defaults.bool(forKey: "SaveMoney.lastIntegrityHealthy")) },
             changesSinceBackup: scheduler.changes, lastError: scheduler.lastError, transactionCount: (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0,
