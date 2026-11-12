@@ -43,6 +43,13 @@ final class StatsTests: XCTestCase {
             return transaction
         }
 
+        func transactions() throws -> [Transaction] {
+            try container.mainContext.save()
+            let context = ModelContext(container)
+            reader = context
+            return try context.fetch(FetchDescriptor<Transaction>())
+        }
+
         func report(_ year: Int = 2026, _ month: Int = 11) throws -> StatsService.Report {
             try container.mainContext.save()
             let context = ModelContext(container)
@@ -261,5 +268,83 @@ final class StatsTests: XCTestCase {
         XCTAssertEqual(try f.report(2026, 10).expense, 250)
         try service.delete(id: id)
         XCTAssertTrue(try f.report(2026, 10).isEmpty)
+    }
+
+    // MARK: - Payday month cycles
+
+    private func withStartDay(_ day: Int, _ body: () throws -> Void) rethrows {
+        let suite = "MonthCycle.\(UUID().uuidString)", defaults = UserDefaults(suiteName: suite)!
+        let previous = MonthCycle.defaults
+        MonthCycle.defaults = defaults
+        defer { MonthCycle.defaults = previous; defaults.removePersistentDomain(forName: suite) }
+        MonthCycle.startDay = day
+        try body()
+    }
+
+    private func local(_ text: String) -> Date { ISO8601DateFormatter().date(from: text + "T00:00:00+07:00")! }
+
+    func testDefaultStartDayKeepsCalendarMonths() throws {
+        try withStartDay(1) {
+            let month = ReportingMonth(containing: local("2026-11-12"))
+            XCTAssertEqual(month, try ReportingMonth(year: 2026, month: 11))
+            XCTAssertEqual(month.interval, DateInterval(start: local("2026-11-01"), end: local("2026-12-01")))
+            XCTAssertEqual(month.title, "Tháng 11/2026")
+        }
+    }
+
+    func testLateStartDayNamesCycleAfterTheMonthItEndsIn() throws {
+        try withStartDay(25) {
+            let november = try ReportingMonth(year: 2026, month: 11)
+            XCTAssertEqual(november.interval, DateInterval(start: local("2026-10-25"), end: local("2026-11-25")))
+            XCTAssertEqual(ReportingMonth(containing: local("2026-10-25")), november)
+            XCTAssertEqual(ReportingMonth(containing: local("2026-11-24").addingTimeInterval(86_399)), november)
+            XCTAssertEqual(ReportingMonth(containing: local("2026-11-25")), try ReportingMonth(year: 2026, month: 12))
+            XCTAssertEqual(ReportingMonth(containing: local("2026-12-30")), try ReportingMonth(year: 2027, month: 1))
+            XCTAssertEqual(november.title, "Tháng 11/2026 (25/10–24/11)")
+            XCTAssertEqual(november.dayCount, 31)
+        }
+    }
+
+    func testEarlyStartDayNamesCycleAfterTheMonthItStartsIn() throws {
+        try withStartDay(5) {
+            let november = try ReportingMonth(year: 2026, month: 11)
+            XCTAssertEqual(november.interval, DateInterval(start: local("2026-11-05"), end: local("2026-12-05")))
+            XCTAssertEqual(ReportingMonth(containing: local("2026-11-04")), try ReportingMonth(year: 2026, month: 10))
+            XCTAssertEqual(ReportingMonth(containing: local("2026-11-05")), november)
+        }
+    }
+
+    func testStartDayPastMonthEndClampsAndCyclesStayContiguous() throws {
+        try withStartDay(31) {
+            let march = try ReportingMonth(year: 2026, month: 3)
+            XCTAssertEqual(march.interval, DateInterval(start: local("2026-02-28"), end: local("2026-03-31")))
+            var month = try ReportingMonth(year: 2026, month: 1)
+            for _ in 0..<24 {
+                let next = month.next!
+                XCTAssertEqual(month.interval.end, next.interval.start)
+                XCTAssertEqual(ReportingMonth(containing: month.interval.start), month)
+                XCTAssertEqual(ReportingMonth(containing: month.interval.end.addingTimeInterval(-1)), month)
+                month = next
+            }
+        }
+    }
+
+    func testReportsAndComparisonFollowPaydayCycle() throws {
+        let f = try Fixture()
+        try withStartDay(25) {
+            f.add(100_000, date: local("2026-10-24"))
+            f.add(200_000, date: local("2026-10-25"))
+            f.add(300_000, date: local("2026-11-24"))
+            f.add(400_000, date: local("2026-11-25"))
+            let november = try ReportingMonth(year: 2026, month: 11)
+            let transactions = try f.transactions()
+            XCTAssertEqual(try StatsService.report(month: november, transactions: transactions).expense, 500_000)
+            XCTAssertEqual(try StatsService.dailyExpenses(month: november, transactions: transactions).count, 31)
+            XCTAssertEqual(StatsService.dailyAllowance(limit: 3_100_000, month: november), 100_000)
+            let comparison = try StatsService.comparison(month: november, now: local("2026-10-26").addingTimeInterval(3_600), transactions: transactions)
+            XCTAssertEqual(comparison.currentRange, DateInterval(start: local("2026-10-25"), end: local("2026-10-27")))
+            XCTAssertEqual(comparison.previousRange, DateInterval(start: local("2026-09-25"), end: local("2026-09-27")))
+            XCTAssertEqual(comparison.label, "so với 25/9–26/9")
+        }
     }
 }

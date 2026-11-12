@@ -52,8 +52,8 @@ final class BudgetAlertService {
                 let name = BudgetPresentation.name(for: progress.scope, categories: categories)
                 let amounts = BudgetPresentation.usage(progress)
                 let detailedBody = threshold == .warning
-                    ? "\(name) đã dùng 80% hạn mức tháng \(month.month) (\(amounts))"
-                    : "Đã vượt \(name.lowercased()) tháng \(month.month): \(amounts)"
+                    ? "\(name) đã dùng 80% hạn mức \(month.shortName) (\(amounts))"
+                    : "Đã vượt \(name.lowercased()) \(month.shortName): \(amounts)"
                 let privateBody = threshold == .warning
                     ? (progress.scope == .total ? "Đã dùng hơn 80% hạn mức tổng tháng này." : "\(name) đã dùng hơn 80% hạn mức tháng này.")
                     : "Đã vượt \(progress.scope == .total ? "hạn mức tổng" : "hạn mức " + name) tháng này."

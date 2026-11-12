@@ -9,6 +9,8 @@ final class TransactionScreenStore: ObservableObject {
     struct UndoAction: Identifiable {
         let id = UUID()
         let snapshot: TransactionSnapshot
+        /// Rows created together with `snapshot` (a transfer's fee), undone with it.
+        var related: [TransactionSnapshot] = []
         let restore: Bool
         let message: String
         let expiresAt = Date().addingTimeInterval(5)
@@ -135,6 +137,30 @@ final class TransactionScreenStore: ObservableObject {
         return savedID
     }
 
+    /// New transfer between own wallets plus an optional fee expense from the source wallet.
+    @discardableResult
+    func saveTransfer(_ draft: TransactionDraft, fee: Int64) throws -> UUID {
+        guard fee > 0 else { return try save(draft, editing: nil) }
+        guard let container else { throw TransactionService.ServiceError.missingRecord }
+        let month = ReportingMonth(containing: draft.date)
+        isWriting = true
+        defer { isWriting = false }
+        let before = progress(in: month)
+        let ids = try TransactionService(container: container, recentSelections: recent, origin: origin).createTransfer(draft, fee: fee)
+        do {
+            try reload()
+            // The fee is an expense, so it can cross a budget threshold.
+            let after = progress(in: month), categories = self.categories
+            Task { await budgetAlerts.notify(month: month, before: before, after: after, categories: categories) }
+            if let transfer = transactions.first(where: { $0.id == ids.transfer }) {
+                let related = transactions.filter { $0.id == ids.fee }.map(TransactionSnapshot.init)
+                undoAction = UndoAction(snapshot: TransactionSnapshot(transfer), related: related, restore: false,
+                                        message: "Đã lưu " + TransactionPresentation.amount(transfer) + " · phí " + MoneyFormatter.string(from: fee))
+            }
+        } catch { errorMessage = "Đã lưu, nhưng chưa tải lại được số dư. Tải lại lịch sử." }
+        return ids.transfer
+    }
+
     private func budgetResult(in month: ReportingMonth) -> Result<[BudgetService.Progress], Error> {
         if let cached = budgetCache[month] { return cached }
         let result = Result { try BudgetService.progress(month: month, rules: budgetRules, transactions: transactions) }
@@ -192,7 +218,7 @@ final class TransactionScreenStore: ObservableObject {
         do {
             let service = TransactionService(container: container, origin: origin)
             if action.restore { try service.restore(action.snapshot) }
-            else { try service.delete(ifUnchanged: action.snapshot) }
+            else { try service.delete(ifUnchanged: [action.snapshot] + action.related) }
             undoAction = nil
             refreshAfterManagementWrite()
         } catch { errorMessage = "Không thể hoàn tác: " + TransactionPresentation.errorMessage(error) }

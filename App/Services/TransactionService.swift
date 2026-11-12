@@ -38,6 +38,58 @@ final class TransactionService {
         }
     }
 
+    enum FeeError: LocalizedError {
+        case invalidFee
+        var errorDescription: String? { "Phí chuyển phải từ 0 đến 999.999.999.999 đồng." }
+    }
+
+    /// Name of the expense category that transfer fees are recorded under.
+    static let transferFeeCategoryName = "Phí chuyển tiền"
+
+    /// Saves a transfer and, when `fee` > 0, an expense of `fee` from the same source wallet
+    /// (category "Phí chuyển tiền", created if needed) in one save: both rows or neither.
+    /// The fee stays a normal expense, so balances, stats, budgets and backups need no new field.
+    @discardableResult
+    func createTransfer(_ input: TransactionDraft, fee: Int64) throws -> (transfer: UUID, fee: UUID?) {
+        guard (0...MoneyFormatter.maximumInput).contains(fee) else { throw FeeError.invalidFee }
+        return try perform {
+            let draft = try resolve(input)
+            guard draft.kind == .transfer else { throw TransactionValidator.ValidationError.missingDestination }
+            try TransactionValidator.validate(draft)
+            guard let wallet = draft.wallet, let destination = draft.toWallet else { throw TransactionValidator.ValidationError.missingWallet }
+            let transfer = Transaction(amount: draft.amount, kind: .transfer, date: draft.date,
+                                       note: draft.note, wallet: wallet, toWallet: destination)
+            context.insert(transfer)
+            var feeID: UUID?
+            if fee > 0 {
+                let category = try transferFeeCategory()
+                let feeDraft = TransactionDraft(amount: fee, kind: .expense, date: draft.date,
+                                                note: "Phí chuyển \(wallet.name) → \(destination.name)", wallet: wallet, category: category)
+                try TransactionValidator.validate(feeDraft)
+                let expense = Transaction(amount: fee, kind: .expense, date: draft.date, note: feeDraft.note, wallet: wallet, category: category)
+                context.insert(expense)
+                feeID = expense.id
+            }
+            try context.save()
+            recentSelections?.remember(draft)
+            return (transfer.id, feeID)
+        }
+    }
+
+    /// Reuses an expense category named "Phí chuyển tiền" (restoring it if archived), else creates one.
+    private func transferFeeCategory() throws -> Category {
+        let name = Self.transferFeeCategoryName
+        let matches = try context.fetch(FetchDescriptor<Category>()).filter {
+            $0.kindRaw == TransactionKind.expense.rawValue
+                && $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "vi_VN")) == .orderedSame
+        }
+        if let active = matches.first(where: { !$0.isArchived }) { return active }
+        if let archived = matches.first { archived.isArchived = false; return archived }
+        let category = Category(name: name, kind: .expense, icon: "building.columns")
+        context.insert(category)
+        return category
+    }
+
     func update(id: UUID, with input: TransactionDraft) throws {
         try perform {
             let transaction = try find(id)
@@ -96,10 +148,17 @@ final class TransactionService {
     }
 
     func delete(ifUnchanged snapshot: TransactionSnapshot) throws {
+        try delete(ifUnchanged: [snapshot])
+    }
+
+    /// Undo for a write that created several rows (a transfer and its fee): all or nothing.
+    func delete(ifUnchanged snapshots: [TransactionSnapshot]) throws {
         try perform {
-            let transaction = try find(snapshot.id)
-            guard TransactionSnapshot(transaction) == snapshot else { throw ServiceError.missingRecord }
-            context.delete(transaction)
+            for snapshot in snapshots {
+                let transaction = try find(snapshot.id)
+                guard TransactionSnapshot(transaction) == snapshot else { throw ServiceError.missingRecord }
+                context.delete(transaction)
+            }
             try context.save()
         }
     }

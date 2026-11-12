@@ -15,6 +15,14 @@ final class TransferLedgerTests: XCTestCase {
         XCTAssertThrowsError(try TransferPreview.make(amount: 1, source: source, destination: target, balances: [source.id: .min, target.id: 0]))
         XCTAssertThrowsError(try TransferPreview.make(amount: 1, source: source, destination: target, balances: [source.id: 1, target.id: .max]))
     }
+    func testPreviewDeductsFeeFromSourceOnly() throws {
+        let source = Wallet(name: "Bank"), target = Wallet(name: "Cash")
+        let result = try TransferPreview.make(amount: 500, fee: 3, source: source, destination: target, balances: [source.id: 1_000, target.id: 0])
+        XCTAssertEqual(result.sourceAfter, 497)
+        XCTAssertEqual(result.destinationAfter, 500)
+        XCTAssertThrowsError(try TransferPreview.make(amount: 500, fee: -1, source: source, destination: target, balances: [source.id: 1_000, target.id: 0]))
+        XCTAssertThrowsError(try TransferPreview.make(amount: 1, fee: 1, source: source, destination: target, balances: [source.id: .min + 1, target.id: 0]))
+    }
     func testLedgerUsesLocalDaysAndIncludesBothTransferDirections() throws {
         let wallet = Wallet(name: "Cash", openingBalance: 1_000), bank = Wallet(name: "Bank")
         let midnight = LocalCalendar.calendar.date(from: DateComponents(year: 2026, month: 11, day: 2))!

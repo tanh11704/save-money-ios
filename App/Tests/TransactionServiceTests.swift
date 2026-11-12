@@ -216,4 +216,37 @@ final class TransactionServiceTests: XCTestCase {
         XCTAssertEqual(selection.destinationID, f.b.id)
         XCTAssertNil(selection.categoryID)
     }
+
+    func testTransferFeeIsSeparateExpenseFromSourceAndUndoesTogether() async throws {
+        let f = try fixture()
+        let ids = try f.service.createTransfer(f.draft(.transfer, amount: 500), fee: 3)
+        XCTAssertEqual(try f.balance("A"), 497)
+        XCTAssertEqual(try f.balance("B"), 2_500)
+        let rows = try f.transactions()
+        let fee = try XCTUnwrap(rows.first { $0.id == ids.fee })
+        XCTAssertEqual(fee.kindRaw, TransactionKind.expense.rawValue)
+        XCTAssertEqual(fee.amount, 3)
+        XCTAssertEqual(fee.wallet?.name, "A")
+        XCTAssertEqual(fee.category?.name, TransactionService.transferFeeCategoryName)
+
+        // A second fee reuses the same category instead of creating duplicates.
+        try f.service.createTransfer(f.draft(.transfer, amount: 1), fee: 1)
+        let feeCategories = try ModelContext(f.container).fetch(FetchDescriptor<Category>()).filter { $0.name == TransactionService.transferFeeCategoryName }
+        XCTAssertEqual(feeCategories.count, 1)
+
+        try f.service.delete(ifUnchanged: rows.filter { $0.id == ids.transfer || $0.id == ids.fee }.map(TransactionSnapshot.init))
+        XCTAssertEqual(try f.balance("A"), 999)
+        XCTAssertEqual(try f.balance("B"), 2_001)
+    }
+
+    func testZeroFeeCreatesOnlyTransferAndInvalidFeeWritesNothing() async throws {
+        let f = try fixture()
+        let ids = try f.service.createTransfer(f.draft(.transfer, amount: 500), fee: 0)
+        XCTAssertNil(ids.fee)
+        XCTAssertEqual(try f.transactions().count, 1)
+        XCTAssertThrowsError(try f.service.createTransfer(f.draft(.transfer, amount: 500), fee: -1))
+        XCTAssertThrowsError(try f.service.createTransfer(f.draft(.expense, amount: 500), fee: 3))
+        XCTAssertEqual(try f.transactions().count, 1)
+        XCTAssertEqual(try f.balance("A"), 500)
+    }
 }

@@ -44,14 +44,23 @@ extension StatsService {
         guard let previous = month.previous else { throw ReportingMonth.MonthError.invalidMonth }
         let calendar = LocalCalendar.calendar
         let isCurrent = month == ReportingMonth(containing: now)
-        let day = calendar.component(.day, from: now)
-        let previousDays = calendar.range(of: .day, in: .month, for: previous.interval.start)!.count
+        // Days elapsed in the current cycle, today included; compare the same count of the previous cycle.
+        let day = calendar.dateComponents([.day], from: month.interval.start, to: calendar.startOfDay(for: now)).day! + 1
+        let previousDays = previous.dayCount
         let currentEnd = isCurrent ? calendar.date(byAdding: .day, value: day, to: month.interval.start)! : month.interval.end
         let previousEnd = isCurrent ? calendar.date(byAdding: .day, value: min(day, previousDays), to: previous.interval.start)! : previous.interval.end
         let currentRange = DateInterval(start: month.interval.start, end: currentEnd)
         let previousRange = DateInterval(start: previous.interval.start, end: previousEnd)
-        return try comparison(currentRange: currentRange, previousRange: previousRange, transactions: transactions,
-            label: isCurrent ? "so với 1–\(min(day, previousDays))/\(previous.month)" : "so với tháng \(previous.month)/\(previous.year)")
+        let label: String
+        if !isCurrent {
+            label = "so với tháng \(previous.month)/\(previous.year)"
+        } else if MonthCycle.isCalendarMonth {
+            label = "so với 1–\(min(day, previousDays))/\(previous.month)"
+        } else {
+            let last = calendar.date(byAdding: .day, value: -1, to: previousEnd)!
+            label = "so với \(StatsPeriod.dayMonth(previous.interval.start))–\(StatsPeriod.dayMonth(last))"
+        }
+        return try comparison(currentRange: currentRange, previousRange: previousRange, transactions: transactions, label: label)
     }
 
     /// Weeks compare the same number of elapsed days while the week is in progress.

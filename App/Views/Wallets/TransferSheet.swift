@@ -12,6 +12,11 @@ struct TransferSheet: View {
     @State private var expression = AmountExpression()
     @State private var error: String?
     @State private var saved = false
+    /// Fee charged by the source (e.g. ATM withdrawal); recorded as a separate expense. Defaults to 0 ₫.
+    @State private var fee: Int64 = 0
+    @State private var feeExpression = AmountExpression()
+    private enum KeypadTarget { case amount, fee }
+    @State private var keypadTarget = KeypadTarget.amount
     private enum Field: Hashable { case note }
     @FocusState private var focus: Field?
     init(store: TransactionScreenStore, source: Wallet? = nil, mode: Mode = .transfer, amount: Int64 = 0) {
@@ -37,13 +42,22 @@ struct TransferSheet: View {
         guard person == nil, let source = draft.wallet else { return nil }
         return store.balanceValues[source.id]
     }
+    /// Fees only apply between the user's own wallets, never to debt payments.
+    private var effectiveFee: Int64 { person == nil ? fee : 0 }
+    private func applyKey(_ key: MoneyFormatter.Key) {
+        switch keypadTarget {
+        case .amount: expression.apply(key); draft.amount = expression.result ?? 0
+        case .fee: feeExpression.apply(key); fee = feeExpression.result ?? 0
+        }
+        error = nil
+    }
     private var validation: String? {
         do { try TransactionValidator.validate(draft); _ = try preview(); return nil }
         catch { return error.localizedDescription }
     }
     private func preview() throws -> TransferPreview {
         guard let source = draft.wallet, let destination = draft.toWallet else { throw TransferPreview.PreviewError.invalidSelection }
-        return try TransferPreview.make(amount: draft.amount, source: source, destination: destination, balances: store.balanceValues)
+        return try TransferPreview.make(amount: draft.amount, fee: effectiveFee, source: source, destination: destination, balances: store.balanceValues)
     }
     var body: some View {
         ScrollView {
@@ -55,6 +69,7 @@ struct TransferSheet: View {
                 }
                 walletPicker(destination: true)
                 Card { VStack(alignment: .leading, spacing: 8) {
+                    if person == nil { Text("Số tiền chuyển").font(.subheadline).foregroundStyle(.secondary) }
                     if expression.hasOperator { Text(expression.displayText).font(.title3).monospacedDigit() }
                     AmountText(amount: draft.amount, style: .system(.largeTitle, design: .rounded).bold())
                     if let amount = quickAmount, amount > 0 {
@@ -64,10 +79,16 @@ struct TransferSheet: View {
                         }.frame(minHeight: 44)
                     }
                 } }
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.accentColor, lineWidth: person == nil && keypadTarget == .amount ? 2 : 0))
+                .contentShape(Rectangle())
+                .onTapGesture { keypadTarget = .amount; focus = nil }
+                .accessibilityAddTraits(person == nil && keypadTarget == .amount ? .isSelected : [])
+                if person == nil { feeCard }
                 if let preview = try? preview() {
                     Card { VStack(alignment: .leading, spacing: 12) {
                         Text("Xem trước").font(.headline)
                         Text(draft.wallet?.name ?? "Từ ví"); AmountText(amount: preview.sourceBefore); Image(systemName: "arrow.down").accessibilityHidden(true); AmountText(amount: preview.sourceAfter)
+                        if effectiveFee > 0 { Text("Gồm phí \(MoneyFormatter.string(from: effectiveFee)), ghi thành khoản chi \"\(TransactionService.transferFeeCategoryName)\"").font(.caption).foregroundStyle(.secondary) }
                         Divider()
                         Text(draft.toWallet?.name ?? "Đến ví"); AmountText(amount: preview.destinationBefore); Image(systemName: "arrow.down").accessibilityHidden(true); AmountText(amount: preview.destinationAfter)
                     } }
@@ -96,8 +117,9 @@ struct TransferSheet: View {
             if focus == nil {
                 PrimaryActionBar(title: draft.amount == 0 ? "Nhập số tiền" : title, systemImage: draft.amount == 0 ? "keyboard" : "arrow.left.arrow.right",
                                  enabled: validation == nil && !saved, identifier: "transfer.save", action: save) {
-                    if !typeSize.isAccessibilitySize { MoneyKeypad(showsOperators: true) { expression.apply($0); draft.amount = expression.result ?? 0; error = nil } }
-                    else { DisclosureGroup("Bàn phím số") { MoneyKeypad(showsOperators: true) { expression.apply($0); draft.amount = expression.result ?? 0; error = nil } } }
+                    if person == nil { Text(keypadTarget == .fee ? "Đang nhập phí chuyển" : "Đang nhập số tiền chuyển").font(.caption).foregroundStyle(.secondary) }
+                    if !typeSize.isAccessibilitySize { MoneyKeypad(showsOperators: true) { applyKey($0) } }
+                    else { DisclosureGroup("Bàn phím số") { MoneyKeypad(showsOperators: true) { applyKey($0) } } }
                     // A zero amount is the starting state; only explain other problems.
                     if let message = error ?? (draft.amount == 0 ? nil : validation) { InlineError(message: message) }
                 }
@@ -108,8 +130,34 @@ struct TransferSheet: View {
         .navigationTitle(title)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() }.frame(minHeight: 44) } }
         .sensoryFeedback(.success, trigger: saved) { _, _ in !reduceMotion }
-        .overlay(alignment: .top) { if saved { Toast(message: "Đã lưu \(MoneyFormatter.string(from: draft.amount)) · \(draft.wallet?.name ?? "") → \(draft.toWallet?.name ?? "")") } }
+        .overlay(alignment: .top) { if saved { Toast(message: "Đã lưu \(MoneyFormatter.string(from: draft.amount)) · \(draft.wallet?.name ?? "") → \(draft.toWallet?.name ?? "")" + (effectiveFee > 0 ? " · phí \(MoneyFormatter.string(from: effectiveFee))" : "")) } }
         .task(id: saved) { if saved { try? await Task.sleep(for: .seconds(2)); if !Task.isCancelled { dismiss() } } }
+    }
+    private var feeCard: some View {
+        Card { HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Phí chuyển").font(.subheadline).foregroundStyle(.secondary)
+                if feeExpression.hasOperator { Text(feeExpression.displayText).font(.caption).monospacedDigit() }
+                AmountText(amount: fee, style: .title3.bold())
+                Text("Ví dụ phí rút ATM. Trừ thêm vào ví nguồn, tính là khoản chi.").font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if fee > 0 {
+                Button { fee = 0; feeExpression = AmountExpression() } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).frame(minWidth: 44, minHeight: 44)
+                }.buttonStyle(.plain).accessibilityLabel("Bỏ phí chuyển")
+            }
+        } }
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.accentColor, lineWidth: keypadTarget == .fee ? 2 : 0))
+        .contentShape(Rectangle())
+        .onTapGesture { keypadTarget = .fee; focus = nil }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Phí chuyển, \(MoneyFormatter.string(from: fee).replacingOccurrences(of: "₫", with: "đồng"))")
+        .accessibilityHint("Chạm để nhập phí bằng bàn phím số")
+        .accessibilityAddTraits(keypadTarget == .fee ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { keypadTarget = .fee }
+        .accessibilityIdentifier("transfer.fee")
     }
     @ViewBuilder private func walletPicker(destination: Bool) -> some View {
         let selected = destination ? draft.toWallet : draft.wallet
@@ -135,7 +183,7 @@ struct TransferSheet: View {
     }
     private func save() {
         guard !saved else { return }
-        do { try TransactionValidator.validate(draft); _ = try preview(); try store.save(draft, editing: nil); saved = true }
+        do { try TransactionValidator.validate(draft); _ = try preview(); try store.saveTransfer(draft, fee: effectiveFee); saved = true }
         catch { self.error = error.localizedDescription }
     }
 }

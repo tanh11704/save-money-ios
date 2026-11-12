@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject var store: BackupScreenStore
     @ObservedObject var lock: AppLockService
     @AppStorage(BudgetAlertService.showsAmountsKey) private var showsNotificationAmounts = false
+    @AppStorage(MonthCycle.startDayKey) private var monthStartDay = 1
     @State private var importing = false
     @State private var sharing: ShareItem?
     private struct ShareItem: Identifiable { let id = UUID(); let url: URL }
@@ -26,6 +27,20 @@ struct SettingsView: View {
                 Button { importing = true } label: { IconRow(icon: "arrow.counterclockwise", tint: .orange, title: "Khôi phục từ file") }
                 HStack { IconRow(icon: "icloud", title: "Sao lưu iCloud của iPhone"); InfoButton(text: "1. Mở Cài đặt → tên bạn → iCloud.\n2. Bật Sao lưu iCloud.\n3. Chia sẻ file backup sang iCloud Drive và giữ thêm một bản ngoài iPhone.") }
 
+            }
+            Section {
+                Picker(selection: $monthStartDay) {
+                    ForEach(MonthCycle.validDays, id: \.self) { day in
+                        Text(day == 1 ? "Ngày 1 (đầu tháng)" : "Ngày \(day)").tag(day)
+                    }
+                } label: { IconRow(icon: "calendar.badge.clock", tint: .orange, title: "Ngày bắt đầu tháng") }
+                    .pickerStyle(.navigationLink)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("settings.monthStartDay")
+            } header: { Text("Kỳ thống kê") } footer: {
+                Text(monthStartDay == 1
+                     ? "Thống kê và ngân sách tính theo tháng dương lịch. Chọn ngày nhận lương để tính từ kỳ lương này đến kỳ lương sau."
+                     : "Kỳ hiện tại: \(ReportingMonth().title). Ngày lớn hơn số ngày của tháng sẽ lấy ngày cuối tháng.")
             }
             Section("Dữ liệu") {
                 NavigationLink { CSVExportView() } label: { IconRow(icon: "tablecells", tint: .green, title: "Xuất CSV") }

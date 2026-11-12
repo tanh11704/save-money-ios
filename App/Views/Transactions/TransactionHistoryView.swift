@@ -21,9 +21,9 @@ struct TransactionHistoryView: View {
                         Text("Tổng số dư").font(.subheadline).foregroundStyle(.secondary)
                         Text(store.totalBalance).font(.title2.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
                         if let report = store.currentMonthReport {
-                            Text("Tháng \(ReportingMonth().month) · Thu \(report.income > 0 ? "+" : "")\(MoneyFormatter.compact(report.income)) · Chi \(report.expense > 0 ? "−" : "")\(MoneyFormatter.compact(report.expense))")
+                            Text("\(ReportingMonth().shortName.capitalizedFirst) · Thu \(report.income > 0 ? "+" : "")\(MoneyFormatter.compact(report.income)) · Chi \(report.expense > 0 ? "−" : "")\(MoneyFormatter.compact(report.expense))")
                                 .font(.caption).foregroundStyle(.secondary)
-                                .accessibilityLabel("Tháng \(ReportingMonth().month), thu \(report.incomeText), chi \(report.expenseText)")
+                                .accessibilityLabel("\(ReportingMonth().shortName.capitalizedFirst), thu \(report.incomeText), chi \(report.expenseText)")
                         }
                     }
                 }.accessibilityIdentifier("history.totalBalance")

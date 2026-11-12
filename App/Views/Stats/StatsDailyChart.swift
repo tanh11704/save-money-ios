@@ -30,16 +30,20 @@ struct StatsDailyChart: View {
 
     private var ticks: [Int] {
         if isWeek { return days.map(\.day) }
-        return typeSize.isAccessibilitySize ? Array(Set([1, 10, 20, days.count])).sorted() : Array(stride(from: 1, through: days.count, by: 5))
+        guard !days.isEmpty else { return [] }
+        return typeSize.isAccessibilitySize ? Array(Set([1, 10, 20, days.count])).filter { $0 <= days.count }.sorted() : Array(stride(from: 1, through: days.count, by: 5))
     }
 
     private func label(for day: Int) -> String {
-        guard isWeek, let entry = days.first(where: { $0.day == day }) else { return String(day) }
-        return StatsPeriod.weekdayLabel(entry.date)
+        guard let entry = days.first(where: { $0.day == day }), entry.date != .distantPast else { return String(day) }
+        // Payday cycles cross months, so label the calendar day ("25", "1") rather than the position.
+        return isWeek ? StatsPeriod.weekdayLabel(entry.date) : String(LocalCalendar.calendar.component(.day, from: entry.date))
     }
 
     private func spokenDay(_ day: StatsService.DailyTotal) -> String {
-        isWeek ? "\(StatsPeriod.weekdayLabel(day.date)) \(StatsPeriod.dayMonth(day.date))" : "Ngày \(day.day)"
+        if isWeek { return "\(StatsPeriod.weekdayLabel(day.date)) \(StatsPeriod.dayMonth(day.date))" }
+        guard day.date != .distantPast else { return "Ngày \(day.day)" }
+        return MonthCycle.isCalendarMonth ? "Ngày \(LocalCalendar.calendar.component(.day, from: day.date))" : "Ngày \(StatsPeriod.dayMonth(day.date))"
     }
 
     var body: some View {

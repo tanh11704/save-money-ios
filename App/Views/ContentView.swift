@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var dismissedBanner: String?
     @State private var selectedTab = 0
     @State private var navigationGeneration = UUID()
+    @AppStorage(MonthCycle.startDayKey) private var monthStartDay = 1
 
     var body: some View {
         Group {
@@ -60,6 +61,11 @@ struct ContentView: View {
         }
         .onChange(of: router.pending?.id, initial: true) { _, _ in consumeRoute() }
         .onChange(of: store.ready) { _, _ in consumeRoute() }
+        // Month cycles moved: rebuild month reports, budget progress and the month list.
+        .onChange(of: monthStartDay) { _, _ in
+            guard store.ready else { return }
+            do { try store.reload() } catch { store.errorMessage = TransactionPresentation.errorMessage(error) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .ledgerDidChange)) { notification in
             store.receiveLedgerChange(notification)
         }

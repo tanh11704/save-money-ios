@@ -29,7 +29,7 @@ struct BudgetFormView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(BudgetPresentation.name(for: scope, categories: store.categories)).font(.title3.weight(.semibold))
                         HStack(spacing: 4) {
-                            Text("Từ tháng \(month.month)/\(String(month.year)) trở đi").font(.subheadline).foregroundStyle(.secondary)
+                            Text("Từ \(month.title.lowercasedFirst) trở đi").font(.subheadline).foregroundStyle(.secondary)
                             InfoButton(text: "Áp dụng tháng này và các tháng sau. Các tháng trước giữ hạn mức cũ.")
                         }
                     }

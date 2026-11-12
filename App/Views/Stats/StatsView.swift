@@ -7,6 +7,7 @@ struct StatsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("SaveMoney.stats.periodKind") private var kindRaw = StatsPeriodKind.month.rawValue
+    @AppStorage(MonthCycle.startDayKey) private var monthStartDay = 1
     @State private var period = StatsPeriod(kind: .month)
     @State private var current = StatsPeriod(kind: .month)
     @State private var showingMonthPicker = false
@@ -84,6 +85,12 @@ struct StatsView: View {
             }
         }
         .onAppear(perform: updateCurrent)
+        .onChange(of: monthStartDay) { _, _ in
+            // A stored month period keeps its old interval; rebuild it around the same day.
+            let anchor = period.contains(Date()) ? Date() : period.lastDay
+            current = StatsPeriod(kind: kind, containing: Date())
+            period = kind == .month ? min(StatsPeriod(kind: .month, containing: anchor), current) : period
+        }
         .onChange(of: scenePhase) { _, phase in if phase == .active { updateCurrent() } }
     }
 

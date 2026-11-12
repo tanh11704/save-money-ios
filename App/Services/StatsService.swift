@@ -72,7 +72,7 @@ struct StatsService {
 
     struct DailyTotal: Identifiable, Equatable {
         var id: Int { day }
-        /// 1-based position within the period (day of month for months, 1 = Monday for weeks).
+        /// 1-based position within the period (1 = first day of the month cycle, 1 = Monday for weeks).
         let day: Int
         let expense: Int64
         /// Local midnight of this day.
@@ -116,7 +116,7 @@ struct StatsService {
     }
 
     static func dailyAllowance(limit: Int64, month: ReportingMonth) -> Int64 {
-        limit / Int64(LocalCalendar.calendar.range(of: .day, in: .month, for: month.interval.start)!.count)
+        limit / Int64(month.dayCount)
     }
 
     static func expenseSlices(_ report: Report, top: Int = 5) -> [CategoryTotal] {

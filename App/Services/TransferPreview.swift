@@ -14,10 +14,14 @@ struct TransferPreview: Equatable {
             }
         }
     }
-    static func make(amount: Int64, source: Wallet, destination: Wallet, balances: [UUID: Int64]) throws -> TransferPreview {
-        guard source.id != destination.id, (1...MoneyFormatter.maximumInput).contains(amount) else { throw PreviewError.invalidSelection }
+    /// `fee` leaves the source wallet too but does not reach the destination.
+    static func make(amount: Int64, fee: Int64 = 0, source: Wallet, destination: Wallet, balances: [UUID: Int64]) throws -> TransferPreview {
+        guard source.id != destination.id, (1...MoneyFormatter.maximumInput).contains(amount),
+              (0...MoneyFormatter.maximumInput).contains(fee) else { throw PreviewError.invalidSelection }
         guard let sourceBefore = balances[source.id], let destinationBefore = balances[destination.id] else { throw PreviewError.missingBalance }
-        let (sourceAfter, underflow) = sourceBefore.subtractingReportingOverflow(amount)
+        let (afterAmount, amountUnderflow) = sourceBefore.subtractingReportingOverflow(amount)
+        let (sourceAfter, feeUnderflow) = afterAmount.subtractingReportingOverflow(fee)
+        let underflow = amountUnderflow || feeUnderflow
         let (destinationAfter, overflow) = destinationBefore.addingReportingOverflow(amount)
         guard !underflow && !overflow else { throw PreviewError.overflow }
         return Self(sourceBefore: sourceBefore, sourceAfter: sourceAfter, destinationBefore: destinationBefore, destinationAfter: destinationAfter)
