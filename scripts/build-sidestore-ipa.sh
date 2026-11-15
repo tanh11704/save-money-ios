@@ -44,6 +44,12 @@ if [[ "${INCLUDE_WIDGET_TRIAL:-0}" == "1" ]]; then
     /usr/bin/ditto "$out_dir/products/Release-iphoneos/SaveMoneyWidgetTrial.appex" \
         "$stage_dir/Payload/SaveMoney.app/PlugIns/SaveMoneyWidgetTrial.appex"
     ipa_name="SaveMoney-WidgetTrial.ipa"
+    # Ad-hoc sign with the App Group entitlement so SideStore registers the group when it
+    # re-signs. The widget only reads a JSON summary from it; the ledger store never moves.
+    /usr/bin/codesign --force --sign - --entitlements "$repo_dir/WidgetTrial/SaveMoneyWidgetTrial.entitlements" \
+        "$stage_dir/Payload/SaveMoney.app/PlugIns/SaveMoneyWidgetTrial.appex"
+    /usr/bin/codesign --force --sign - --entitlements "$repo_dir/App/SaveMoney.entitlements" \
+        "$stage_dir/Payload/SaveMoney.app"
 fi
 /usr/bin/ditto -c -k --keepParent "$stage_dir/Payload" "$stage_dir/SaveMoney.ipa"
 /usr/bin/unzip -tq "$stage_dir/SaveMoney.ipa"

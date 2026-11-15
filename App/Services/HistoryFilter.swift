@@ -5,6 +5,8 @@ struct HistoryFilter: Equatable {
     var walletID: UUID?
     var categoryID: UUID?
     var month: ReportingMonth?
+    /// Set from the spending calendar: only this local day.
+    var day: Date?
 
     func apply(to transactions: [Transaction]) -> [Transaction] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -12,6 +14,7 @@ struct HistoryFilter: Equatable {
             if let walletID, transaction.wallet?.id != walletID && transaction.toWallet?.id != walletID { return false }
             if let categoryID, transaction.category?.id != categoryID { return false }
             if let month, !month.interval.contains(transaction.date) || transaction.date == month.interval.end { return false }
+            if let day, !LocalCalendar.calendar.isDate(transaction.date, inSameDayAs: day) { return false }
             let digits = needle.filter { $0.isNumber }
             let moneyQuery = !digits.isEmpty && needle.allSatisfy { $0.isNumber || "., ₫đ".contains($0) }
             if moneyQuery && String(transaction.amount).contains(digits) { return true }

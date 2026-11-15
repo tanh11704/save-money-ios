@@ -1,11 +1,17 @@
 import SwiftData
 import SwiftUI
+import UserNotifications
+import WidgetKit
 
 /// A retained read context gives both tabs a fresh snapshot after every write.
 /// All arithmetic and validation are delegated to Services.
 @MainActor
 final class TransactionScreenStore: ObservableObject {
-    struct AddPrefill: Identifiable { let id = UUID(); let kind: TransactionKind?; let amount: Int64? }
+    struct AddPrefill: Identifiable {
+        let id = UUID(); let kind: TransactionKind?; let amount: Int64?
+        /// Shortcuts and URLs make the user pick the category; in-app buttons keep the remembered one.
+        var clearsSelection = true
+    }
     struct UndoAction: Identifiable {
         let id = UUID()
         let snapshot: TransactionSnapshot
@@ -33,6 +39,9 @@ final class TransactionScreenStore: ObservableObject {
     @Published private(set) var currentMonthReport: StatsService.Report?
     @Published private(set) var lastActivityByWallet: [UUID: Date] = [:]
     @Published private(set) var availableMonths: [ReportingMonth] = []
+    /// The cycle that just ended, shown once as an end-of-cycle summary.
+    @Published var pendingCycleSummary: ReportingMonth?
+    private var lastWidgetSnapshot: WidgetSnapshot?
     private var budgetCache: [ReportingMonth: Result<[BudgetService.Progress], Error>] = [:]
     private(set) var isWriting = false
     private let origin = UUID()
@@ -109,6 +118,162 @@ final class TransactionScreenStore: ObservableObject {
         reloadCount += 1
         #endif
         snapshotVersion = UUID()
+        publishWidgetSnapshot()
+        scheduleCardReminders()
+        scheduleDailyReminder()
+    }
+
+    var loggingStreak: Int { LoggingStreak.days(transactions: transactions) }
+
+    /// Recurring payments, installments and card due dates in the next `days` days, soonest first.
+    func upcoming(days: Int = 7, now: Date = Date()) -> [UpcomingItem] {
+        let calendar = LocalCalendar.calendar
+        let today = calendar.startOfDay(for: now)
+        guard let horizon = calendar.date(byAdding: .day, value: days, to: today) else { return [] }
+        var items: [UpcomingItem] = []
+        for rule in recurringRules where !rule.isPaused {
+            guard let next = RecurringPresentation.nextDate(rule), next >= today, next <= horizon else { continue }
+            items.append(UpcomingItem(id: "rule.\(rule.id.uuidString)", kind: rule.endDate == nil ? .recurring : .installment,
+                                      title: rule.title, date: next, amount: rule.amount))
+        }
+        for card in creditCards {
+            guard let status = cardStatus(card, now: now), status.debt > 0, status.dueDate <= horizon else { continue }
+            items.append(UpcomingItem(id: "card.\(card.id.uuidString)", kind: .cardDue, title: "Hạn thẻ \(card.name)", date: status.dueDate, amount: status.debt))
+        }
+        return items.sorted { $0.date == $1.date ? $0.title < $1.title : $0.date < $1.date }
+    }
+
+    /// 21:00 "Hôm nay bạn đã chi gì chưa?" — today if nothing is logged yet, otherwise tomorrow.
+    /// Rescheduled on every reload, so logging something cancels today's reminder.
+    func scheduleDailyReminder(now: Date = Date()) {
+        let id = "SaveMoney.dailyLogReminder"
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+        guard UserDefaults.standard.bool(forKey: AppearanceSettings.dailyReminderKey) else { return }
+        let calendar = LocalCalendar.calendar
+        guard var fire = calendar.date(bySettingHour: 21, minute: 0, second: 0, of: now) else { return }
+        if LoggingStreak.hasLoggedToday(transactions: transactions, now: now) || fire <= now {
+            fire = calendar.date(byAdding: .day, value: 1, to: fire)!
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "Hôm nay bạn đã chi gì chưa?"
+        let streak = loggingStreak
+        content.body = streak > 1 ? "Ghi lại để giữ chuỗi \(streak) ngày ghi chép." : "Mất vài giây để ghi lại chi tiêu hôm nay."
+        content.sound = .default
+        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+        components.calendar = calendar; components.timeZone = calendar.timeZone
+        center.add(UNNotificationRequest(identifier: id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)))
+    }
+
+
+    // MARK: Widget, cycle summary, cards and installments
+
+    /// Writes the widget summary to the App Group (no-op without one) and refreshes widgets on change.
+    func publishWidgetSnapshot(now: Date = Date()) {
+        let showsAmounts = UserDefaults.standard.bool(forKey: SharedContainer.showsAmountsKey)
+        let snapshot = WidgetSnapshot.make(transactions: transactions, totalBalance: netWorth?.ownWallets ?? 0,
+                                           rules: budgetRules, showsAmounts: showsAmounts, now: now)
+        var comparable = snapshot; comparable.generatedAt = lastWidgetSnapshot?.generatedAt ?? snapshot.generatedAt
+        guard comparable != lastWidgetSnapshot else { return }
+        if SharedContainer.write(snapshot) {
+            lastWidgetSnapshot = snapshot
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    /// Offers the summary of the cycle that just ended, once.
+    func checkCycleSummary(now: Date = Date()) {
+        guard pendingCycleSummary == nil else { return }
+        pendingCycleSummary = CycleSummaryTracker.pending(now: now, transactions: transactions)
+    }
+
+    func dismissCycleSummary() {
+        if let month = pendingCycleSummary { CycleSummaryTracker.markShown(month) }
+        pendingCycleSummary = nil
+    }
+
+    func flexibleAllowance(now: Date = Date()) -> StatsService.FlexibleAllowance? {
+        let month = ReportingMonth(containing: now)
+        guard let rule = BudgetService.activeRule(for: .total, in: month, rules: budgetRules) else { return nil }
+        return try? StatsService.flexibleAllowance(limit: rule.limit, month: month, transactions: transactions, now: now)
+    }
+
+    var installments: [InstallmentProgress] {
+        recurringRules.compactMap(InstallmentProgress.make).sorted {
+            if $0.isFinished != $1.isFinished { return !$0.isFinished }
+            return ($0.nextDate ?? .distantFuture) < ($1.nextDate ?? .distantFuture)
+        }
+    }
+
+    var creditCards: [Wallet] { wallets.filter { !$0.isArchived && WalletKind(rawValue: $0.kindRaw) == .card } }
+
+    func cardStatus(_ wallet: Wallet, now: Date = Date()) -> CreditCardStatus? {
+        guard let settings = CreditCardSettingsStore.load(wallet.id) else { return nil }
+        return CreditCardStatus.make(wallet: wallet, balance: balanceValues[wallet.id] ?? 0, settings: settings, transactions: transactions, now: now)
+    }
+
+    func saveCardSettings(_ settings: CreditCardSettings?, for walletID: UUID) {
+        CreditCardSettingsStore.save(settings, for: walletID)
+        if settings?.remindsBeforeDue == true { Task { _ = try? await SystemReminderClient().requestPermission() } }
+        scheduleCardReminders()
+        snapshotVersion = UUID()
+    }
+
+    /// 9:00 three days before and on the due date, only while the card has debt.
+    /// Never asks for permission here; that happens when reminders are turned on.
+    private func scheduleCardReminders(now: Date = Date()) {
+        let cards = wallets.filter { WalletKind(rawValue: $0.kindRaw) == .card }
+        var requests: [UNNotificationRequest] = []
+        for card in cards where !card.isArchived {
+            guard let settings = CreditCardSettingsStore.load(card.id), settings.remindsBeforeDue,
+                  let status = cardStatus(card, now: now), status.debt > 0 else { continue }
+            for daysBefore in [3, 0] {
+                guard let day = LocalCalendar.calendar.date(byAdding: .day, value: -daysBefore, to: status.dueDate),
+                      let fire = LocalCalendar.calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day), fire > now else { continue }
+                let content = UNMutableNotificationContent()
+                content.title = daysBefore == 0 ? "Hôm nay đến hạn thẻ \(card.name)" : "Còn \(daysBefore) ngày đến hạn thẻ \(card.name)"
+                let showsAmounts = UserDefaults.standard.bool(forKey: BudgetAlertService.showsAmountsKey)
+                content.body = showsAmounts ? "Dư nợ hiện tại \(MoneyFormatter.string(from: status.debt)). Hạn \(TransactionPresentation.shortDate(status.dueDate))."
+                                            : "Thanh toán trước \(TransactionPresentation.shortDate(status.dueDate)) để tránh phí trễ hạn."
+                content.sound = .default
+                var components = LocalCalendar.calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+                components.calendar = LocalCalendar.calendar; components.timeZone = LocalCalendar.calendar.timeZone
+                requests.append(UNNotificationRequest(identifier: "SaveMoney.cardDue.\(card.id.uuidString).\(daysBefore)", content: content,
+                                                      trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)))
+            }
+        }
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pending in
+            let stale = pending.map(\.identifier).filter { $0.hasPrefix("SaveMoney.cardDue.") }
+            center.removePendingNotificationRequests(withIdentifiers: stale)
+            requests.forEach { center.add($0) }
+        }
+    }
+
+    /// Saves an installment plan as a monthly recurring expense with an end date.
+    /// Without a chosen category, an expense category "Trả góp" is reused or created.
+    func saveInstallment(name: String, perPeriod: Int64, periods: Int, firstPayment: Date,
+                         wallet: Wallet?, category: Category?, editing id: UUID? = nil) throws {
+        guard let end = InstallmentProgress.endDate(start: firstPayment, periods: periods) else { throw InstallmentError.periods }
+        var chosen = category
+        if chosen == nil {
+            let name = "Trả góp"
+            if let existing = categories.first(where: { $0.kindRaw == TransactionKind.expense.rawValue && !$0.isArchived
+                && $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "vi_VN")) == .orderedSame }) {
+                chosen = existing
+            } else {
+                try saveCategory(CategoryDraft(name: name, kind: .expense, icon: "calendar.badge.clock"), editing: nil)
+                chosen = categories.first { $0.kindRaw == TransactionKind.expense.rawValue && !$0.isArchived && $0.name == name }
+            }
+        }
+        let draft = RecurringDraft(name: name, transaction: TransactionDraft(amount: perPeriod, kind: .expense, note: name, wallet: wallet, category: chosen),
+                                   frequency: .monthly, interval: 1, startDate: firstPayment, endDate: end)
+        try saveRecurring(draft, editing: id)
+    }
+
+    enum InstallmentError: LocalizedError {
+        case periods
+        var errorDescription: String? { "Số kỳ phải từ 1 đến \(InstallmentProgress.maximumPeriods)." }
     }
 
     @discardableResult
@@ -131,7 +296,13 @@ final class TransactionScreenStore: ObservableObject {
                 Task { await budgetAlerts.notify(month: month, before: before, after: after, categories: categories) }
             }
             if id == nil, let transaction = transactions.first(where: { $0.id == savedID }) {
-                undoAction = UndoAction(snapshot: TransactionSnapshot(transaction), restore: false, message: "Đã lưu " + TransactionPresentation.amount(transaction) + " · " + TransactionPresentation.title(transaction))
+                var message = "Đã lưu " + TransactionPresentation.amount(transaction) + " · " + TransactionPresentation.title(transaction)
+                // Immediate feedback on what the expense means for today.
+                if draft.kind == .expense, LocalCalendar.calendar.isDateInToday(draft.date), let allowance = flexibleAllowance() {
+                    message += allowance.leftToday >= 0 ? " · hôm nay còn \(MoneyFormatter.compact(allowance.leftToday))"
+                                                        : " · hôm nay vượt \(MoneyFormatter.compact(-allowance.leftToday))"
+                }
+                undoAction = UndoAction(snapshot: TransactionSnapshot(transaction), restore: false, message: message)
             }
         } catch { errorMessage = "Đã lưu, nhưng chưa tải lại được số dư. Tải lại lịch sử." }
         return savedID
@@ -224,14 +395,33 @@ final class TransactionScreenStore: ObservableObject {
         } catch { errorMessage = "Không thể hoàn tác: " + TransactionPresentation.errorMessage(error) }
     }
 
-    func saveWallet(_ draft: WalletDraft, editing id: UUID?) throws {
+    @discardableResult
+    func saveWallet(_ draft: WalletDraft, editing id: UUID?) throws -> UUID {
         isWriting = true
         defer { isWriting = false }
         guard let container else { throw ManagementError.missingRecord }
         let service = WalletService(container: container, origin: origin)
-        if let id { try service.update(id: id, with: draft) }
-        else { _ = try service.create(draft) }
+        let savedID: UUID
+        if let id { try service.update(id: id, with: draft); savedID = id }
+        else { savedID = try service.create(draft) }
         refreshAfterManagementWrite()
+        return savedID
+    }
+
+    /// Display preferences kept outside SwiftData; republishes so cards and forms refresh.
+    func setWalletColor(_ index: Int?, for id: UUID) {
+        WalletAppearance.setColorIndex(index, for: id)
+        snapshotVersion = UUID()
+    }
+
+    var mainWalletID: UUID? {
+        guard let id = MainWallet.id, wallets.contains(where: { $0.id == id && $0.isOwn && !$0.isArchived }) else { return nil }
+        return id
+    }
+
+    func setMainWallet(_ id: UUID?) {
+        MainWallet.id = id
+        snapshotVersion = UUID()
     }
 
     func archiveWallet(_ id: UUID) throws {

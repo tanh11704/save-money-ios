@@ -214,15 +214,33 @@ private struct StatsReportSections: View {
         switch result {
         case .success(let report):
             Section("Tóm tắt") {
-                summary("Chênh lệch", amount: report.differenceText, negative: report.difference < 0, delta: comparison?.balance, label: comparison?.label)
-                ViewThatFits(in: .horizontal) {
-                    HStack {
-                        summary("Thu", amount: report.incomeText, delta: comparison?.income, label: comparison?.label)
-                        summary("Chi", amount: report.expenseText, delta: comparison?.expense, label: comparison?.label)
+                // One headline figure; income and expense sit underneath at a smaller size.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(report.difference >= 0 ? "Còn lại sau chi tiêu" : "Chi nhiều hơn thu").font(.subheadline).foregroundStyle(.secondary)
+                    Text(report.differenceText).font(.system(size: 38, weight: .bold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(report.difference < 0 ? Color("Expense") : .primary)
+                        .lineLimit(1).minimumScaleFactor(0.4)
+                        .contentTransition(.numericText())
+                    if let balance = comparison?.balance, !balance.isEmpty {
+                        TrendBadge(delta: balance.badgeText + " " + (comparison?.label ?? ""))
                     }
-                    VStack {
-                        summary("Thu", amount: report.incomeText, delta: comparison?.income, label: comparison?.label)
-                        summary("Chi", amount: report.expenseText, delta: comparison?.expense, label: comparison?.label)
+                }
+                .padding(.vertical, 4)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Chênh lệch \(report.differenceText), \(comparison?.balance?.text ?? "") \(comparison?.label ?? "")".replacingOccurrences(of: "₫", with: "đồng"))
+                HStack(spacing: Spacing.m) {
+                    miniSummary("Thu", amount: report.income, tint: Color("Income"), delta: comparison?.income, label: comparison?.label)
+                    Divider()
+                    miniSummary("Chi", amount: report.expense, tint: Color("Expense"), delta: comparison?.expense, label: comparison?.label)
+                }
+            }
+            let insights = StatsInsight.make(report: report, comparison: comparison, kind: period.kind)
+            if !insights.isEmpty {
+                Section("Nhận xét") {
+                    ForEach(insights) { insight in
+                        Label { Text(insight.text).font(.subheadline).fixedSize(horizontal: false, vertical: true) } icon: {
+                            Image(systemName: insight.icon).foregroundStyle(.tint)
+                        }
                     }
                 }
             }
@@ -244,23 +262,61 @@ private struct StatsReportSections: View {
             }
             categorySection("Chi theo danh mục", rows: report.expenses, empty: "Không có khoản chi.", report: report, comparison: comparison)
             if report.expense > 0 {
-                Section("Chi theo ngày") {
-                    switch Result(catching: { try StatsService.dailyExpenses(period: period, transactions: transactions) }) {
-                    case .success(let days):
-                        Card { StatsDailyChart(days: days, period: period, allowance: BudgetService.activeRule(for: .total, in: month, rules: store.budgetRules)
-                            .map { StatsService.dailyAllowance(limit: $0.limit, month: month) }) }
-                    case .failure(let error): Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red)
-                    }
+                Section {
+                    DisclosureGroup(isExpanded: $showsDaily) {
+                        switch Result(catching: { try StatsService.dailyExpenses(period: period, transactions: transactions) }) {
+                        case .success(let days):
+                            StatsDailyChart(days: days, period: period, allowance: BudgetService.activeRule(for: .total, in: month, rules: store.budgetRules)
+                                .map { StatsService.dailyAllowance(limit: $0.limit, month: month) })
+                                .padding(.vertical, Spacing.s)
+                        case .failure(let error): Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red)
+                        }
+                    } label: { Text("Chi theo ngày").font(.headline) }
+                    .frame(minHeight: 44)
                 }
             }
             trendSection
-            categorySection("Thu theo danh mục", rows: report.incomes, empty: "Không có khoản thu.")
+            Section {
+                DisclosureGroup(isExpanded: $showsIncome) {
+                    if report.incomes.isEmpty { Text("Không có khoản thu.").foregroundStyle(.secondary) }
+                    ForEach(report.incomes) { row in
+                        Button { select(row.key) } label: {
+                            LedgerRow(icon: row.icon, title: row.name, subtitle: row.percentageText, amount: MoneyFormatter.string(from: row.amount), categoryIcon: true)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(row.name), \(MoneyFormatter.string(from: row.amount)), \(row.percentageText)")
+                    }
+                } label: {
+                    HStack { Text("Thu theo danh mục").font(.headline); Spacer(); Text(MoneyFormatter.compact(report.income)).monospacedDigit().foregroundStyle(.secondary) }
+                }
+                .frame(minHeight: 44)
+            }
+            if !isWeek, period.interval.end <= Date(), !report.isEmpty {
+                Section {
+                    NavigationLink { CycleSummaryView(store: store, month: month) } label: {
+                        IconRow(icon: "sparkles", tint: .purple, title: "Tổng kết \(month.shortName)")
+                    }
+                }
+            }
         case .failure(let error):
             Section { Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red) }
         }
     }
 
     @State private var showsUnspentBudgets = false
+    @AppStorage("SaveMoney.stats.showsDaily") private var showsDaily = false
+    @AppStorage("SaveMoney.stats.showsIncome") private var showsIncome = false
+
+    private func miniSummary(_ title: String, amount: Int64, tint: Color, delta: StatsService.Comparison.Delta?, label: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: title == "Thu" ? "arrow.up.circle.fill" : "arrow.down.circle.fill").font(.caption.weight(.semibold)).foregroundStyle(tint)
+            Text(MoneyFormatter.compact(amount)).font(.title3.bold()).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+            if let delta, !delta.isEmpty { Text(delta.badgeText).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title) \(MoneyFormatter.string(from: amount)), \(delta?.text ?? "") \(label ?? "")".replacingOccurrences(of: "₫", with: "đồng"))
+    }
 
     @ViewBuilder private var trendSection: some View {
         let count = isWeek ? 8 : 6
@@ -278,6 +334,10 @@ private struct StatsReportSections: View {
         let active = progress.filter { $0.scope == .total || $0.spent != 0 }
         let unspent = progress.filter { $0.scope != .total && $0.spent == 0 }
         return Section("Ngân sách") {
+            if period.contains(Date()), let allowance = store.flexibleAllowance() { FlexibleAllowanceCard(allowance: allowance) }
+            if let total = progress.first(where: { $0.scope == .total }), let pace = BudgetPace.make(spent: total.spent, limit: total.limit, month: month) {
+                PaceBar(pace: pace).padding(.vertical, 4)
+            }
             if let error = store.budgetError(in: month) { Callout(level: .danger, title: "Chưa tính được ngân sách", message: error) }
             ForEach(active, id: \.scope) { budgetRow($0) }
             if !unspent.isEmpty {
@@ -309,15 +369,9 @@ private struct StatsReportSections: View {
             .accessibilityValue(Text(value.fraction, format: .percent.precision(.fractionLength(0))))
     }
 
-    private func summary(_ title: String, amount: String, negative: Bool = false, delta: StatsService.Comparison.Delta? = nil, label: String? = nil) -> some View {
-        StatTile(title: title, value: amount, icon: title == "Thu" ? "arrow.up.circle" : title == "Chi" ? "arrow.down.circle" : "equal.circle", trend: delta.flatMap { $0.isEmpty ? nil : $0.badgeText + " " + (label ?? "") }, valueTint: negative ? Color("Expense") : .primary)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title), \(amount), \(delta?.text ?? "") \(label ?? "")".replacingOccurrences(of: "₫", with: "đồng"))
-    }
-
     private func categorySection(_ title: String, rows: [StatsService.CategoryTotal], empty: String, report: StatsService.Report? = nil, comparison: StatsService.Comparison? = nil) -> some View {
         Section(title) {
-            if let report, report.expense > 0 { StatsCategoryChart(slices: StatsService.expenseSlices(report), total: report.expense) }
+            if let report, report.expense > 0 { StatsCategoryChart(slices: StatsService.expenseSlices(report), total: report.expense, onOpen: select) }
             if rows.isEmpty { Text(empty).foregroundStyle(.secondary) }
             ForEach(rows) { row in
                 Button { select(row.key) } label: {

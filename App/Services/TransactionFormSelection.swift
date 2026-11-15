@@ -14,13 +14,16 @@ struct TransactionFormSelection {
         }
     }
 
+    /// `preferredWalletID` (the main wallet) wins over the last used wallet for expenses and incomes.
     static func restoring(_ input: TransactionDraft, wallets: [Wallet], categories: [Category],
-                          recent: RecentSelectionStore, preserveWallet: Bool = false) -> TransactionDraft {
+                          recent: RecentSelectionStore, preserveWallet: Bool = false,
+                          preferredWalletID: UUID? = MainWallet.id) -> TransactionDraft {
         var draft = input.changingKind(to: input.kind)
         let selection = recent.selection(for: draft.kind, wallets: wallets, categories: categories)
         let active = self.wallets(wallets)
         if !preserveWallet {
-            draft.wallet = active.first { $0.id == selection.walletID } ?? active.first
+            let preferred = draft.kind == .transfer ? nil : active.first { $0.id == preferredWalletID && $0.isOwn }
+            draft.wallet = preferred ?? active.first { $0.id == selection.walletID } ?? active.first
         }
         let availableCategories = self.categories(categories, kind: draft.kind, recentID: selection.categoryID)
         draft.category = availableCategories.first { $0.id == selection.categoryID } ?? availableCategories.first

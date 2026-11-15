@@ -12,6 +12,9 @@ struct WalletFormView: View {
     @State private var magnitude: Int64
     @State private var isDebt: Bool
     @State private var saveError: String?
+    /// Nil = colour by wallet kind.
+    @State private var colorIndex: Int?
+    @State private var isMain: Bool
     private enum Field: Hashable { case name }
     @FocusState private var focus: Field?
 
@@ -22,6 +25,13 @@ struct WalletFormView: View {
         _kind = State(initialValue: WalletKind(rawValue: original?.kindRaw ?? "cash") ?? .cash)
         _magnitude = State(initialValue: WalletService.magnitude(of: original?.openingBalance ?? 0))
         _isDebt = State(initialValue: (original?.openingBalance ?? 0) < 0)
+        _colorIndex = State(initialValue: original.flatMap { WalletAppearance.colorIndex(for: $0.id) })
+        _isMain = State(initialValue: original.map { $0.id == MainWallet.id } ?? false)
+    }
+
+    private var previewIndex: Int {
+        if let colorIndex { return colorIndex }
+        switch kind { case .cash: return 0; case .bank: return 2; case .card: return 4; default: return 7 }
     }
 
     private func draft() throws -> WalletDraft {
@@ -58,6 +68,30 @@ struct WalletFormView: View {
                     FieldLabel("Loại ví")
                     ChoiceChips(options: Self.kindOptions, selection: $kind)
                         .accessibilityIdentifier("wallet.kind")
+                }
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    FieldLabel("Màu thẻ")
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(0..<WalletPalette.gradients.count, id: \.self) { index in
+                                Button { colorIndex = index } label: {
+                                    Circle().fill(WalletPalette.gradient(index: index)).frame(width: 40, height: 40)
+                                        .overlay(Circle().stroke(Color.primary, lineWidth: previewIndex == index ? 3 : 0).padding(-4))
+                                        .overlay { if previewIndex == index { Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(.white) } }
+                                        .frame(minWidth: 48, minHeight: 48)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Màu \(WalletPalette.names[index])")
+                                .accessibilityAddTraits(previewIndex == index ? .isSelected : [])
+                            }
+                        }.padding(.horizontal, 4)
+                    }
+                    Toggle(isOn: $isMain) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label("Ví chính", systemImage: "star.fill")
+                            Text("Khoản chi và thu mới mặc định dùng ví này.").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }.frame(minHeight: 44)
                 }
                 VStack(alignment: .leading, spacing: Spacing.s) {
                     FieldLabel("Số dư ban đầu")
@@ -127,7 +161,11 @@ struct WalletFormView: View {
     }
 
     private func save() {
-        do { try store.saveWallet(draft(), editing: original?.id); dismiss() }
-        catch { saveError = TransactionPresentation.errorMessage(error) }
+        do {
+            let id = try store.saveWallet(draft(), editing: original?.id)
+            store.setWalletColor(colorIndex, for: id)
+            if isMain { store.setMainWallet(id) } else if MainWallet.id == id { store.setMainWallet(nil) }
+            dismiss()
+        } catch { saveError = TransactionPresentation.errorMessage(error) }
     }
 }

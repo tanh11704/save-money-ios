@@ -11,6 +11,7 @@ struct TransactionHistoryView: View {
     @State private var days: [TransactionGrouping.Day] = []
     @State private var dayFlows: [Date: String] = [:]
     @State private var dayFlowLabels: [Date: String] = [:]
+    @AppStorage("SaveMoney.history.showsCalendar") private var showsCalendar = false
     private struct RefreshKey: Equatable { let filter: HistoryFilter; let snapshot: UUID }
 
     var body: some View {
@@ -25,8 +26,16 @@ struct TransactionHistoryView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                                 .accessibilityLabel("\(ReportingMonth().shortName.capitalizedFirst), thu \(report.incomeText), chi \(report.expenseText)")
                         }
+                        if let allowance = store.flexibleAllowance() { FlexibleAllowanceCard(allowance: allowance, compact: true) }
                     }
                 }.accessibilityIdentifier("history.totalBalance")
+            }
+            if showsCalendar && !store.transactions.isEmpty {
+                Section {
+                    SpendingCalendarView(transactions: store.transactions,
+                                         month: Binding(get: { filter.month ?? ReportingMonth() }, set: { filter.month = $0 }),
+                                         selectedDay: $filter.day, current: ReportingMonth())
+                }
             }
             // Filters live in the list: a top safe-area inset collides with the search field.
             Section {
@@ -73,6 +82,17 @@ struct TransactionHistoryView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Lịch sử")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showsCalendar.toggle()
+                    if !showsCalendar { filter.day = nil }
+                } label: {
+                    Image(systemName: showsCalendar ? "list.bullet" : "calendar").frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel(showsCalendar ? "Ẩn lịch chi tiêu" : "Xem lịch chi tiêu")
+            }
+        }
         .refreshable { reload() }
         .sheet(item: $editing) { transaction in
             NavigationStack {
@@ -125,7 +145,11 @@ struct TransactionHistoryView: View {
                         Button(month.title) { filter.month = month }
                     }
                 } label: { Label(filter.month?.title ?? "Tháng", systemImage: "calendar").frame(minHeight: 44) }
-                if filter.month != nil { Button { filter.month = nil } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Bỏ lọc tháng") }
+                if filter.month != nil { Button { filter.month = nil; filter.day = nil } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Bỏ lọc tháng") }
+                if let day = filter.day {
+                    Button { filter.day = nil } label: { Label(StatsPeriod.dayMonth(day), systemImage: "xmark.circle.fill").frame(minHeight: 44) }
+                        .accessibilityLabel("Bỏ lọc ngày \(StatsPeriod.dayMonth(day))")
+                }
             }.font(.subheadline).controlSize(.small).buttonStyle(.bordered)
                 .padding(.vertical, 8)
         }

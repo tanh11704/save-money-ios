@@ -17,35 +17,52 @@ struct ContentView: View {
     @State private var selectedTab = 0
     @State private var navigationGeneration = UUID()
     @AppStorage(MonthCycle.startDayKey) private var monthStartDay = 1
+    @AppStorage(SharedContainer.showsAmountsKey) private var widgetShowsAmounts = false
+    @AppStorage(AppearanceSettings.accentKey) private var accentRaw = AppearanceSettings.Accent.standard.rawValue
+    @AppStorage(AppearanceSettings.startScreenKey) private var startScreenRaw = AppearanceSettings.StartScreen.overview.rawValue
+    @AppStorage(AppearanceSettings.dailyReminderKey) private var dailyReminder = false
+    @State private var showingSettings = false
+    @State private var appliedStartScreen = false
+
+    /// Tab order: Tổng quan · Lịch sử · Thêm (centre) · Thống kê · Ví. Settings live behind the gear on Tổng quan.
+    private enum Tab { static let overview = 0, history = 1, add = 2, stats = 3, wallets = 4 }
+    private var accent: Color? { (AppearanceSettings.Accent(rawValue: accentRaw) ?? .standard).color }
 
     var body: some View {
         Group {
             if store.ready {
                 TabView(selection: $selectedTab) {
                     NavigationStack {
-                        TransactionFormView(store: store, onNeedsWallet: { selectedTab = 2 })
+                        OverviewView(store: store, settings: settings, lock: lock, showingSettings: $showingSettings,
+                                     onAdd: { kind in store.addPrefill = .init(kind: kind, amount: nil, clearsSelection: false); selectedTab = Tab.add },
+                                     onShowHistory: { selectedTab = Tab.history }, onShowStats: { selectedTab = Tab.stats })
                     }
-                    .tabItem { Label("Thêm", systemImage: "plus.circle.fill") }
-                    .tag(0)
+                    .tabItem { Label("Tổng quan", systemImage: "house.fill") }
+                    .badge(settings.health.level == .critical ? "!" : nil)
+                    .tag(Tab.overview)
                     NavigationStack {
-                        TransactionHistoryView(store: store, onAdd: { selectedTab = 0 })
+                        TransactionHistoryView(store: store, onAdd: { selectedTab = Tab.add })
                     }
                     .tabItem { Label("Lịch sử", systemImage: "list.bullet") }
-                    .tag(1)
+                    .tag(Tab.history)
                     NavigationStack {
-                        WalletListView(store: store)
+                        TransactionFormView(store: store, onNeedsWallet: { selectedTab = Tab.wallets })
                     }
-                    .tabItem { Label("Ví", systemImage: "wallet.bifold") }
-                    .tag(2)
+                    .tabItem { Label("Thêm", systemImage: "plus.circle.fill") }
+                    .tag(Tab.add)
                     NavigationStack {
                         StatsView(store: store)
                     }
                     .tabItem { Label("Thống kê", systemImage: "chart.bar.xaxis") }
-                    .tag(3)
-                    NavigationStack { SettingsView(store: settings, lock: lock) }
-                        .tabItem { Label("Cài đặt", systemImage: "gearshape") }
-                        .badge(settings.health.level == .critical ? "!" : nil).tag(4)
-                }.id(navigationGeneration)
+                    .tag(Tab.stats)
+                    NavigationStack {
+                        WalletListView(store: store)
+                    }
+                    .tabItem { Label("Ví", systemImage: "wallet.bifold") }
+                    .tag(Tab.wallets)
+                }
+                .id(navigationGeneration)
+                .tint(accent)
             } else {
                 VStack(spacing: 16) {
                     if let message = store.errorMessage {
@@ -60,7 +77,19 @@ struct ContentView: View {
             }
         }
         .onChange(of: router.pending?.id, initial: true) { _, _ in consumeRoute() }
-        .onChange(of: store.ready) { _, _ in consumeRoute() }
+        .onChange(of: store.ready) { _, ready in
+            if ready && !appliedStartScreen {
+                appliedStartScreen = true
+                selectedTab = startScreenRaw == AppearanceSettings.StartScreen.add.rawValue ? Tab.add : Tab.overview
+            }
+            consumeRoute()
+            if ready { store.checkCycleSummary() }
+        }
+        .onChange(of: dailyReminder) { _, _ in store.scheduleDailyReminder() }
+        .onChange(of: widgetShowsAmounts) { _, _ in store.publishWidgetSnapshot() }
+        .sheet(item: Binding(get: { store.pendingCycleSummary }, set: { if $0 == nil { store.dismissCycleSummary() } })) { month in
+            NavigationStack { CycleSummaryView(store: store, month: month) { store.dismissCycleSummary() } }
+        }
         // Month cycles moved: rebuild month reports, budget progress and the month list.
         .onChange(of: monthStartDay) { _, _ in
             guard store.ready else { return }
@@ -70,7 +99,7 @@ struct ContentView: View {
             store.receiveLedgerChange(notification)
         }
         .onReceive(NotificationCenter.default.publisher(for: .ledgerDidRestore)) { _ in
-            selectedTab = 0
+            selectedTab = Tab.overview
             navigationGeneration = UUID()
             store.clearUndo()
             do { try store.reload() } catch { store.errorMessage = "Đã khôi phục, nhưng chưa tải lại được dữ liệu. Hãy mở lại app." }
@@ -78,6 +107,11 @@ struct ContentView: View {
         .overlay(alignment: .top) {
             if let action = store.undoAction {
                 HStack {
+                    if !action.restore {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color("Income"))
+                            .symbolEffect(.pulse, options: .repeat(2))
+                            .accessibilityHidden(true)
+                    }
                     Text(action.message)
                         .font(.subheadline).lineLimit(2).minimumScaleFactor(0.8)
                     Button("Hoàn tác") { store.undo() }.frame(minHeight: 44)
@@ -97,7 +131,7 @@ struct ContentView: View {
                 }.padding(8).background(.regularMaterial)
             } else if let error = settings.scheduler.lastError, dismissedBanner != error {
                 VStack {
-                    Callout(level: .danger, title: "Sao lưu cần kiểm tra", message: error, actionTitle: "Xem") { selectedTab = 4 }
+                    Callout(level: .danger, title: "Sao lưu cần kiểm tra", message: error, actionTitle: "Xem") { selectedTab = Tab.overview; showingSettings = true }
                     Button("Đóng", systemImage: "xmark") { dismissedBanner = error }.frame(minHeight: 44)
                 }.padding(8).background(.regularMaterial)
             }
@@ -114,15 +148,16 @@ struct ContentView: View {
             guard phase == .active, store.ready else { return }
             do { try store.reload() }
             catch { store.errorMessage = TransactionPresentation.errorMessage(error) }
+            store.checkCycleSummary()
         }
     }
     private func consumeRoute() {
         guard store.ready, let route = router.take(unlocked: lock.state == .unlocked) else { return }
         switch route {
-        case .transfer(let from): selectedTab = 2; transferSourceID = from; showingTransfer = true
-        case .history: selectedTab = 1
-        case .stats: selectedTab = 3
-        case .add(let kind, let amount): selectedTab = 0; store.addPrefill = .init(kind: kind, amount: amount)
+        case .transfer(let from): selectedTab = Tab.wallets; transferSourceID = from; showingTransfer = true
+        case .history: selectedTab = Tab.history
+        case .stats: selectedTab = Tab.stats
+        case .add(let kind, let amount): selectedTab = Tab.add; store.addPrefill = .init(kind: kind, amount: amount)
         }
     }
 

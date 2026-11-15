@@ -19,12 +19,16 @@ struct TransferSheet: View {
     @State private var keypadTarget = KeypadTarget.amount
     private enum Field: Hashable { case note }
     @FocusState private var focus: Field?
-    init(store: TransactionScreenStore, source: Wallet? = nil, mode: Mode = .transfer, amount: Int64 = 0) {
+    init(store: TransactionScreenStore, source: Wallet? = nil, destination: Wallet? = nil, mode: Mode = .transfer, amount: Int64 = 0) {
         self.store = store
         self.mode = mode
         let wallets = store.wallets.filter { $0.isOwn }
         var draft = TransactionFormSelection.restoring(TransactionDraft(kind: .transfer), wallets: wallets, categories: store.categories, recent: store.recent)
         if let source, source.isOwn { draft = TransactionFormSelection.selectingWallet(source, in: draft, available: wallets) }
+        if let destination, destination.isOwn, !destination.isArchived {
+            draft.toWallet = destination
+            if draft.wallet?.id == destination.id { draft.wallet = wallets.first { !$0.isArchived && $0.id != destination.id } }
+        }
         if case .debt(let person, let action) = mode {
             let own = draft.wallet ?? wallets.first { !$0.isArchived }
             draft.wallet = action == .lend || action == .repay ? own : person

@@ -12,12 +12,13 @@ struct WalletDetailView: View {
     @State private var adding: AddKind?
     @State private var editingTransaction: Transaction?
     @State private var kind: String = "all"
+    @State private var payingCard = false
     private struct AddKind: Identifiable { let kind: TransactionKind; var id: String { kind.rawValue } }
     private var transactions: [Transaction] { WalletLedger.transactions(for: wallet, in: store.transactions).filter { kind == "all" || $0.kindRaw == kind } }
     var body: some View {
         List {
             Section {
-                WalletCard(wallet: wallet, balance: store.balanceValues[wallet.id])
+                WalletCard(wallet: wallet, balance: store.balanceValues[wallet.id], isMain: wallet.id == store.mainWalletID)
                 if !wallet.isArchived {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                         actionTile("Chi", icon: "arrow.down.circle.fill", tint: Color("Expense")) { adding = AddKind(kind: .expense) }
@@ -32,6 +33,9 @@ struct WalletDetailView: View {
                 Picker("Lọc giao dịch", selection: $kind) {
                     Text("Tất cả").tag("all"); Text("Chi").tag("expense"); Text("Thu").tag("income"); Text("Chuyển").tag("transfer")
                 }.pickerStyle(.menu).frame(minHeight: 44)
+            }
+            if WalletKind(rawValue: wallet.kindRaw) == .card && !wallet.isArchived {
+                CreditCardSection(store: store, wallet: wallet, payingCard: $payingCard)
             }
             let balances = try? WalletLedger.runningBalances(wallet: wallet, transactions: store.transactions)
             ForEach(TransactionGrouping.group(transactions)) { day in
@@ -51,6 +55,12 @@ struct WalletDetailView: View {
         .toolbar { ToolbarItem(placement: .primaryAction) { Button("Sửa") { editingWallet = true }.frame(minHeight: 44) } }
         .sheet(isPresented: $editingWallet) { NavigationStack { WalletFormView(store: store, original: wallet) } }
         .sheet(isPresented: $showingTransfer) { NavigationStack { TransferSheet(store: store, source: wallet) } }
+        .sheet(isPresented: $payingCard) {
+            NavigationStack {
+                TransferSheet(store: store, source: store.wallets.first { $0.isOwn && !$0.isArchived && $0.id != wallet.id && WalletKind(rawValue: $0.kindRaw) == .bank },
+                              destination: wallet, amount: min(store.cardStatus(wallet)?.debt ?? 0, MoneyFormatter.maximumInput))
+            }
+        }
         .sheet(isPresented: $adjusting) { NavigationStack { BalanceAdjustmentSheet(store: store, wallet: wallet) } }
         .sheet(item: $adding) { selection in NavigationStack { TransactionFormView(store: store, prefillKind: selection.kind, prefillWallet: wallet) } }
         .sheet(item: $editingTransaction) { transaction in NavigationStack { TransactionFormView(store: store, original: transaction) } }

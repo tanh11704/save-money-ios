@@ -18,6 +18,8 @@ struct AmountText: View {
     var kind: TransactionKind? = nil
     var style: Font = .headline
     var prefix = ""
+    /// Overrides the kind colour, e.g. white on a coloured wallet card.
+    var tint: Color? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var text: String {
         let formatted = MoneyFormatter.string(from: amount)
@@ -26,7 +28,7 @@ struct AmountText: View {
     }
     var body: some View {
         Text(prefix + text).font(style).monospacedDigit().lineLimit(1).minimumScaleFactor(0.25)
-            .foregroundStyle(kind.map { Color($0 == .income ? "Income" : $0 == .expense ? "Expense" : "Transfer") } ?? .primary)
+            .foregroundStyle(tint ?? kind.map { Color($0 == .income ? "Income" : $0 == .expense ? "Expense" : "Transfer") } ?? .primary)
             .contentTransition(reduceMotion ? .identity : .numericText())
     }
 }

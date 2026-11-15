@@ -154,8 +154,10 @@ struct TransactionFormView: View {
                 draft = TransactionFormSelection.restoring(draft.changingKind(to: kind), wallets: store.wallets.filter { $0.isOwn }, categories: store.categories, recent: store.recent)
             }
             if let amount = prefill.amount { expression = AmountExpression(amount: amount); draft.amount = amount }
-            routedPrefillNeedsSelection = true
-            draft.category = nil; draft.toWallet = nil
+            if prefill.clearsSelection {
+                routedPrefillNeedsSelection = true
+                draft.category = nil; draft.toWallet = nil
+            }
             saveError = nil; store.addPrefill = nil
         }
         .onChange(of: draft.kind) { _, kind in

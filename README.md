@@ -927,6 +927,26 @@ trước khi cài. Extension có bundle ID riêng; kiểm tra số App ID và kh
 làm mới trên chính máy bạn. Người dùng đã chọn thử K0: cài, thêm widget,
 làm mới chữ ký và xác nhận widget còn mở app được. Chỉ sau kết quả đó mới làm K1.
 
+**K1 (15/11/2026, chưa build/test, chưa thử trên máy thật):** theo yêu cầu chủ dự án, widget đọc
+một file tóm tắt `widget-snapshot.json` trong App Group (app ghi sau mỗi lần tải lại). Store
+SwiftData không chuyển vào App Group. Mặc định không có số tiền, chỉ phần trăm ngân sách; bật
+"Hiện số tiền trên widget" trong Cài đặt để thấy "Hôm nay còn được tiêu". Màn hình khóa không
+bao giờ hiện số tiền. IPA widget được ký ad-hoc với entitlement App Group để SideStore đăng ký
+nhóm; ID nhóm thật đọc từ `embedded.mobileprovision` vì SideStore có thể đổi tên. Không có App
+Group thì widget tự quay về các nút mở nhanh.
+
+Cùng đợt: hạn mức linh hoạt "Hôm nay còn được tiêu", tổng kết cuối kỳ (hiện một lần khi sang kỳ
+mới, xem lại trong Thống kê), "Trả góp & thẻ" (trả góp = quy tắc định kỳ có ngày kết thúc; thiết
+lập thẻ tín dụng lưu UserDefaults, không nằm trong backup). Không đổi schema hay định dạng backup.
+
+**UI/UX 15/11/2026 (chưa build/test):** tab Tổng quan · Lịch sử · Thêm · Thống kê · Ví; Cài đặt
+nằm sau nút bánh răng ở Tổng quan (có chấm đỏ khi backup nguy cấp). Tổng quan có thẻ "Hôm nay còn
+được tiêu" kèm thanh tốc độ chi, nút nhanh, chuỗi ngày ghi chép, dải ví màu, mục sắp tới 7 ngày và
+giao dịch gần đây. Ví dạng thẻ màu (chọn màu khi sửa ví), ví chính (khoản chi/thu mới mặc định dùng
+ví này), lịch nhiệt chi tiêu trong Lịch sử, Thống kê có một số chính + nhận xét + biểu đồ tròn chạm
+được + phần gập. Cài đặt → Giao diện & thói quen: màu chủ đạo, màn mở đầu, nhắc ghi chép 21:00.
+Màu ví, ví chính và các tùy chọn giao diện lưu UserDefaults, không nằm trong backup.
+
 Kết quả rà ảnh và các bước thiết bị còn mở: [checklist QA](docs/qa/phase3-accessibility.md).
 Ảnh render nằm trong xcresult và `build/AccessibilityReview/`; ảnh tĩnh không
 xác nhận cuộn/chạm hay VoiceOver. Có preview AX5 tối và chữ nhỏ nhất sáng.

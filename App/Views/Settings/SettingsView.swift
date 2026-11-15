@@ -8,6 +8,11 @@ struct SettingsView: View {
     @ObservedObject var lock: AppLockService
     @AppStorage(BudgetAlertService.showsAmountsKey) private var showsNotificationAmounts = false
     @AppStorage(MonthCycle.startDayKey) private var monthStartDay = 1
+    @AppStorage(SharedContainer.showsAmountsKey) private var widgetShowsAmounts = false
+    @AppStorage(AppearanceSettings.accentKey) private var accentRaw = AppearanceSettings.Accent.standard.rawValue
+    @AppStorage(AppearanceSettings.startScreenKey) private var startScreenRaw = AppearanceSettings.StartScreen.overview.rawValue
+    @AppStorage(AppearanceSettings.dailyReminderKey) private var dailyReminder = false
+    @State private var reminderMessage: String?
     @State private var importing = false
     @State private var sharing: ShareItem?
     private struct ShareItem: Identifiable { let id = UUID(); let url: URL }
@@ -42,6 +47,34 @@ struct SettingsView: View {
                      ? "Thống kê và ngân sách tính theo tháng dương lịch. Chọn ngày nhận lương để tính từ kỳ lương này đến kỳ lương sau."
                      : "Kỳ hiện tại: \(ReportingMonth().title). Ngày lớn hơn số ngày của tháng sẽ lấy ngày cuối tháng.")
             }
+            Section {
+                Picker(selection: $accentRaw) {
+                    ForEach(AppearanceSettings.Accent.allCases) { accent in
+                        Label { Text(accent.title) } icon: {
+                            Image(systemName: "circle.fill").foregroundStyle(accent.color ?? Color.accentColor)
+                        }.tag(accent.rawValue)
+                    }
+                } label: { IconRow(icon: "paintpalette", tint: .pink, title: "Màu chủ đạo") }
+                    .pickerStyle(.navigationLink).frame(minHeight: 44)
+                Picker(selection: $startScreenRaw) {
+                    ForEach(AppearanceSettings.StartScreen.allCases) { Text($0.title).tag($0.rawValue) }
+                } label: { IconRow(icon: "rectangle.portrait.and.arrow.forward", tint: .teal, title: "Màn hình mở đầu") }
+                    .frame(minHeight: 44)
+                Toggle(isOn: Binding(get: { dailyReminder }, set: { enable in
+                    guard enable else { dailyReminder = false; reminderMessage = nil; return }
+                    Task {
+                        let granted = (try? await SystemReminderClient().requestPermission()) == true
+                        dailyReminder = granted
+                        reminderMessage = granted ? nil : "Hãy cho phép thông báo của SaveMoney trong Cài đặt iPhone."
+                    }
+                })) { VStack(alignment: .leading, spacing: 4) {
+                    IconRow(icon: "bell.badge", tint: .orange, title: "Nhắc ghi chép lúc 21:00")
+                    Text("Chỉ nhắc khi hôm nay chưa ghi khoản nào.").font(.footnote).foregroundStyle(.secondary)
+                } }.frame(minHeight: 44)
+                if let reminderMessage { Text(reminderMessage).font(.footnote).foregroundStyle(.red) }
+            } header: { Text("Giao diện & thói quen") } footer: {
+                Text("\"Thêm giao dịch\" mở thẳng bàn phím nhập số tiền mỗi khi mở app. Màu chủ đạo áp dụng cho nút, tab và thẻ Tổng quan.")
+            }
             Section("Dữ liệu") {
                 NavigationLink { CSVExportView() } label: { IconRow(icon: "tablecells", tint: .green, title: "Xuất CSV") }
                 if store.scheduler.defaults.object(forKey: "SaveMoney.lastIntegrityCheck") != nil && !store.scheduler.defaults.bool(forKey: "SaveMoney.lastIntegrityHealthy") {
@@ -57,6 +90,10 @@ struct SettingsView: View {
                 } }
                     .frame(minHeight: 44).disabled(lock.state == .authenticating)
                 Toggle("Hiện số tiền trong thông báo", isOn: $showsNotificationAmounts)
+                Toggle(isOn: $widgetShowsAmounts) { VStack(alignment: .leading, spacing: 4) {
+                    Text("Hiện số tiền trên widget")
+                    Text("Tắt: widget chỉ hiện phần trăm ngân sách, không hiện số dư hay số tiền.").font(.footnote).foregroundStyle(.secondary)
+                } }.frame(minHeight: 44)
                 if let message = lock.message { Text(message).foregroundStyle(.red) }
             }
             Section("Phím tắt") {
