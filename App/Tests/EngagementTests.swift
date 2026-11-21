@@ -48,6 +48,25 @@ final class EngagementTests: XCTestCase {
         }
     }
 
+    func testBudgetPaceExpectsFixedCostsInFullAndSpreadsOnlyTheRest() throws {
+        try withCycle {
+            let november = try ReportingMonth(year: 2026, month: 11) // 30 days
+            // Day 1, rent 4.000.000 paid plus 200.000 food: 4.000.000 + 6.000.000 / 30 = 4.200.000 expected.
+            let paid = try XCTUnwrap(BudgetPace.make(spent: 4_200_000, limit: 10_000_000, month: november,
+                                                     fixed: FixedCosts.Totals(spent: 4_000_000, reserved: 0), now: local("2026-11-01")))
+            XCTAssertEqual(paid.expected, 4_200_000)
+            XCTAssertEqual(paid.status, .onTrack)
+            XCTAssertEqual(BudgetPace.make(spent: 4_200_000, limit: 10_000_000, month: november, now: local("2026-11-01"))?.status, .ahead)
+            // Rent still to come is set aside but not expected yet.
+            let upcoming = try XCTUnwrap(BudgetPace.make(spent: 200_000, limit: 10_000_000, month: november,
+                                                         fixed: FixedCosts.Totals(spent: 0, reserved: 4_000_000), now: local("2026-11-01")))
+            XCTAssertEqual(upcoming.expected, 200_000)
+            // Fixed costs above the limit: nothing left to spread.
+            XCTAssertEqual(BudgetPace.make(spent: 0, limit: 1_000, month: november,
+                                           fixed: FixedCosts.Totals(spent: 1_500, reserved: 0), now: local("2026-11-15"))?.expected, 1_500)
+        }
+    }
+
     func testLoggingStreakCountsBackFromTodayOrYesterday() {
         let transactions = [expense(1, "2026-11-12"), expense(1, "2026-11-13"), expense(1, "2026-11-14"), expense(1, "2026-11-10")]
         XCTAssertEqual(LoggingStreak.days(transactions: transactions, now: local("2026-11-14", hour: 22)), 3)

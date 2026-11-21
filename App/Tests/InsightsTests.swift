@@ -61,6 +61,97 @@ final class InsightsTests: XCTestCase {
         }
     }
 
+    func testFixedCategoriesAreTakenOutUpFrontInsteadOfSpreadDaily() throws {
+        try withDefaults { _ in
+            let november = try ReportingMonth(year: 2026, month: 11) // 30 days
+            let rent = Category(name: "Nhà ở", kind: .expense, icon: "house"); rent.isFixed = true
+            let bills = Category(name: "Hóa đơn", kind: .expense, icon: "doc.text"); bills.isFixed = true
+            let fixed = FixedCosts.make(categories: [food, rent, bills, salary], rules: [], month: november)
+            XCTAssertEqual(fixed.categoryIDs, [rent.id, bills.id])
+
+            // Payday: paying 4.000.000 rent must not turn today negative. (10.000.000 − 4.000.000) / 30 = 200.000.
+            let payday = [expense(4_000_000, local("2026-11-01", hour: 9), category: rent)]
+            let first = try XCTUnwrap(StatsService.flexibleAllowance(limit: 10_000_000, month: november, transactions: payday,
+                                                                     fixed: fixed, now: local("2026-11-01", hour: 20)))
+            XCTAssertEqual(first.fixedSpent, 4_000_000)
+            XCTAssertEqual(first.flexibleLimit, 6_000_000)
+            XCTAssertEqual(first.perDay, 200_000)
+            XCTAssertEqual(first.spentToday, 0)
+            XCTAssertEqual(first.leftToday, 200_000)
+            // The old behaviour spread the rent over the days and reported today as 3.666.667 over.
+            let spread = try XCTUnwrap(StatsService.flexibleAllowance(limit: 10_000_000, month: november, transactions: payday,
+                                                                      now: local("2026-11-01", hour: 20)))
+            XCTAssertEqual(spread.leftToday, 333_333 - 4_000_000)
+
+            // 21/11: flexible 10.000.000 − 4.500.000 fixed = 5.500.000; − 1.000.000 food before today = 4.500.000 / 10 days.
+            let later = payday + [expense(1_000_000, local("2026-11-02", hour: 12)),
+                                  expense(500_000, local("2026-11-21", hour: 8), category: bills),
+                                  expense(50_000, local("2026-11-21", hour: 9))]
+            let allowance = try XCTUnwrap(StatsService.flexibleAllowance(limit: 10_000_000, month: november, transactions: later,
+                                                                         fixed: fixed, now: local("2026-11-21", hour: 15)))
+            XCTAssertEqual(allowance.fixedSpent, 4_500_000)
+            XCTAssertEqual(allowance.fixedReserved, 0)
+            XCTAssertEqual(allowance.spentBeforeToday, 1_000_000)
+            XCTAssertEqual(allowance.spentToday, 50_000, "the bill paid today is not today's flexible spending")
+            XCTAssertEqual(allowance.perDay, 450_000)
+            XCTAssertEqual(allowance.leftToday, 400_000)
+            XCTAssertEqual(allowance.leftInCycle, 4_450_000)
+        }
+    }
+
+    func testRecurringExpensesAreFixedAndUpcomingOnesAreReserved() throws {
+        try withDefaults { _ in
+            let november = try ReportingMonth(year: 2026, month: 11)
+            @MainActor func rule(_ amount: Int64, kind: TransactionKind = .expense, start: String, through: String?, paused: Bool = false) -> RecurringRule {
+                let rule = RecurringRule()
+                rule.amount = amount; rule.kindRaw = kind.rawValue; rule.wallet = wallet
+                rule.category = kind == .income ? salary : food
+                rule.startDate = local(start); rule.generatedThrough = through.map { local($0) }; rule.isPaused = paused
+                return rule
+            }
+            let internet = rule(300_000, start: "2026-10-05", through: "2026-10-05")      // next: 05/11, still to come
+            let gym = rule(200_000, start: "2026-10-01", through: "2026-11-01")           // 01/11 already booked
+            let paused = rule(900_000, start: "2026-10-10", through: "2026-10-10", paused: true)
+            let pay = rule(9_000_000, kind: .income, start: "2026-10-10", through: "2026-10-10")
+            let fixed = FixedCosts.make(categories: [food, salary], rules: [internet, gym, paused, pay], month: november)
+            XCTAssertEqual(fixed.planned, [FixedCosts.Planned(date: local("2026-11-05"), amount: 300_000)])
+
+            let booked = expense(200_000, local("2026-11-01"))
+            booked.recurrenceKey = RecurrenceCalculator.key(ruleID: gym.id, occurrence: local("2026-11-01"))
+            let transactions = [booked, expense(100_000, local("2026-11-02", hour: 12))]
+            XCTAssertEqual(try fixed.totals(month: november, transactions: transactions), FixedCosts.Totals(spent: 200_000, reserved: 300_000))
+            XCTAssertTrue(fixed.isFixed(booked))
+            XCTAssertFalse(FixedCosts.none.isFixed(booked))
+
+            // 03/11: (3.000.000 − 500.000 fixed − 100.000 flexible) / 28 days left.
+            let allowance = try XCTUnwrap(StatsService.flexibleAllowance(limit: 3_000_000, month: november, transactions: transactions,
+                                                                         fixed: fixed, now: local("2026-11-03", hour: 10)))
+            XCTAssertEqual(allowance.fixedSpent, 200_000)
+            XCTAssertEqual(allowance.fixedReserved, 300_000)
+            XCTAssertEqual(allowance.daysLeft, 28)
+            XCTAssertEqual(allowance.perDay, 2_400_000 / 28)
+
+            // Once the generator books 05/11 the reservation moves into spent; the total stays the same.
+            internet.generatedThrough = local("2026-11-05")
+            XCTAssertTrue(FixedCosts.make(categories: [], rules: [internet], month: november).planned.isEmpty)
+        }
+    }
+
+    func testFixedCostsAboveTheLimitLeaveNothingToSpreadDaily() throws {
+        try withDefaults { _ in
+            let november = try ReportingMonth(year: 2026, month: 11)
+            let rent = Category(name: "Nhà ở", kind: .expense); rent.isFixed = true
+            let fixed = FixedCosts(categoryIDs: [rent.id])
+            let allowance = try XCTUnwrap(StatsService.flexibleAllowance(limit: 3_000_000, month: november,
+                transactions: [expense(3_500_000, local("2026-11-01"), category: rent), expense(20_000, local("2026-11-10"))],
+                fixed: fixed, now: local("2026-11-10", hour: 12)))
+            XCTAssertEqual(allowance.flexibleLimit, -500_000)
+            XCTAssertEqual(allowance.perDay, 0)
+            XCTAssertEqual(allowance.leftToday, -20_000)
+            XCTAssertEqual(allowance.leftInCycle, -520_000)
+        }
+    }
+
     // MARK: Cycle summary
 
     func testCycleSummaryAndTrackerShowOncePerFinishedCycle() throws {

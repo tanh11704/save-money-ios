@@ -12,7 +12,7 @@ private typealias Category = SaveMoney.Category
 @MainActor
 final class DefaultDataSeederTests: XCTestCase {
     private func container() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
     }
 
@@ -32,6 +32,7 @@ final class DefaultDataSeederTests: XCTestCase {
         XCTAssertEqual(wallets.first?.kindRaw, "cash")
         XCTAssertEqual(Set(categories.filter { $0.kindRaw == "expense" }.map(\.name)), Set(["Ăn uống", "Đi lại", "Nhà ở", "Hóa đơn", "Mua sắm", "Sức khỏe", "Giải trí", "Khác"]))
         XCTAssertEqual(Set(categories.filter { $0.kindRaw == "income" }.map(\.name)), Set(["Lương", "Thu nhập khác"]))
+        XCTAssertEqual(Set(categories.filter(\.isFixed).map(\.name)), Set(["Nhà ở", "Hóa đơn"]))
         let originalIDs = Set(categories.map(\.id))
         XCTAssertTrue(defaults.bool(forKey: "didSeedDefaults"))
         // Simulate legacy/direct store archive; WalletService itself forbids the last wallet.

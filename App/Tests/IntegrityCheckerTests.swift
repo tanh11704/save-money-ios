@@ -12,7 +12,7 @@ private typealias Category = SaveMoney.Category
 @MainActor
 final class IntegrityCheckerTests: XCTestCase {
     func testCleanReadOnlyAndIndependentBalanceWithTransfers() async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let context = container.mainContext, a = Wallet(name: "A", openingBalance: 1_000), b = Wallet(name: "B", openingBalance: 2_000)
         let category = Category(name: "Chi", kind: .expense)

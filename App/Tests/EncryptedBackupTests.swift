@@ -9,7 +9,7 @@ import XCTest
 @MainActor
 final class EncryptedBackupTests: XCTestCase {
     func testEncryptedRoundTripPasswordRestoreAndMissingKeyFailsClosed() async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), suite = "Encrypted.\(UUID().uuidString)", defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: folder) }
@@ -42,7 +42,7 @@ final class EncryptedBackupTests: XCTestCase {
         XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: folder.path).contains { $0.hasSuffix("tmp") })
     }
     func testMixedCatalogRotationRetainsTenEvenWhenKeysAreMissing() async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), suite = "Mixed.\(UUID().uuidString)", defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: folder) }

@@ -15,7 +15,8 @@ struct CategoryFormView: View {
         self.store = store
         self.original = original
         _draft = State(initialValue: CategoryDraft(name: original?.name ?? "",
-            kind: TransactionKind(rawValue: original?.kindRaw ?? "expense") ?? .expense, icon: original?.icon ?? "tag"))
+            kind: TransactionKind(rawValue: original?.kindRaw ?? "expense") ?? .expense, icon: original?.icon ?? "tag",
+            isFixed: original?.isFixed ?? false))
     }
 
     private var lockedKind: Bool { original.map { store.categoryKindIsLocked($0.id) } ?? false }
@@ -53,6 +54,18 @@ struct CategoryFormView: View {
                         }
                     }
                     ChoiceChips(options: Self.kindOptions, selection: $draft.kind, disabled: lockedKind)
+                }
+                if draft.kind == .expense {
+                    VStack(alignment: .leading, spacing: Spacing.s) {
+                        HStack {
+                            Toggle("Chi phí cố định", isOn: $draft.isFixed).frame(minHeight: 44)
+                                .accessibilityIdentifier("category.isFixed")
+                            InfoButton(text: "Khoản trả một lần mỗi kỳ như tiền nhà, điện nước, học phí. Chi cố định được trừ trước khỏi hạn mức tổng, không chia theo ngày, nên ngày trả tiền không làm \"Hôm nay còn được tiêu\" bị âm. Khoản định kỳ luôn được tính là cố định.")
+                        }
+                        Text(draft.isFixed ? "Trừ trước khỏi hạn mức, không tính vào chi tiêu hằng ngày."
+                                           : "Chi linh hoạt (ăn uống, đi lại…): chia đều theo ngày.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 VStack(alignment: .leading, spacing: Spacing.s) {
                     FieldLabel("Biểu tượng")

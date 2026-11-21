@@ -38,7 +38,7 @@ final class TransactionServiceTests: XCTestCase {
     }
 
     private func fixture() throws -> Fixture {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         container.mainContext.autosaveEnabled = false
         let a = Wallet(name: "A", openingBalance: 1_000)
@@ -235,7 +235,8 @@ final class TransactionServiceTests: XCTestCase {
         XCTAssertEqual(feeCategories.count, 1)
 
         try f.service.delete(ifUnchanged: rows.filter { $0.id == ids.transfer || $0.id == ids.fee }.map(TransactionSnapshot.init))
-        XCTAssertEqual(try f.balance("A"), 999)
+        // Only the second transfer (1) and its fee (1) remain.
+        XCTAssertEqual(try f.balance("A"), 998)
         XCTAssertEqual(try f.balance("B"), 2_001)
     }
 

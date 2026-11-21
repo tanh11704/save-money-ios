@@ -13,7 +13,7 @@ private typealias Category = SaveMoney.Category
 final class RecurringServiceTests: XCTestCase {
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date { LocalCalendar.calendar.date(from: DateComponents(year: y, month: m, day: d))! }
     private func fixture() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let context = container.mainContext
         let a = Wallet(name: "A", openingBalance: 1_000), b = Wallet(name: "B"), category = Category(name: "Chi", kind: .expense)

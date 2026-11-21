@@ -13,11 +13,16 @@ struct DefaultDataSeeder {
               try context.fetchCount(FetchDescriptor<Category>()) == 0,
               try context.fetchCount(FetchDescriptor<Transaction>()) == 0 else { return }
         context.insert(Wallet(name: "Tiền mặt"))
-        let expense: [(String, String)] = [
-            ("Ăn uống", "fork.knife"), ("Đi lại", "bus"), ("Nhà ở", "house"), ("Hóa đơn", "doc.text"),
-            ("Mua sắm", "bag"), ("Sức khỏe", "cross.case"), ("Giải trí", "gamecontroller"), ("Khác", "tag")
+        // Rent and bills are paid once per cycle, so they start out fixed.
+        let expense: [(String, String, Bool)] = [
+            ("Ăn uống", "fork.knife", false), ("Đi lại", "bus", false), ("Nhà ở", "house", true), ("Hóa đơn", "doc.text", true),
+            ("Mua sắm", "bag", false), ("Sức khỏe", "cross.case", false), ("Giải trí", "gamecontroller", false), ("Khác", "tag", false)
         ]
-        for (name, icon) in expense { context.insert(Category(name: name, kind: .expense, icon: icon)) }
+        for (name, icon, isFixed) in expense {
+            let category = Category(name: name, kind: .expense, icon: icon)
+            category.isFixed = isFixed
+            context.insert(category)
+        }
         context.insert(Category(name: "Lương", kind: .income, icon: "banknote"))
         context.insert(Category(name: "Thu nhập khác", kind: .income, icon: "plus.circle"))
         do {

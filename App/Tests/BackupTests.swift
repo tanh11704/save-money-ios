@@ -20,7 +20,7 @@ final class BackupTests: XCTestCase {
         let defaults: UserDefaults
         var exporter: BackupExporter { BackupExporter(container: container, directory: folder) }
         init() throws {
-            let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+            let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
             container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
             container.mainContext.autosaveEnabled = false
             folder = FileManager.default.temporaryDirectory.appendingPathComponent("BackupTests-\(UUID().uuidString)").appendingPathComponent("Backups")
@@ -47,7 +47,7 @@ final class BackupTests: XCTestCase {
     }
 
     func testStoreConfigurationIsOutsideSharedDocuments() async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let configured = ModelConfiguration(schema: schema).url.standardizedFileURL
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].standardizedFileURL
         XCTAssertFalse(configured.path.hasPrefix(documents.path + "/"))
@@ -157,13 +157,31 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(pre.first?.file?.payload, original.payload)
     }
 
+    func testFixedCategoryFlagRoundTripsAndNeedsV6() async throws {
+        let f = try Fixture(); defer { f.clean() }; try f.seed()
+        let food = try XCTUnwrap(f.container.mainContext.fetch(FetchDescriptor<Category>()).first { $0.kindRaw == "expense" })
+        food.isFixed = true; try f.container.mainContext.save()
+        let file = try f.current()
+        XCTAssertEqual(file.schemaVersion, 6)
+        XCTAssertEqual(file.payload.categories.first { $0.id == food.id.uuidString }?.isFixed, true)
+        XCTAssertEqual(file.payload.categories.first { $0.kind == "income" }?.isFixed, nil, "false is not written")
+        let graph = try BackupValidator.graph(file.payload)
+        XCTAssertEqual(graph.categories.filter(\.isFixed).map(\.id), [food.id])
+        var old = file; old.schemaVersion = 5
+        XCTAssertThrowsError(try BackupValidator.validate(old))
+        var income = file
+        let index = try XCTUnwrap(income.payload.categories.firstIndex { $0.kind == "income" })
+        income.payload.categories[index].isFixed = true; income.checksum = try BackupFile.digest(income.payload)
+        XCTAssertThrowsError(try BackupValidator.validate(income))
+    }
+
     func testChecksumTamperAndFutureVersionRejectWithoutMutation() async throws {
         let f = try Fixture(); defer { f.clean() }; try f.seed()
         let original = try f.current()
         var tampered = original; tampered.payload.wallets[0].name += "x"
         XCTAssertThrowsError(try f.restorer().restore(f.bytes(tampered))) { XCTAssertEqual($0 as? BackupError, .checksum) }
-        var future = original; future.schemaVersion = 6
-        XCTAssertThrowsError(try f.restorer().restore(f.bytes(future))) { XCTAssertEqual($0 as? BackupError, .unsupportedVersion(6)) }
+        var future = original; future.schemaVersion = 7
+        XCTAssertThrowsError(try f.restorer().restore(f.bytes(future))) { XCTAssertEqual($0 as? BackupError, .unsupportedVersion(7)) }
         XCTAssertEqual(try f.current().payload, original.payload)
         XCTAssertFalse(FileManager.default.fileExists(atPath: f.folder.path))
     }

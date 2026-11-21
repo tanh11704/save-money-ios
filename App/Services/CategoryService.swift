@@ -5,6 +5,8 @@ struct CategoryDraft {
     var name = ""
     var kind: TransactionKind = .expense
     var icon = "tag"
+    /// Expense categories only; ignored (saved as false) for income.
+    var isFixed = false
 }
 
 @MainActor
@@ -30,6 +32,7 @@ struct CategoryService {
         try ManagementPersistence(container: container, origin: origin).write { context in
             try Self.validate(draft, categories: context.fetch(FetchDescriptor<Category>()))
             let category = Category(name: try ManagementValidation.name(draft.name), kind: draft.kind, icon: draft.icon)
+            category.isFixed = draft.kind == .expense && draft.isFixed
             context.insert(category)
             return category.id
         }
@@ -47,6 +50,7 @@ struct CategoryService {
             category.name = try ManagementValidation.name(draft.name)
             category.kindRaw = draft.kind.rawValue
             category.icon = draft.icon
+            category.isFixed = draft.kind == .expense && draft.isFixed
         }
     }
 

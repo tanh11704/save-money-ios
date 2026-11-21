@@ -6,7 +6,7 @@ import SwiftUI
 private struct AccessibilityPreview: View {
     @StateObject private var runtime: AppRuntime
     init() {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let defaults = UserDefaults(suiteName: "SaveMoneyPreview.\(UUID().uuidString)")!
         var exporter = BackupExporter(container: container, directory: FileManager.default.temporaryDirectory.appendingPathComponent("SaveMoneyPreview-\(UUID().uuidString)"))

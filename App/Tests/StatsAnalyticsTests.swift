@@ -34,6 +34,8 @@ final class StatsAnalyticsTests: XCTestCase {
         XCTAssertEqual(daily[13].expense, 10); XCTAssertEqual(daily[14].expense, 20)
         XCTAssertEqual(daily.reduce(Int64(0)) { $0 + $1.expense }, try StatsService.report(month: month, transactions: records).expense)
         XCTAssertEqual(StatsService.dailyAllowance(limit: 1_000, month: month), 33)
+        XCTAssertEqual(StatsService.dailyAllowance(limit: 1_000, month: month, fixed: 400), 20)
+        XCTAssertEqual(StatsService.dailyAllowance(limit: 1_000, month: month, fixed: 2_000), 0)
     }
     func testSlicesKeepUncategorizedAndAggregateRemainderWithoutLosingMoney() throws {
         let wallet = Wallet(name: "A"), month = ReportingMonth()

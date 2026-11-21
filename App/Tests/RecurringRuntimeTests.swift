@@ -18,7 +18,7 @@ final class RecurringRuntimeTests: XCTestCase {
         func schedule(_ alert: BudgetAlert) async throws { alerts.append(alert); scheduled?() }
     }
     func testUnlockGenerationCountsEveryRecordAndNotifiesOnceForWholeBatch() async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let suite = "RecurringRuntimeTests.\(UUID().uuidString)", defaults = UserDefaults(suiteName: suite)!
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -46,7 +46,7 @@ final class RecurringRuntimeTests: XCTestCase {
         XCTAssertEqual(scheduler.changes, 1)
     }
     func testTwentyThreeGeneratedTransactionsRotateBackupAtTwenty() async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let suite = "RecurringRuntimeTests.\(UUID().uuidString)", defaults = UserDefaults(suiteName: suite)!
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

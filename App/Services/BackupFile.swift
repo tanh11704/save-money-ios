@@ -119,6 +119,8 @@ struct BackupFile: Codable, Equatable {
         var kind: String
         var icon: String
         var isArchived: Bool
+        /// v6+. Written only when true so older payloads (and their checksums) stay byte-identical.
+        var isFixed: Bool? = nil
     }
     struct TransactionRecord: Codable, Equatable {
         var id: String

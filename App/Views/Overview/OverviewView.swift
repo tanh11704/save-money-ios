@@ -159,7 +159,7 @@ struct OverviewView: View {
         let month = ReportingMonth()
         let allowance = store.flexibleAllowance()
         let total = store.progress(in: month).first { $0.scope == .total }
-        let pace = total.flatMap { BudgetPace.make(spent: $0.spent, limit: $0.limit, month: month) }
+        let pace = total.flatMap { BudgetPace.make(spent: $0.spent, limit: $0.limit, month: month, fixed: store.fixedTotals(in: month)) }
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.l) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -218,6 +218,9 @@ struct OverviewView: View {
                         .contentTransition(reduceMotion ? .identity : .numericText())
                     Text("≈ \(MoneyFormatter.compact(allowance.perDay))/ngày · hôm nay đã chi \(MoneyFormatter.compact(allowance.spentToday))")
                         .font(.caption).opacity(0.9)
+                    if allowance.fixedTotal > 0 {
+                        Text(FlexibleAllowanceCard.fixedText(allowance)).font(.caption).opacity(0.8)
+                    }
                 }
                 .accessibilityElement(children: .combine)
                 if let pace { PaceBar(pace: pace, onDark: true) }

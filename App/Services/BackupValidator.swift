@@ -25,7 +25,7 @@ struct BackupValidator {
         do { header = try JSONDecoder().decode(Header.self, from: data) }
         catch { throw BackupError.unreadable }
         guard header.format == "savemoney-backup" else { throw BackupError.wrongFormat }
-        guard (1...5).contains(header.schemaVersion) else { throw BackupError.unsupportedVersion(header.schemaVersion) }
+        guard (1...6).contains(header.schemaVersion) else { throw BackupError.unsupportedVersion(header.schemaVersion) }
         let file: BackupFile
         do { file = try JSONDecoder().decode(BackupFile.self, from: data) }
         catch { throw BackupError.unreadable }
@@ -34,7 +34,7 @@ struct BackupValidator {
 
     static func validate(_ file: BackupFile) throws -> Validated {
         guard file.format == "savemoney-backup" else { throw BackupError.wrongFormat }
-        guard (1...5).contains(file.schemaVersion) else { throw BackupError.unsupportedVersion(file.schemaVersion) }
+        guard (1...6).contains(file.schemaVersion) else { throw BackupError.unsupportedVersion(file.schemaVersion) }
         guard try BackupFile.digest(file.payload) == file.checksum else { throw BackupError.checksum }
         _ = try BackupFile.date(file.createdAt)
         let p = file.payload
@@ -57,6 +57,7 @@ struct BackupValidator {
         }
         guard file.schemaVersion >= 4 || p.wallets.allSatisfy({ $0.kind != WalletKind.person.rawValue }) else { throw BackupError.structure("Ví người cần bản sao lưu v4.") }
         guard file.schemaVersion >= 5 || p.wallets.allSatisfy({ $0.kind != WalletKind.adjustment.rawValue }) else { throw BackupError.structure("Điều chỉnh số dư cần bản sao lưu v5.") }
+        guard file.schemaVersion >= 6 || p.categories.allSatisfy({ $0.isFixed == nil }) else { throw BackupError.structure("Danh mục cố định cần bản sao lưu v6.") }
         let graph = try graph(p)
         let balances = try expectedBalances(graph)
         guard balances == file.summary.expectedBalances else { throw BackupError.balances }
@@ -89,7 +90,9 @@ struct BackupValidator {
             let uuid = try id(record.id)
             guard let kind = TransactionKind(rawValue: record.kind), kind != .transfer else { throw BackupError.structure("Loại danh mục không hợp lệ.") }
             let category = Category(name: record.name, kind: kind, icon: record.icon)
-            category.id = uuid; category.isArchived = record.isArchived; categories[record.id] = category
+            guard record.isFixed != true || kind == .expense else { throw BackupError.structure("Chỉ danh mục chi mới có thể cố định.") }
+            category.id = uuid; category.isArchived = record.isArchived; category.isFixed = record.isFixed == true
+            categories[record.id] = category
         }
         var recurrenceKeys = Set<String>()
         for record in payload.transactions {

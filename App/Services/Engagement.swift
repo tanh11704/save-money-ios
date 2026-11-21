@@ -92,14 +92,20 @@ struct BudgetPace: Equatable {
     }
 
     /// Nil outside the cycle or without a positive limit.
-    static func make(spent: Int64, limit: Int64, month: ReportingMonth, now: Date = Date()) -> BudgetPace? {
+    /// Fixed costs are expected in full once paid; only the flexible rest of the limit is expected to
+    /// build up evenly, so paying the rent on day 1 does not read as "spending too fast".
+    static func make(spent: Int64, limit: Int64, month: ReportingMonth, fixed: FixedCosts.Totals = .zero,
+                     now: Date = Date()) -> BudgetPace? {
         let interval = month.interval
         guard limit > 0, now >= interval.start, now < interval.end else { return nil }
         let calendar = LocalCalendar.calendar
         let dayCount = month.dayCount
         let elapsed = min(dayCount, calendar.dateComponents([.day], from: interval.start, to: calendar.startOfDay(for: now)).day! + 1)
-        // limit ≤ 999.999.999.999 and days ≤ 31, so the product cannot overflow Int64.
-        let expected = limit * Int64(elapsed) / Int64(dayCount)
+        let flexible = limit - min(limit, max(0, fixed.total))
+        let paid = max(0, fixed.spent)
+        // flexible ≤ limit ≤ 999.999.999.999 and days ≤ 31, so the product cannot overflow Int64.
+        let even = flexible * Int64(elapsed) / Int64(dayCount)
+        let expected = paid.addingReportingOverflow(even).overflow ? Int64.max : paid + even
         return BudgetPace(spent: spent, limit: limit, elapsedDays: elapsed, dayCount: dayCount, expected: expected, difference: spent - expected)
     }
 }

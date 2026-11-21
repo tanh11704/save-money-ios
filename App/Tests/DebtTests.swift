@@ -82,7 +82,7 @@ final class DebtTests: XCTestCase {
         XCTAssertThrowsError(try NetWorth.make(wallets: [Wallet(name: "Bad legacy", openingBalance: .min, kind: .person)], transactions: []))
     }
     func testBackupV4RoundTripAndOldVersionsRejectPerson() throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let (wallets, transactions) = scenario()
         for wallet in wallets { container.mainContext.insert(wallet) }
@@ -90,7 +90,7 @@ final class DebtTests: XCTestCase {
         try container.mainContext.save()
         let exporter = BackupExporter(container: container, directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
         let file = try exporter.capture()
-        XCTAssertEqual(file.schemaVersion, 5)
+        XCTAssertEqual(file.schemaVersion, 6)
         XCTAssertNoThrow(try BackupValidator.validate(file))
         let graph = try BackupValidator.graph(file.payload)
         XCTAssertEqual(try NetWorth.make(wallets: graph.wallets, transactions: graph.transactions), try NetWorth.make(wallets: wallets, transactions: transactions))
@@ -108,7 +108,7 @@ final class DebtTests: XCTestCase {
         XCTAssertTrue(String(decoding: csv, as: UTF8.self).contains("Trả hộ"))
     }
     func testLastOwnWalletAndOutstandingPersonCannotArchive() throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let cash = Wallet(name: "Cash", openingBalance: 1_000), person = Wallet(name: "Lan", kind: .person)
         container.mainContext.insert(cash); container.mainContext.insert(person)
@@ -123,7 +123,7 @@ final class DebtTests: XCTestCase {
 @MainActor
 final class BalanceAdjustmentTests: XCTestCase {
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
     }
 
@@ -229,7 +229,7 @@ final class BalanceAdjustmentTests: XCTestCase {
 
         let exporter = BackupExporter(container: container, directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
         let file = try exporter.capture()
-        XCTAssertEqual(file.schemaVersion, 5)
+        XCTAssertEqual(file.schemaVersion, 6)
         let validated = try BackupValidator.validate(file)
         XCTAssertEqual(validated.totalBalance, 1_500, "restore summary counts only own wallets")
         var downgraded = file; downgraded.schemaVersion = 4

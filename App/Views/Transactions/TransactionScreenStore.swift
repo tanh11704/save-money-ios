@@ -172,7 +172,8 @@ final class TransactionScreenStore: ObservableObject {
     func publishWidgetSnapshot(now: Date = Date()) {
         let showsAmounts = UserDefaults.standard.bool(forKey: SharedContainer.showsAmountsKey)
         let snapshot = WidgetSnapshot.make(transactions: transactions, totalBalance: netWorth?.ownWallets ?? 0,
-                                           rules: budgetRules, showsAmounts: showsAmounts, now: now)
+                                           rules: budgetRules, fixed: fixedCosts(in: ReportingMonth(containing: now)),
+                                           showsAmounts: showsAmounts, now: now)
         var comparable = snapshot; comparable.generatedAt = lastWidgetSnapshot?.generatedAt ?? snapshot.generatedAt
         guard comparable != lastWidgetSnapshot else { return }
         if SharedContainer.write(snapshot) {
@@ -192,10 +193,21 @@ final class TransactionScreenStore: ObservableObject {
         pendingCycleSummary = nil
     }
 
+    /// Fixed categories and recurring expenses still to come in `month`; kept out of the daily spread.
+    func fixedCosts(in month: ReportingMonth) -> FixedCosts {
+        FixedCosts.make(categories: categories, rules: recurringRules, month: month)
+    }
+
+    /// Fixed spending booked in `month` plus recurring expenses still to come; zero when it cannot be computed.
+    func fixedTotals(in month: ReportingMonth) -> FixedCosts.Totals {
+        (try? fixedCosts(in: month).totals(month: month, transactions: transactions)) ?? .zero
+    }
+
     func flexibleAllowance(now: Date = Date()) -> StatsService.FlexibleAllowance? {
         let month = ReportingMonth(containing: now)
         guard let rule = BudgetService.activeRule(for: .total, in: month, rules: budgetRules) else { return nil }
-        return try? StatsService.flexibleAllowance(limit: rule.limit, month: month, transactions: transactions, now: now)
+        return try? StatsService.flexibleAllowance(limit: rule.limit, month: month, transactions: transactions,
+                                                   fixed: fixedCosts(in: month), now: now)
     }
 
     var installments: [InstallmentProgress] {
@@ -299,8 +311,12 @@ final class TransactionScreenStore: ObservableObject {
                 var message = "Đã lưu " + TransactionPresentation.amount(transaction) + " · " + TransactionPresentation.title(transaction)
                 // Immediate feedback on what the expense means for today.
                 if draft.kind == .expense, LocalCalendar.calendar.isDateInToday(draft.date), let allowance = flexibleAllowance() {
-                    message += allowance.leftToday >= 0 ? " · hôm nay còn \(MoneyFormatter.compact(allowance.leftToday))"
-                                                        : " · hôm nay vượt \(MoneyFormatter.compact(-allowance.leftToday))"
+                    if fixedCosts(in: ReportingMonth(containing: transaction.date)).isFixed(transaction) {
+                        message += " · khoản cố định, không trừ vào hôm nay"
+                    } else {
+                        message += allowance.leftToday >= 0 ? " · hôm nay còn \(MoneyFormatter.compact(allowance.leftToday))"
+                                                            : " · hôm nay vượt \(MoneyFormatter.compact(-allowance.leftToday))"
+                    }
                 }
                 undoAction = UndoAction(snapshot: TransactionSnapshot(transaction), restore: false, message: message)
             }

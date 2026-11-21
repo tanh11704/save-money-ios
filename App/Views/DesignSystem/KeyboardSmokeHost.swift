@@ -12,7 +12,7 @@ struct KeyboardSmokeHost: View {
     init(screen: String) {
         self.screen = screen
         UIView.setAnimationsEnabled(false) // UI fixture only; leaves focus and keyboard dismissal real.
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try! ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         self.container = container
         let wallet = Wallet(name: "Tien mat")

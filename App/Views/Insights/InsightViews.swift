@@ -32,7 +32,7 @@ private struct MoneyTextField: View {
 
 // MARK: - Flexible daily allowance
 
-/// "Hôm nay còn được tiêu": the running cycle's leftover budget spread over the days left.
+/// "Hôm nay còn được tiêu": the running cycle's leftover flexible budget spread over the days left.
 struct FlexibleAllowanceCard: View {
     let allowance: StatsService.FlexibleAllowance
     var compact = false
@@ -52,19 +52,39 @@ struct FlexibleAllowanceCard: View {
                     Label(allowance.leftToday >= 0 ? "Hôm nay còn được tiêu" : "Hôm nay đã vượt", systemImage: "sun.max")
                         .font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
-                    InfoButton(text: "Lấy hạn mức tổng còn lại từ đầu hôm nay, chia đều cho \(allowance.daysLeft) ngày còn lại của kỳ (tính cả hôm nay). Hôm qua chi nhiều thì hôm nay ít đi, tiết kiệm thì được nhiều hơn.")
+                    InfoButton(text: "Lấy hạn mức tổng trừ trước các khoản cố định (danh mục đánh dấu Cố định và khoản định kỳ, đã trả hoặc sắp tới trong kỳ). Phần chi linh hoạt còn lại từ đầu hôm nay được chia đều cho \(allowance.daysLeft) ngày còn lại của kỳ (tính cả hôm nay). Hôm qua chi nhiều thì hôm nay ít đi, tiết kiệm thì được nhiều hơn.")
                 }
                 Text(MoneyFormatter.string(from: abs(allowance.leftToday)))
                     .font(.system(.title, design: .rounded).bold()).monospacedDigit().foregroundStyle(tint)
                     .lineLimit(1).minimumScaleFactor(0.5)
                 Text("≈ \(MoneyFormatter.compact(allowance.perDay))/ngày · còn \(allowance.daysLeft) ngày · hôm nay đã chi \(MoneyFormatter.compact(allowance.spentToday))")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if allowance.fixedTotal > 0 {
+                    Text(FlexibleAllowanceCard.fixedText(allowance))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
                 if allowance.perDay == 0 {
-                    Text("Đã dùng hết hạn mức tổng của kỳ này.").font(.caption.weight(.semibold)).foregroundStyle(Color("Expense"))
+                    Text(allowance.flexibleLimit <= 0 ? "Chi cố định đã chiếm hết hạn mức tổng của kỳ này."
+                                                      : "Đã dùng hết phần chi linh hoạt của kỳ này.")
+                        .font(.caption.weight(.semibold)).foregroundStyle(Color("Expense"))
                 }
             }
             .accessibilityElement(children: .combine)
         }
+    }
+}
+
+extension FlexibleAllowanceCard {
+    /// "Đã trừ trước 4,5tr cố định · đã trả 4tr · sắp tới 500k".
+    static func fixedText(_ allowance: StatsService.FlexibleAllowance) -> String {
+        var parts = ["Đã trừ trước \(MoneyFormatter.compact(allowance.fixedTotal)) chi cố định"]
+        if allowance.fixedSpent > 0, allowance.fixedReserved > 0 {
+            parts.append("đã trả \(MoneyFormatter.compact(allowance.fixedSpent))")
+            parts.append("sắp tới \(MoneyFormatter.compact(allowance.fixedReserved))")
+        } else if allowance.fixedReserved > 0 {
+            parts.append("chưa đến hạn")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 

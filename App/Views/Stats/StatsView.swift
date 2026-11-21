@@ -267,7 +267,7 @@ private struct StatsReportSections: View {
                         switch Result(catching: { try StatsService.dailyExpenses(period: period, transactions: transactions) }) {
                         case .success(let days):
                             StatsDailyChart(days: days, period: period, allowance: BudgetService.activeRule(for: .total, in: month, rules: store.budgetRules)
-                                .map { StatsService.dailyAllowance(limit: $0.limit, month: month) })
+                                .map { StatsService.dailyAllowance(limit: $0.limit, month: month, fixed: store.fixedTotals(in: month).total) })
                                 .padding(.vertical, Spacing.s)
                         case .failure(let error): Text(TransactionPresentation.errorMessage(error)).foregroundStyle(.red)
                         }
@@ -335,7 +335,8 @@ private struct StatsReportSections: View {
         let unspent = progress.filter { $0.scope != .total && $0.spent == 0 }
         return Section("Ngân sách") {
             if period.contains(Date()), let allowance = store.flexibleAllowance() { FlexibleAllowanceCard(allowance: allowance) }
-            if let total = progress.first(where: { $0.scope == .total }), let pace = BudgetPace.make(spent: total.spent, limit: total.limit, month: month) {
+            if let total = progress.first(where: { $0.scope == .total }), let pace = BudgetPace.make(spent: total.spent, limit: total.limit, month: month,
+                                                                                                       fixed: store.fixedTotals(in: month)) {
                 PaceBar(pace: pace).padding(.vertical, 4)
             }
             if let error = store.budgetError(in: month) { Callout(level: .danger, title: "Chưa tính được ngân sách", message: error) }

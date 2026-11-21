@@ -9,7 +9,7 @@ import XCTest
 @MainActor
 final class BackupEncryptionManagerTests: XCTestCase {
     func testEnableConvertsPlainFilesIncludingPreRestoreAndChangesPassword() async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), suite = "EncryptionManager.\(UUID().uuidString)", defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: folder) }
@@ -30,7 +30,7 @@ final class BackupEncryptionManagerTests: XCTestCase {
         for file in try IntegrityChecker.files(in: folder) { _ = try BackupValidator.decode(Data(contentsOf: file), protection: exporter.protection, password: second) }
     }
     func testFailedActivationKeepsPlainOriginalAndDisabledState() async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), suite = "EncryptionFail.\(UUID().uuidString)", defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: folder) }

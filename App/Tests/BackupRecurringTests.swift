@@ -18,7 +18,7 @@ final class BackupRecurringTests: XCTestCase {
         return try Data(contentsOf: XCTUnwrap(bundle.url(forResource: "golden-v\(version)", withExtension: "json", subdirectory: "Fixtures")))
     }
     private func container() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
     }
     func testGoldenV3RoundTripAndV2ClearsRules() async throws {

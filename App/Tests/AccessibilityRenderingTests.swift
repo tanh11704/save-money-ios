@@ -73,7 +73,7 @@ final class AccessibilityRenderingTests: XCTestCase {
         try await render(type: .accessibility5, scheme: .dark, size: CGSize(width: 375, height: 667), suffix: "AX5-dark-small", includeNames: ["wallet-form", "daily-chart"])
     }
     private func render(type: DynamicTypeSize, scheme: ColorScheme, size: CGSize, suffix: String, includeNames: Set<String>? = nil) async throws {
-        let schema = Schema(versionedSchema: SaveMoneySchemaV3.self)
+        let schema = Schema(versionedSchema: SaveMoneySchemaV4.self)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         let context = container.mainContext, wallet = Wallet(name: "Tiền mặt và sinh hoạt", openingBalance: 5_000_000)
         let category = SaveMoney.Category(name: "Ăn uống và sinh hoạt gia đình", kind: .expense, icon: "fork.knife")

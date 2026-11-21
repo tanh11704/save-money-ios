@@ -115,8 +115,9 @@ struct StatsService {
         }
     }
 
-    static func dailyAllowance(limit: Int64, month: ReportingMonth) -> Int64 {
-        limit / Int64(month.dayCount)
+    /// Even daily share of the flexible budget: the limit minus the cycle's fixed costs, spread over every day.
+    static func dailyAllowance(limit: Int64, month: ReportingMonth, fixed: Int64 = 0) -> Int64 {
+        max(0, limit - min(limit, max(0, fixed))) / Int64(month.dayCount)
     }
 
     static func expenseSlices(_ report: Report, top: Int = 5) -> [CategoryTotal] {
